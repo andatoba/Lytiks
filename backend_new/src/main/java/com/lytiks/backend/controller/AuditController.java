@@ -38,44 +38,48 @@ public class AuditController {
 
     // Crear nueva auditoría
     @PostMapping("/create")
-    public ResponseEntity<Map<String, Object>> createAudit(@RequestBody Map<String, Object> auditData) {
-        Map<String, Object> response = new HashMap<>();
-        try {
-            Audit audit = new Audit();
-            audit.setHacienda((String) auditData.get("hacienda"));
-            audit.setCultivo((String) auditData.get("cultivo"));
-            audit.setFecha(LocalDateTime.now());
-            audit.setTecnicoId(Long.valueOf(auditData.get("tecnicoId").toString()));
-            audit.setEstado("PENDIENTE");
-            audit.setObservaciones((String) auditData.get("observaciones"));
-            
-            Audit savedAudit = auditRepository.save(audit);
-            
-            // Guardar puntuaciones si existen
-            if (auditData.containsKey("scores")) {
-                @SuppressWarnings("unchecked")
-                List<Map<String, Object>> scores = (List<Map<String, Object>>) auditData.get("scores");
-                for (Map<String, Object> scoreData : scores) {
-                    AuditScore score = new AuditScore();
-                    score.setAudit(savedAudit);
-                    score.setCategoria((String) scoreData.get("categoria"));
-                    score.setPuntuacion(Integer.valueOf(scoreData.get("puntuacion").toString()));
-                    score.setObservaciones((String) scoreData.get("observaciones"));
-                    auditScoreRepository.save(score);
-                }
+public ResponseEntity<Map<String, Object>> createAudit(@RequestBody Map<String, Object> auditData) {
+    Map<String, Object> response = new HashMap<>();
+    try {
+        Audit audit = new Audit();
+        audit.setHacienda(auditData.get("hacienda") != null ? auditData.get("hacienda").toString() : null);
+        audit.setCultivo(auditData.get("cultivo") != null ? auditData.get("cultivo").toString() : null);
+        audit.setFecha(auditData.get("fecha") != null ? LocalDateTime.parse(auditData.get("fecha").toString()) : LocalDateTime.now());
+        audit.setTecnicoId(auditData.get("tecnicoId") != null ? Long.valueOf(auditData.get("tecnicoId").toString()) : null);
+        audit.setEstado(auditData.get("estado") != null ? auditData.get("estado").toString() : "PENDIENTE");
+        audit.setObservaciones((String) auditData.get("observaciones"));
+        // Si tu entidad Audit tiene estos campos, agrégalos:
+       // if (auditData.get("foto") != null) {
+       //     audit.setFoto(auditData.get("foto").toString());
+       // }
+
+        Audit savedAudit = auditRepository.save(audit);
+
+        // Guardar puntuaciones si existen
+        if (auditData.containsKey("scores")) {
+            @SuppressWarnings("unchecked")
+            List<Map<String, Object>> scores = (List<Map<String, Object>>) auditData.get("scores");
+            for (Map<String, Object> scoreData : scores) {
+                AuditScore score = new AuditScore();
+                score.setAudit(savedAudit);
+                score.setCategoria((String) scoreData.get("categoria"));
+                score.setPuntuacion(Integer.valueOf(scoreData.get("puntuacion").toString()));
+                score.setObservaciones((String) scoreData.get("observaciones"));
+                auditScoreRepository.save(score);
             }
-            
-            response.put("success", true);
-            response.put("message", "Auditoría creada exitosamente");
-            response.put("auditId", savedAudit.getId());
-            return ResponseEntity.ok(response);
-            
-        } catch (Exception e) {
-            response.put("success", false);
-            response.put("message", "Error al crear auditoría: " + e.getMessage());
-            return ResponseEntity.badRequest().body(response);
         }
+
+        response.put("success", true);
+        response.put("message", "Auditoría creada exitosamente");
+        response.put("auditId", savedAudit.getId());
+        return ResponseEntity.ok(response);
+
+    } catch (Exception e) {
+        response.put("success", false);
+        response.put("message", "Error al crear auditoría: " + e.getMessage());
+        return ResponseEntity.badRequest().body(response);
     }
+}
 
     // Obtener auditorías por técnico
     @GetMapping("/technician/{tecnicoId}")
