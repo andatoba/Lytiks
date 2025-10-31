@@ -1,3 +1,6 @@
+import 'dart:io';
+import 'package:image_picker/image_picker.dart';
+
 import 'package:flutter/material.dart';
 import '../services/sync_service.dart';
 import '../services/moko_audit_service.dart';
@@ -28,6 +31,11 @@ class _MokoAuditScreenState extends State<MokoAuditScreen> {
   final SyncService _syncService = SyncService();
   final MokoAuditService _mokoAuditService = MokoAuditService();
   final OfflineStorageService _offlineStorage = OfflineStorageService();
+
+  File? _mokoPhotoObservaciones;
+  String? _mokoPhotoPathObservaciones;
+  File? _mokoPhotoSeguimiento;
+  String? _mokoPhotoPathSeguimiento;
 
   @override
   Widget build(BuildContext context) {
@@ -72,7 +80,7 @@ class _MokoAuditScreenState extends State<MokoAuditScreen> {
             (v) => setState(() => entradaUnica = v),
           ),
           _buildPreguntaSiNo(
-            'No tiene maleza',
+            'Tiene maleza',
             noMaleza,
             (v) => setState(() => noMaleza = v),
           ),
@@ -97,11 +105,15 @@ class _MokoAuditScreenState extends State<MokoAuditScreen> {
             'Observaciones auditoría',
             observacionesAuditoria,
             (v) => setState(() => observacionesAuditoria = v),
+            _mokoPhotoObservaciones,
+            () => _tomarFotoMoko('observaciones'),
           ),
           _buildCampoTextoConFoto(
             'Seguimiento áreas',
             seguimientoAreas,
             (v) => setState(() => seguimientoAreas = v),
+            _mokoPhotoSeguimiento,
+            () => _tomarFotoMoko('seguimiento'),
           ),
           const SizedBox(height: 24),
           SizedBox(
@@ -243,7 +255,7 @@ class _MokoAuditScreenState extends State<MokoAuditScreen> {
                     _buildItemResumen('Control de maleza', controlMaleza),
                     _buildItemResumen('Riego estructurado', riegoEstructurado),
                     _buildItemResumen('Entrada única', entradaUnica),
-                    _buildItemResumen('No tiene maleza', noMaleza),
+                    _buildItemResumen('Tiene maleza', noMaleza),
                     _buildItemResumen('Pediluvios', pediluvios),
                     _buildItemResumen(
                       'Soluciones desinfectantes',
@@ -425,6 +437,8 @@ class _MokoAuditScreenState extends State<MokoAuditScreen> {
     String label,
     String valor,
     Function(String) onChanged,
+    File? photoFile,
+    VoidCallback onTakePhoto,
   ) {
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
@@ -454,12 +468,7 @@ class _MokoAuditScreenState extends State<MokoAuditScreen> {
           SizedBox(
             width: double.infinity,
             child: OutlinedButton.icon(
-              onPressed: () => ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('Función de cámara en desarrollo'),
-                  backgroundColor: Color(0xFF004B63),
-                ),
-              ),
+              onPressed: onTakePhoto,
               icon: const Icon(Icons.camera_alt, size: 20),
               label: const Text('Tomar Foto'),
               style: OutlinedButton.styleFrom(
@@ -469,6 +478,11 @@ class _MokoAuditScreenState extends State<MokoAuditScreen> {
               ),
             ),
           ),
+          if (photoFile != null)
+            Padding(
+              padding: const EdgeInsets.only(top: 8.0),
+              child: Image.file(photoFile, height: 120),
+            ),
         ],
       ),
     );
@@ -594,39 +608,131 @@ class _MokoAuditScreenState extends State<MokoAuditScreen> {
         ),
       );
 
-      // Preparar datos de la auditoría
+      // Preparar datos de la auditoría con los campos que espera el backend
+      final List<Map<String, dynamic>> details = [
+        {
+          'categoria': 'PROGRAMA DE MANEJO',
+          'subcategoria': null,
+          'pregunta': 'Control de maleza',
+          'respuesta': controlMaleza == true
+              ? 'SI'
+              : controlMaleza == false
+              ? 'NO'
+              : null,
+          'puntuacion': controlMaleza == true ? 1 : 0,
+          'puntuacionMaxima': 1,
+          'esCritico': false,
+          'observaciones': '',
+          'recomendaciones': '',
+        },
+        {
+          'categoria': 'PROGRAMA DE MANEJO',
+          'subcategoria': null,
+          'pregunta': 'Riego estructurado',
+          'respuesta': riegoEstructurado == true
+              ? 'SI'
+              : riegoEstructurado == false
+              ? 'NO'
+              : null,
+          'puntuacion': riegoEstructurado == true ? 1 : 0,
+          'puntuacionMaxima': 1,
+          'esCritico': false,
+          'observaciones': '',
+          'recomendaciones': '',
+        },
+        {
+          'categoria': 'PROGRAMA DE MANEJO',
+          'subcategoria': null,
+          'pregunta': 'Entrada única',
+          'respuesta': entradaUnica == true
+              ? 'SI'
+              : entradaUnica == false
+              ? 'NO'
+              : null,
+          'puntuacion': entradaUnica == true ? 1 : 0,
+          'puntuacionMaxima': 1,
+          'esCritico': false,
+          'observaciones': '',
+          'recomendaciones': '',
+        },
+        {
+          'categoria': 'PROGRAMA DE MANEJO',
+          'subcategoria': null,
+          'pregunta': 'Tiene maleza',
+          'respuesta': noMaleza == true
+              ? 'SI'
+              : noMaleza == false
+              ? 'NO'
+              : null,
+          'puntuacion': noMaleza == true ? 1 : 0,
+          'puntuacionMaxima': 1,
+          'esCritico': false,
+          'observaciones': '',
+          'recomendaciones': '',
+        },
+        {
+          'categoria': 'PROGRAMA DE MANEJO',
+          'subcategoria': null,
+          'pregunta': 'Pediluvios',
+          'respuesta': pediluvios == true
+              ? 'SI'
+              : pediluvios == false
+              ? 'NO'
+              : null,
+          'puntuacion': pediluvios == true ? 1 : 0,
+          'puntuacionMaxima': 1,
+          'esCritico': false,
+          'observaciones': '',
+          'recomendaciones': '',
+        },
+        {
+          'categoria': 'PROGRAMA DE MANEJO',
+          'subcategoria': null,
+          'pregunta': 'Soluciones desinfectantes',
+          'respuesta': solucionesDesinfectantes == true
+              ? 'SI'
+              : solucionesDesinfectantes == false
+              ? 'NO'
+              : null,
+          'puntuacion': solucionesDesinfectantes == true ? 1 : 0,
+          'puntuacionMaxima': 1,
+          'esCritico': false,
+          'observaciones': '',
+          'recomendaciones': '',
+        },
+        {
+          'categoria': 'LABORES DENTRO DEL MOKO',
+          'subcategoria': null,
+          'pregunta': 'Análisis microbiológico',
+          'respuesta': analisisMicrobiologico == true
+              ? 'SI'
+              : analisisMicrobiologico == false
+              ? 'NO'
+              : null,
+          'puntuacion': analisisMicrobiologico == true ? 1 : 0,
+          'puntuacionMaxima': 1,
+          'esCritico': false,
+          'observaciones': '',
+          'recomendaciones': '',
+        },
+      ];
+
       final auditData = {
-        'clientId':
-            widget.clientData?['id'] ??
-            1, // Usar ID del cliente si está disponible
-        'auditDate': DateTime.now().toIso8601String(),
-        'status': 'COMPLETADA',
-        'mokoData': [
-          {'question': 'Control de maleza', 'answer': controlMaleza},
-          {'question': 'Riego estructurado', 'answer': riegoEstructurado},
-          {'question': 'Entrada única', 'answer': entradaUnica},
-          {'question': 'No tiene maleza', 'answer': noMaleza},
-          {'question': 'Pediluvios', 'answer': pediluvios},
-          {
-            'question': 'Soluciones desinfectantes',
-            'answer': solucionesDesinfectantes,
-          },
-          {
-            'question': 'Análisis microbiológico',
-            'answer': analisisMicrobiologico,
-          },
-        ],
-        'observations': observacionesAuditoria,
-        'seguimiento': seguimientoAreas,
+        'tecnicoId': widget.clientData?['id'] ?? 1,
+        'fecha': DateTime.now().toIso8601String(),
+        'estado': 'COMPLETADA',
+        'details': details,
+        'observaciones': observacionesAuditoria,
+        // 'seguimiento' eliminado porque el backend no lo espera
       };
 
       // 1. Guardar en SQLite primero (siempre)
       final localId = await _offlineStorage.savePendingMokoAudit(
-        clientId: auditData['clientId'],
-        auditDate: auditData['auditDate'],
-        status: auditData['status'],
-        mokoData: List<Map<String, dynamic>>.from(auditData['mokoData']),
-        observations: auditData['observations'],
+        clientId: auditData['tecnicoId'],
+        auditDate: auditData['fecha'],
+        status: auditData['estado'],
+        mokoData: List<Map<String, dynamic>>.from(auditData['details']),
+        observations: auditData['observaciones'],
       );
 
       // 2. Verificar conexión y sincronizar si es posible
@@ -637,11 +743,11 @@ class _MokoAuditScreenState extends State<MokoAuditScreen> {
         try {
           // Intentar subir inmediatamente
           final result = await _mokoAuditService.createMokoAudit(
-            clientId: auditData['clientId'],
-            auditDate: auditData['auditDate'],
-            status: auditData['status'],
-            mokoData: List<Map<String, dynamic>>.from(auditData['mokoData']),
-            observations: auditData['observations'],
+            tecnicoId: auditData['tecnicoId'],
+            fecha: auditData['fecha'],
+            estado: auditData['estado'],
+            details: List<Map<String, dynamic>>.from(auditData['details']),
+            observaciones: auditData['observaciones'],
           );
 
           if (result['success'] == true) {
@@ -699,6 +805,25 @@ class _MokoAuditScreenState extends State<MokoAuditScreen> {
           ],
         ),
       );
+    }
+  }
+
+  Future<void> _tomarFotoMoko(String tipo) async {
+    final picker = ImagePicker();
+    final pickedFile = await picker.pickImage(
+      source: ImageSource.camera,
+      imageQuality: 70,
+    );
+    if (pickedFile != null) {
+      setState(() {
+        if (tipo == 'observaciones') {
+          _mokoPhotoObservaciones = File(pickedFile.path);
+          _mokoPhotoPathObservaciones = pickedFile.path;
+        } else if (tipo == 'seguimiento') {
+          _mokoPhotoSeguimiento = File(pickedFile.path);
+          _mokoPhotoPathSeguimiento = pickedFile.path;
+        }
+      });
     }
   }
 }

@@ -8,7 +8,9 @@ services:
       mysql:
         condition: service_healthy
     environment:
-      - SPRING_DATASOURCE_URL=jdbc:mysql://mysql:3306/lytiks_db?useSSL=false&serverTimezone=UTC&createDatabaseIfNotExist=true
+      #- SPRING_DATASOURCE_URL=jdbc:mysql://mysql:3306/lytiks_db?useSSL=false&serverTimezone=UTC&createDatabaseIfNotExist=true
+      - SPRING_DATASOURCE_URL=jdbc:mysql://lytiks-new-mysql:3306/lytiks_db?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC&createDatabaseIfNotExist=true
+
       - SPRING_DATASOURCE_USERNAME=lytiks_user
       - SPRING_DATASOURCE_PASSWORD=lytiks_pass
     networks:

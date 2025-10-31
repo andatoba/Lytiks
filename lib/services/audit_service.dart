@@ -36,33 +36,29 @@ class AuditService {
   }
 
   // Crear una nueva auditoría
-  Future<Map<String, dynamic>> createAudit({
-    required int clientId,
-    required int categoryId,
-    required String auditDate,
-    required String status,
-    required List<Map<String, dynamic>> auditData,
-    String? observations,
-    double? latitude,
-    double? longitude,
-    String? imagePath,
+  Future<Map<String, dynamic>> createAuditBackend({
+    required String hacienda,
+    required String cultivo,
+    required String fecha,
+    required int tecnicoId,
+    required String estado,
+    String? observaciones,
+    required List<Map<String, dynamic>> scores,
   }) async {
     try {
       final headers = await _getHeaders();
       final url = await baseUrl;
       final response = await http.post(
-        Uri.parse('$url/audits'),
+        Uri.parse('$url/audits/create'),
         headers: headers,
         body: json.encode({
-          'clientId': clientId,
-          'categoryId': categoryId,
-          'auditDate': auditDate,
-          'status': status,
-          'auditData': auditData,
-          'observations': observations,
-          'latitude': latitude,
-          'longitude': longitude,
-          'imagePath': imagePath,
+          'hacienda': hacienda,
+          'cultivo': cultivo,
+          'fecha': fecha,
+          'tecnicoId': tecnicoId,
+          'estado': estado,
+          'observaciones': observaciones,
+          'scores': scores,
         }),
       );
 
@@ -71,7 +67,7 @@ class AuditService {
       } else if (response.statusCode == 401) {
         throw Exception('Token expirado. Por favor, inicia sesión nuevamente.');
       } else {
-        throw Exception('Error al crear auditoría: ${response.body}');
+        throw Exception('Error al crear auditoría: \\${response.body}');
       }
     } catch (e) {
       if (e.toString().contains('SocketException')) {
@@ -79,6 +75,22 @@ class AuditService {
       }
       rethrow;
     }
+  }
+
+  /// Helper to build scores for backend
+  static List<Map<String, dynamic>> buildBackendScores(
+    List<Map<String, dynamic>> details,
+  ) {
+    return details
+        .map(
+          (item) => {
+            'categoria': item['section'] ?? '',
+            'puntuacion': item['calculatedScore'] ?? 0,
+            'observaciones': '', // Add if you have per-item observations
+            'photoBase64': item['photoBase64'],
+          },
+        )
+        .toList();
   }
 
   // Obtener todas las auditorías

@@ -8,72 +8,72 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDateTime;
-import java.util.List;
-import java.util.Optional;
-import java.util.HashMap;
-import java.util.Map;
+import java.util.*;
 
 @RestController
-@RequestMapping("/moko-audits")
+@RequestMapping({"/moko-audits", "/api/moko-audits"})
 @CrossOrigin(origins = "*")
-public class MokoAuditController {
+public class MokoAuditController {  
+
 
     @Autowired
     private MokoAuditRepository mokoAuditRepository;
 
     // Crear nueva auditoría de Moko
-    @PostMapping("/create")
-    public ResponseEntity<Map<String, Object>> createMokoAudit(@RequestBody Map<String, Object> auditData) {
+    @PostMapping
+    public ResponseEntity<Map<String, Object>> createMokoAudit(@RequestBody Map<String, Object> mokoAuditData) {
         Map<String, Object> response = new HashMap<>();
         try {
-            MokoAudit mokoAudit = new MokoAudit();
-            mokoAudit.setHacienda((String) auditData.get("hacienda"));
-            mokoAudit.setLote((String) auditData.get("lote"));
-            mokoAudit.setFecha(LocalDateTime.now());
-            mokoAudit.setTecnicoId(Long.valueOf(auditData.get("tecnicoId").toString()));
-            mokoAudit.setEstado("PENDIENTE");
-            
-            // Datos específicos del resumen Moko
-            if (auditData.containsKey("evaluacionesTotales")) {
-                mokoAudit.setEvaluacionesTotales(Integer.valueOf(auditData.get("evaluacionesTotales").toString()));
+            MokoAudit audit = new MokoAudit();
+            // Mapear clientId a tecnicoId si viene de Flutter
+            if (mokoAuditData.get("clientId") != null) {
+                audit.setTecnicoId(Long.valueOf(mokoAuditData.get("clientId").toString()));
+            } else if (mokoAuditData.get("tecnicoId") != null) {
+                audit.setTecnicoId(Long.valueOf(mokoAuditData.get("tecnicoId").toString()));
             }
-            
-            if (auditData.containsKey("programaManejoScore")) {
-                mokoAudit.setProgramaManejoScore(Integer.valueOf(auditData.get("programaManejoScore").toString()));
+            audit.setHacienda((String) mokoAuditData.get("hacienda"));
+            audit.setLote((String) mokoAuditData.get("lote"));
+            audit.setFecha(mokoAuditData.get("auditDate") != null ? LocalDateTime.parse(mokoAuditData.get("auditDate").toString()) : LocalDateTime.now());
+            audit.setEstado((String) mokoAuditData.getOrDefault("status", "PENDIENTE"));
+            audit.setObservaciones((String) mokoAuditData.get("observations"));
+            // Puedes mapear otros campos aquí según tu modelo
+
+            // Guardar detalles si existen
+            if (mokoAuditData.containsKey("mokoData")) {
+                List<MokoAuditDetail> details = new ArrayList<>();
+                Object mokoDataObj = mokoAuditData.get("mokoData");
+                if (mokoDataObj instanceof List<?>) {
+                    List<?> mokoDataList = (List<?>) mokoDataObj;
+                    for (Object detailObj : mokoDataList) {
+                        if (detailObj instanceof Map) {
+                            @SuppressWarnings("unchecked")
+                            Map<String, Object> detailData = (Map<String, Object>) detailObj; // Safe due to runtime check
+                            MokoAuditDetail detail = new MokoAuditDetail();
+                            detail.setMokoAudit(audit);
+                            detail.setCategoria((String) detailData.get("categoria"));
+                            detail.setSubcategoria((String) detailData.get("subcategoria"));
+                            detail.setPregunta((String) detailData.get("pregunta"));
+                            detail.setRespuesta((String) detailData.get("respuesta"));
+                            detail.setPuntuacion(detailData.get("puntuacion") != null ? Integer.valueOf(detailData.get("puntuacion").toString()) : null);
+                            detail.setPuntuacionMaxima(detailData.get("puntuacionMaxima") != null ? Integer.valueOf(detailData.get("puntuacionMaxima").toString()) : null);
+                            detail.setEsCritico(detailData.get("esCritico") != null ? Boolean.valueOf(detailData.get("esCritico").toString()) : false);
+                            detail.setObservaciones((String) detailData.get("observaciones"));
+                            detail.setRecomendaciones((String) detailData.get("recomendaciones"));
+                            details.add(detail);
+                        }
+                    }
+                }
+                audit.setDetails(details);
             }
-            
-            if (auditData.containsKey("programaManejoTotal")) {
-                mokoAudit.setProgramaManejoTotal(Integer.valueOf(auditData.get("programaManejoTotal").toString()));
-            }
-            
-            if (auditData.containsKey("laboresMokoScore")) {
-                mokoAudit.setLaboresMokoScore(Integer.valueOf(auditData.get("laboresMokoScore").toString()));
-            }
-            
-            if (auditData.containsKey("laboresMokoTotal")) {
-                mokoAudit.setLaboresMokoTotal(Integer.valueOf(auditData.get("laboresMokoTotal").toString()));
-            }
-            
-            if (auditData.containsKey("cumplimientoGeneral")) {
-                mokoAudit.setCumplimientoGeneral(Double.valueOf(auditData.get("cumplimientoGeneral").toString()));
-            }
-            
-            if (auditData.containsKey("estadoImplementacion")) {
-                mokoAudit.setEstadoImplementacion((String) auditData.get("estadoImplementacion"));
-            }
-            
-            mokoAudit.setObservaciones((String) auditData.get("observaciones"));
-            
-            MokoAudit savedAudit = mokoAuditRepository.save(mokoAudit);
-            
+
+            MokoAudit savedAudit = mokoAuditRepository.save(audit);
             response.put("success", true);
-            response.put("message", "Auditoría de Moko creada exitosamente");
+            response.put("message", "Auditoría Moko creada exitosamente");
             response.put("auditId", savedAudit.getId());
             return ResponseEntity.ok(response);
-            
         } catch (Exception e) {
             response.put("success", false);
-            response.put("message", "Error al crear auditoría de Moko: " + e.getMessage());
+            response.put("message", "Error al crear auditoría Moko: " + e.getMessage());
             return ResponseEntity.badRequest().body(response);
         }
     }
@@ -102,9 +102,9 @@ public class MokoAuditController {
     // Actualizar estado de auditoría de Moko
     @PutMapping("/{id}/status")
     public ResponseEntity<Map<String, Object>> updateMokoAuditStatus(
-            @PathVariable Long id, 
+            @PathVariable Long id,
             @RequestBody Map<String, String> statusData) {
-        
+
         Map<String, Object> response = new HashMap<>();
         try {
             Optional<MokoAudit> auditOpt = mokoAuditRepository.findById(id);
@@ -112,7 +112,7 @@ public class MokoAuditController {
                 MokoAudit audit = auditOpt.get();
                 audit.setEstado(statusData.get("estado"));
                 mokoAuditRepository.save(audit);
-                
+
                 response.put("success", true);
                 response.put("message", "Estado actualizado exitosamente");
                 return ResponseEntity.ok(response);
@@ -132,33 +132,33 @@ public class MokoAuditController {
     @GetMapping("/dashboard/{tecnicoId}")
     public ResponseEntity<Map<String, Object>> getMokoDashboard(@PathVariable Long tecnicoId) {
         Map<String, Object> dashboard = new HashMap<>();
-        
+
         try {
             // Contar auditorías de Moko totales
             long totalMokoAudits = mokoAuditRepository.countByTecnicoId(tecnicoId);
-            
+
             // Contar auditorías de Moko de hoy
             long todayMokoAudits = mokoAuditRepository.countTodayMokoAuditsByTecnico(tecnicoId);
-            
+
             // Promedio de cumplimiento
             Double avgCumplimiento = mokoAuditRepository.getAverageCumplimientoByTecnico(tecnicoId);
             if (avgCumplimiento == null) avgCumplimiento = 0.0;
-            
+
             // Auditorías con cumplimiento bajo (menos del 80%)
             long lowCumplimientoAudits = mokoAuditRepository.findLowCumplimientoAudits(80.0).size();
-            
+
             // Obtener auditorías recientes
             List<MokoAudit> recentMokoAudits = mokoAuditRepository.findRecentMokoAuditsByTecnico(tecnicoId)
                     .stream().limit(5).toList();
-            
+
             dashboard.put("totalMokoAudits", totalMokoAudits);
             dashboard.put("todayMokoAudits", todayMokoAudits);
             dashboard.put("avgCumplimiento", Math.round(avgCumplimiento * 100.0) / 100.0);
             dashboard.put("lowCumplimientoAudits", lowCumplimientoAudits);
             dashboard.put("recentMokoAudits", recentMokoAudits);
-            
+
             return ResponseEntity.ok(dashboard);
-            
+
         } catch (Exception e) {
             Map<String, Object> errorResponse = new HashMap<>();
             errorResponse.put("error", "Error al obtener dashboard de Moko: " + e.getMessage());

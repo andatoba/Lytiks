@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'dart:io';
+import 'package:image_picker/image_picker.dart';
 
 class SigatokaAuditScreen extends StatefulWidget {
   final Map<String, dynamic>? clientData;
@@ -10,9 +12,11 @@ class SigatokaAuditScreen extends StatefulWidget {
 }
 
 class _SigatokaAuditScreenState extends State<SigatokaAuditScreen> {
+  File? _sigatokaPhoto;
+  String? _sigatokaPhotoPath;
   String _selectedCrop = 'Banano';
   bool _showResults = false;
-  
+
   // Parámetros básicos (0 y 10 semanas)
   final Map<String, Map<String, double?>> _basicParams = {
     'HSI': {'week0': null, 'week10': null},
@@ -20,7 +24,7 @@ class _SigatokaAuditScreenState extends State<SigatokaAuditScreen> {
     'ILP': {'week0': null, 'week10': null},
     'ISED': {'week0': null, 'week10': null},
   };
-  
+
   String _observations = '';
   String _recommendations = '';
   double? _realStover;
@@ -42,7 +46,10 @@ class _SigatokaAuditScreenState extends State<SigatokaAuditScreen> {
         ),
         actions: [
           IconButton(
-            icon: Icon(_showResults ? Icons.edit : Icons.analytics, color: Colors.white),
+            icon: Icon(
+              _showResults ? Icons.edit : Icons.analytics,
+              color: Colors.white,
+            ),
             onPressed: () => setState(() => _showResults = !_showResults),
           ),
         ],
@@ -95,11 +102,7 @@ class _SigatokaAuditScreenState extends State<SigatokaAuditScreen> {
               color: Colors.white,
               borderRadius: BorderRadius.circular(12),
             ),
-            child: const Icon(
-              Icons.eco,
-              color: Color(0xFF388E3C),
-              size: 32,
-            ),
+            child: const Icon(Icons.eco, color: Color(0xFF388E3C), size: 32),
           ),
           const SizedBox(width: 16),
           Expanded(
@@ -175,12 +178,10 @@ class _SigatokaAuditScreenState extends State<SigatokaAuditScreen> {
                         value: 'Banano',
                         child: Text('🍌 Banano'),
                       ),
-                      DropdownMenuItem(
-                        value: 'Palma',
-                        child: Text('🌴 Palma'),
-                      ),
+                      DropdownMenuItem(value: 'Palma', child: Text('🌴 Palma')),
                     ],
-                    onChanged: (value) => setState(() => _selectedCrop = value!),
+                    onChanged: (value) =>
+                        setState(() => _selectedCrop = value!),
                   ),
                 ),
                 const SizedBox(height: 12),
@@ -230,10 +231,7 @@ class _SigatokaAuditScreenState extends State<SigatokaAuditScreen> {
                 const SizedBox(width: 8),
                 const Text(
                   'Parámetros de Análisis Básico',
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                  ),
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                 ),
               ],
             ),
@@ -262,7 +260,10 @@ class _SigatokaAuditScreenState extends State<SigatokaAuditScreen> {
     );
   }
 
-  Widget _buildBasicParameterRow(String parameter, Map<String, double?> values) {
+  Widget _buildBasicParameterRow(
+    String parameter,
+    Map<String, double?> values,
+  ) {
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(12),
@@ -286,12 +287,17 @@ class _SigatokaAuditScreenState extends State<SigatokaAuditScreen> {
                   decoration: const InputDecoration(
                     labelText: 'Semana 0',
                     border: OutlineInputBorder(),
-                    contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    contentPadding: EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 8,
+                    ),
                   ),
                   keyboardType: TextInputType.number,
                   onChanged: (value) {
                     setState(() {
-                      _basicParams[parameter]!['week0'] = double.tryParse(value);
+                      _basicParams[parameter]!['week0'] = double.tryParse(
+                        value,
+                      );
                     });
                   },
                 ),
@@ -302,12 +308,17 @@ class _SigatokaAuditScreenState extends State<SigatokaAuditScreen> {
                   decoration: const InputDecoration(
                     labelText: 'Semana 10 *',
                     border: OutlineInputBorder(),
-                    contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    contentPadding: EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 8,
+                    ),
                   ),
                   keyboardType: TextInputType.number,
                   onChanged: (value) {
                     setState(() {
-                      _basicParams[parameter]!['week10'] = double.tryParse(value);
+                      _basicParams[parameter]!['week10'] = double.tryParse(
+                        value,
+                      );
                     });
                   },
                 ),
@@ -342,7 +353,10 @@ class _SigatokaAuditScreenState extends State<SigatokaAuditScreen> {
                   decoration: const InputDecoration(
                     labelText: 'Stover Real',
                     border: OutlineInputBorder(),
-                    contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    contentPadding: EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 8,
+                    ),
                   ),
                   keyboardType: TextInputType.number,
                   onChanged: (value) {
@@ -358,7 +372,10 @@ class _SigatokaAuditScreenState extends State<SigatokaAuditScreen> {
                   decoration: const InputDecoration(
                     labelText: 'Stover Recomendado',
                     border: OutlineInputBorder(),
-                    contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    contentPadding: EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 8,
+                    ),
                   ),
                   keyboardType: TextInputType.number,
                   onChanged: (value) {
@@ -408,14 +425,7 @@ class _SigatokaAuditScreenState extends State<SigatokaAuditScreen> {
             SizedBox(
               width: double.infinity,
               child: OutlinedButton.icon(
-                onPressed: () {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('Función de cámara en desarrollo'),
-                      backgroundColor: Color(0xFF388E3C),
-                    ),
-                  );
-                },
+                onPressed: _tomarFotoSigatoka,
                 icon: const Icon(Icons.camera_alt),
                 label: const Text('Tomar Evidencias Fotográficas'),
                 style: OutlinedButton.styleFrom(
@@ -425,6 +435,11 @@ class _SigatokaAuditScreenState extends State<SigatokaAuditScreen> {
                 ),
               ),
             ),
+            if (_sigatokaPhoto != null)
+              Padding(
+                padding: const EdgeInsets.only(top: 8.0),
+                child: Image.file(_sigatokaPhoto!, height: 120),
+              ),
             const SizedBox(height: 12),
             TextField(
               maxLines: 2,
@@ -441,6 +456,20 @@ class _SigatokaAuditScreenState extends State<SigatokaAuditScreen> {
     );
   }
 
+  Future<void> _tomarFotoSigatoka() async {
+    final picker = ImagePicker();
+    final pickedFile = await picker.pickImage(
+      source: ImageSource.camera,
+      imageQuality: 70,
+    );
+    if (pickedFile != null) {
+      setState(() {
+        _sigatokaPhoto = File(pickedFile.path);
+        _sigatokaPhotoPath = pickedFile.path;
+      });
+    }
+  }
+
   Widget _buildActionButtons() {
     return Row(
       children: [
@@ -453,7 +482,10 @@ class _SigatokaAuditScreenState extends State<SigatokaAuditScreen> {
             ),
             child: const Text(
               'Ver Análisis',
-              style: TextStyle(color: Color(0xFF388E3C), fontWeight: FontWeight.bold),
+              style: TextStyle(
+                color: Color(0xFF388E3C),
+                fontWeight: FontWeight.bold,
+              ),
             ),
           ),
         ),
@@ -468,7 +500,10 @@ class _SigatokaAuditScreenState extends State<SigatokaAuditScreen> {
             ),
             child: const Text(
               'Guardar Auditoría',
-              style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+              style: TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.bold,
+              ),
             ),
           ),
         ),
@@ -507,7 +542,11 @@ class _SigatokaAuditScreenState extends State<SigatokaAuditScreen> {
                     color: const Color(0xFF388E3C),
                     borderRadius: BorderRadius.circular(8),
                   ),
-                  child: const Icon(Icons.analytics, color: Colors.white, size: 20),
+                  child: const Icon(
+                    Icons.analytics,
+                    color: Colors.white,
+                    size: 20,
+                  ),
                 ),
                 const SizedBox(width: 12),
                 const Text(
@@ -520,10 +559,18 @@ class _SigatokaAuditScreenState extends State<SigatokaAuditScreen> {
             Row(
               children: [
                 Expanded(
-                  child: _buildResultMetric('Cultivo', _selectedCrop, Colors.green),
+                  child: _buildResultMetric(
+                    'Cultivo',
+                    _selectedCrop,
+                    Colors.green,
+                  ),
                 ),
                 Expanded(
-                  child: _buildResultMetric('Estado', _calculateOverallStatus(), _getStatusColor(_calculateOverallStatus())),
+                  child: _buildResultMetric(
+                    'Estado',
+                    _calculateOverallStatus(),
+                    _getStatusColor(_calculateOverallStatus()),
+                  ),
                 ),
               ],
             ),
@@ -543,9 +590,23 @@ class _SigatokaAuditScreenState extends State<SigatokaAuditScreen> {
       ),
       child: Column(
         children: [
-          Text(label, style: TextStyle(fontSize: 12, color: color, fontWeight: FontWeight.bold)),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 12,
+              color: color,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
           const SizedBox(height: 4),
-          Text(value, style: TextStyle(fontSize: 14, color: color, fontWeight: FontWeight.w500)),
+          Text(
+            value,
+            style: TextStyle(
+              fontSize: 14,
+              color: color,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
         ],
       ),
     );
@@ -565,7 +626,9 @@ class _SigatokaAuditScreenState extends State<SigatokaAuditScreen> {
               style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 16),
-            ..._getActiveParameters().map((param) => _buildParameterInterpretation(param)),
+            ..._getActiveParameters().map(
+              (param) => _buildParameterInterpretation(param),
+            ),
             if (_realStover != null && _recommendedStover != null)
               _buildStoverInterpretation(),
           ],
@@ -577,7 +640,7 @@ class _SigatokaAuditScreenState extends State<SigatokaAuditScreen> {
   Widget _buildParameterInterpretation(String parameter) {
     final level = _getParameterLevel(parameter);
     final color = _getLevelColor(level);
-    
+
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(12),
@@ -591,20 +654,21 @@ class _SigatokaAuditScreenState extends State<SigatokaAuditScreen> {
           Container(
             width: 12,
             height: 12,
-            decoration: BoxDecoration(
-              color: color,
-              shape: BoxShape.circle,
-            ),
+            decoration: BoxDecoration(color: color, shape: BoxShape.circle),
           ),
           const SizedBox(width: 12),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('${_getParameterFullName(parameter)}: $level', 
-                     style: const TextStyle(fontWeight: FontWeight.w500)),
-                Text(_getParameterRecommendation(parameter, level),
-                     style: TextStyle(fontSize: 12, color: Colors.grey[600])),
+                Text(
+                  '${_getParameterFullName(parameter)}: $level',
+                  style: const TextStyle(fontWeight: FontWeight.w500),
+                ),
+                Text(
+                  _getParameterRecommendation(parameter, level),
+                  style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                ),
               ],
             ),
           ),
@@ -616,14 +680,20 @@ class _SigatokaAuditScreenState extends State<SigatokaAuditScreen> {
   Widget _buildStoverInterpretation() {
     final difference = (_realStover! - _recommendedStover!).abs();
     final isWithinRange = difference <= (_recommendedStover! * 0.1);
-    
+
     return Container(
       margin: const EdgeInsets.only(top: 12),
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: isWithinRange ? Colors.green.withOpacity(0.1) : Colors.orange.withOpacity(0.1),
+        color: isWithinRange
+            ? Colors.green.withOpacity(0.1)
+            : Colors.orange.withOpacity(0.1),
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: isWithinRange ? Colors.green.withOpacity(0.3) : Colors.orange.withOpacity(0.3)),
+        border: Border.all(
+          color: isWithinRange
+              ? Colors.green.withOpacity(0.3)
+              : Colors.orange.withOpacity(0.3),
+        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -655,8 +725,8 @@ class _SigatokaAuditScreenState extends State<SigatokaAuditScreen> {
               style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 12),
-            ..._generateAutomaticRecommendations().map((rec) => 
-              Container(
+            ..._generateAutomaticRecommendations().map(
+              (rec) => Container(
                 margin: const EdgeInsets.only(bottom: 8),
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -686,11 +756,16 @@ class _SigatokaAuditScreenState extends State<SigatokaAuditScreen> {
 
   String _getParameterFullName(String param) {
     switch (param) {
-      case 'HSI': return 'HSI (Health Status Index)';
-      case 'YLS': return 'YLS (Youngest Leaf Spotted)';
-      case 'ILP': return 'ILP (Index of Leaf Position)';
-      case 'ISED': return 'ISED (Index of Severity Evolution Disease)';
-      default: return param;
+      case 'HSI':
+        return 'HSI (Health Status Index)';
+      case 'YLS':
+        return 'YLS (Youngest Leaf Spotted)';
+      case 'ILP':
+        return 'ILP (Index of Leaf Position)';
+      case 'ISED':
+        return 'ISED (Index of Severity Evolution Disease)';
+      default:
+        return param;
     }
   }
 
@@ -711,9 +786,9 @@ class _SigatokaAuditScreenState extends State<SigatokaAuditScreen> {
     final data = _getParameterData(parameter);
     final validValues = data.where((v) => v != null).map((v) => v!).toList();
     if (validValues.isEmpty) return 'Sin datos';
-    
+
     final average = validValues.reduce((a, b) => a + b) / validValues.length;
-    
+
     // Lógica simplificada para demostración
     if (average < 30) return 'Bajo';
     if (average < 70) return 'Medio';
@@ -722,24 +797,34 @@ class _SigatokaAuditScreenState extends State<SigatokaAuditScreen> {
 
   Color _getLevelColor(String level) {
     switch (level) {
-      case 'Bajo': return Colors.green;
-      case 'Medio': return Colors.orange;
-      case 'Alto': return Colors.red;
-      default: return Colors.grey;
+      case 'Bajo':
+        return Colors.green;
+      case 'Medio':
+        return Colors.orange;
+      case 'Alto':
+        return Colors.red;
+      default:
+        return Colors.grey;
     }
   }
 
   String _getParameterRecommendation(String parameter, String level) {
     switch (level) {
-      case 'Bajo': return 'Nivel óptimo, mantener programa actual';
-      case 'Medio': return 'Nivel moderado, monitorear de cerca';
-      case 'Alto': return 'Nivel crítico, aplicar medidas correctivas inmediatas';
-      default: return 'Insuficientes datos para evaluación';
+      case 'Bajo':
+        return 'Nivel óptimo, mantener programa actual';
+      case 'Medio':
+        return 'Nivel moderado, monitorear de cerca';
+      case 'Alto':
+        return 'Nivel crítico, aplicar medidas correctivas inmediatas';
+      default:
+        return 'Insuficientes datos para evaluación';
     }
   }
 
   String _calculateOverallStatus() {
-    final levels = _getActiveParameters().map((p) => _getParameterLevel(p)).toList();
+    final levels = _getActiveParameters()
+        .map((p) => _getParameterLevel(p))
+        .toList();
     if (levels.contains('Alto')) return 'Crítico';
     if (levels.contains('Medio')) return 'Moderado';
     if (levels.contains('Bajo')) return 'Óptimo';
@@ -748,18 +833,22 @@ class _SigatokaAuditScreenState extends State<SigatokaAuditScreen> {
 
   Color _getStatusColor(String status) {
     switch (status) {
-      case 'Óptimo': return Colors.green;
-      case 'Moderado': return Colors.orange;
-      case 'Crítico': return Colors.red;
-      default: return Colors.grey;
+      case 'Óptimo':
+        return Colors.green;
+      case 'Moderado':
+        return Colors.orange;
+      case 'Crítico':
+        return Colors.red;
+      default:
+        return Colors.grey;
     }
   }
 
   List<String> _generateAutomaticRecommendations() {
     List<String> recommendations = [];
-    
+
     final overallStatus = _calculateOverallStatus();
-    
+
     switch (overallStatus) {
       case 'Crítico':
         recommendations.addAll([
@@ -784,24 +873,32 @@ class _SigatokaAuditScreenState extends State<SigatokaAuditScreen> {
         ]);
         break;
     }
-    
+
     if (_realStover != null && _recommendedStover != null) {
       final difference = _realStover! - _recommendedStover!;
       if (difference.abs() > (_recommendedStover! * 0.1)) {
         if (difference > 0) {
-          recommendations.add('Reducir programa de deshoje, stover actual superior al recomendado');
+          recommendations.add(
+            'Reducir programa de deshoje, stover actual superior al recomendado',
+          );
         } else {
-          recommendations.add('Incrementar programa de deshoje, stover actual inferior al recomendado');
+          recommendations.add(
+            'Incrementar programa de deshoje, stover actual inferior al recomendado',
+          );
         }
       }
     }
-    
+
     if (_selectedCrop == 'Banano') {
-      recommendations.add('Aplicar consideraciones específicas para cultivo de banano');
+      recommendations.add(
+        'Aplicar consideraciones específicas para cultivo de banano',
+      );
     } else {
-      recommendations.add('Aplicar consideraciones específicas para cultivo de palma');
+      recommendations.add(
+        'Aplicar consideraciones específicas para cultivo de palma',
+      );
     }
-    
+
     return recommendations;
   }
 
@@ -815,15 +912,17 @@ class _SigatokaAuditScreenState extends State<SigatokaAuditScreen> {
       'recommendedStover': _recommendedStover,
       'basicParams': _basicParams,
     };
-    
+
     // TODO: Implementar guardado real en base de datos
     print('Guardando auditoría Sigatoka: $auditData');
-    
+
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Auditoría Guardada'),
-        content: const Text('La auditoría de Sigatoka ha sido guardada exitosamente.'),
+        content: const Text(
+          'La auditoría de Sigatoka ha sido guardada exitosamente.',
+        ),
         actions: [
           TextButton(
             onPressed: () {

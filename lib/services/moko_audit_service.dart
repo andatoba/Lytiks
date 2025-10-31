@@ -21,11 +21,11 @@ class MokoAuditService {
 
   // Crear una nueva auditoría Moko
   Future<Map<String, dynamic>> createMokoAudit({
-    required int clientId,
-    required String auditDate,
-    required String status,
-    required List<Map<String, dynamic>> mokoData,
-    String? observations,
+    required int tecnicoId,
+    required String fecha,
+    required String estado,
+    required List<Map<String, dynamic>> details,
+    String? observaciones,
     double? latitude,
     double? longitude,
   }) async {
@@ -34,11 +34,11 @@ class MokoAuditService {
       final url = Uri.parse('${await baseUrl}/moko-audits');
 
       final body = {
-        'clientId': clientId,
-        'auditDate': auditDate,
-        'status': status,
-        'mokoData': mokoData,
-        'observations': observations,
+        'tecnicoId': tecnicoId,
+        'fecha': fecha,
+        'estado': estado,
+        'details': details,
+        'observaciones': observaciones,
         'latitude': latitude,
         'longitude': longitude,
       };

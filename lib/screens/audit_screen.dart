@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'dart:io';
 import 'package:image_picker/image_picker.dart';
+import 'dart:convert';
 import '../utils/lytiks_utils.dart';
 import '../services/offline_storage_service.dart';
+import '../services/audit_service.dart';
 
 class AuditScreen extends StatefulWidget {
   const AuditScreen({super.key});
@@ -12,8 +14,146 @@ class AuditScreen extends StatefulWidget {
 }
 
 class _AuditScreenState extends State<AuditScreen> {
+  // Servicios para auditoría de campo
+  final OfflineStorageService _offlineStorageCampo = OfflineStorageService();
+  // TODO: Agregar aquí el servicio de sincronización de auditoría de campo si existe (por ejemplo, AuditSyncService)
+  Future<void> _guardarAuditoriaCampo(
+    int completedItems,
+    int totalItems,
+    int totalScore,
+    int maxPossibleScore,
+  ) async {
+    try {
+      // Mostrar indicador de carga
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => const AlertDialog(
+          content: Row(
+            children: [
+              CircularProgressIndicator(),
+              SizedBox(width: 16),
+              Text('Guardando auditoría...'),
+            ],
+          ),
+        ),
+      );
+
+      // Preparar datos de la auditoría de campo
+      final List<Map<String, dynamic>> details = [];
+      for (final section in _auditSections.entries) {
+        final sectionName = section.key;
+        final items = section.value;
+        for (final item in items) {
+          if (item.rating != null) {
+            details.add({
+              'section': sectionName,
+              'item': item.name,
+              'maxScore': item.maxScore,
+              'rating': item.rating,
+              'calculatedScore': item.calculatedScore ?? 0,
+              'photoBase64': item.photoPath != null
+                  ? base64Encode(File(item.photoPath!).readAsBytesSync())
+                  : null,
+            });
+          }
+        }
+      }
+
+      // Guardar en SQLite primero (tabla pending_audits)
+      final int clientId = 1; // TODO: Reemplazar con el ID real del cliente
+      final int categoryId =
+          1; // TODO: Reemplazar con el ID real de la categoría
+      await _offlineStorageCampo.savePendingAudit(
+        clientId: clientId,
+        categoryId: categoryId,
+        auditDate: DateTime.now().toIso8601String(),
+        status: 'COMPLETADA',
+        auditData: details,
+        observations: null,
+        latitude: null,
+        longitude: null,
+        imagePath: null,
+      );
+
+      // Intentar sincronizar con backend solo si hay internet
+      final auditService = AuditService();
+      final String hacienda = 'Hacienda Demo';
+      final String cultivo = _selectedCrop;
+      final String fecha = DateTime.now().toIso8601String();
+      final int tecnicoId = 1;
+      final String estado = 'COMPLETADA';
+      final String? observaciones = null;
+      final scores = AuditService.buildBackendScores(details);
+
+      bool hayInternet = false;
+      try {
+        hayInternet = await auditService.testConnection();
+      } catch (_) {
+        hayInternet = false;
+      }
+
+      String mensaje;
+      if (hayInternet) {
+        try {
+          await auditService.createAuditBackend(
+            hacienda: hacienda,
+            cultivo: cultivo,
+            fecha: fecha,
+            tecnicoId: tecnicoId,
+            estado: estado,
+            observaciones: observaciones,
+            scores: scores,
+          );
+          mensaje = 'Auditoría guardada y sincronizada exitosamente.';
+        } catch (e) {
+          mensaje =
+              'Auditoría guardada localmente, se sincronizará cuando haya conexión estable.';
+        }
+      } else {
+        mensaje =
+            'Auditoría guardada localmente, se sincronizará cuando haya conexión estable.';
+      }
+
+      // Cerrar indicador de carga
+      Navigator.of(context).pop();
+
+      // Mostrar resultado
+      showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Auditoría Guardada'),
+          content: Text(mensaje),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.of(context).pop();
+                Navigator.of(context).pop();
+              },
+              child: const Text('Aceptar'),
+            ),
+          ],
+        ),
+      );
+    } catch (e) {
+      Navigator.of(context).pop();
+      showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Error'),
+          content: Text('Error al guardar la auditoría: ${e.toString()}'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Aceptar'),
+            ),
+          ],
+        ),
+      );
+    }
+  }
+
   final ImagePicker _picker = ImagePicker();
-  final OfflineStorageService _offlineStorage = OfflineStorageService();
   bool _isBasicMode = true; // true para básica, false para completa
   String _selectedCrop =
       'banano'; // tipo de cultivo seleccionado: 'banano' o 'palma'
@@ -21,29 +161,32 @@ class _AuditScreenState extends State<AuditScreen> {
   // Estructura de datos para los elementos de evaluación (mismo para ambos cultivos)
   final Map<String, List<AuditItem>> _auditSections = {
     'ENFUNDE': [
-      AuditItem('IDENTIFICACION', 20),
+      AuditItem('ATRASO DE LABOR E MAL IDENTIFICACION', 20),
       AuditItem('RETOLDEO', 20),
       AuditItem('CIRUGIA, SE ENCUENTRAN MELLIZOS', 20),
       AuditItem('FALTA DE PROTECTORES Y/O MAL COLOCADO', 20),
-      AuditItem('SACUDIDO BRACTEAS 2DA SUBIDA Y 3RA PICADA', 20),
+      AuditItem('SACUDIR BRACTEAS 2DA SUBIDA Y 3RA SUBIDA AL RACIMO', 20),
     ],
     'SELECCION': [
-      AuditItem('MALA DISTRIBUCION Y/O DEJA PLANTAS SIN SELECCIONAR', 20),
-      AuditItem('MALA SELECCION DE HIJOS DOBLE EN EXCESO', 20),
+      AuditItem('MALA DISTRIBUCION Y/O DEJA PLANTAS SIN SELECTAR', 20),
+      AuditItem('MALA SELECCION DE HIJOS', 20),
+      AuditItem('DOBLE EN EXCESO', 20),
       AuditItem('MAL CANCELADOS', 20),
-      AuditItem('NO GENERA DOBLES', 20),
+      AuditItem('NO GENERA DOBLES PERIFERICOS', 20),
     ],
     'COSECHA': [
-      AuditItem('FFE + FF(16.0% a 7.33%)', 10),
-      AuditItem('FFE + FF(16 a 3%)', 15),
-      AuditItem('FFE+FF(13.0 a 0%)', 20),
+      AuditItem('FFE + FFI (6,01% a 7,99%)', 10),
+      AuditItem('FFE + FFI (8 a 9%)', 15),
+      AuditItem('FFE+FFI (=>9,01%)', 20),
       AuditItem('NO SE LLEVA PARCELA DE CALIBRACION', 15),
-      AuditItem('COSECHA OJOS', 5),
-      AuditItem('DIARIO DE LOTES', 20),
-      AuditItem('COSECHA(LIJOS) PLANIFICACION', 5),
-      AuditItem('LOTES CON FRECUENCIA', 5),
-      AuditItem('MAYOR A 8 DIAS', 20),
-      AuditItem('PLANIFICACION DE COSECHA', 5),
+      AuditItem(
+        'LIBRO DE AR (LLEVA REGISTRO DIARIO DE LOTES COSECHADOS) PLANIFICACION DE COSECHA',
+        20,
+      ),
+      AuditItem(
+        'LOTES CON FRECUENCIA MAYOR A 5 DÍAS / MAL PLANIFICACION DE COSECHA',
+        20,
+      ),
     ],
     'DESHOJE FITOSANITARIO': [
       AuditItem('TEJIDO NECROTICO SIN CORTAR', 40),
@@ -54,108 +197,48 @@ class _AuditScreenState extends State<AuditScreen> {
       AuditItem('HOJA TOCANDO RACIMO Y/O HOJA PUENTE SIN CORTAR', 25),
       AuditItem('ELIMINA HOJAS VERDES', 25),
       AuditItem('DEJA HOJA BAJERA', 25),
-      AuditItem('DEJAN COGOLLOS', 25),
+      AuditItem('DEJAN CODOS', 25),
     ],
-    'DESHIJE': [
+    'DESVIO DE HIJOS': [
       AuditItem('SIN DESVIAR', 50),
       AuditItem('HIJOS MALTRATADOS', 50),
     ],
-    'APLICACION PUNTO CON SUCONT': [
+    'APUNTALAMIENTO CON SUNCHOT': [
       AuditItem('ZUNCHO FLOJO Y/O MAL ANGULO MAL COLOCADO', 25),
-      AuditItem('MATAS CAIDAS MAYOR A 3%', 25),
-      AuditItem('DEL ENFUNDE PROMEDIO SEMANAL DEL LOTE', 25),
       AuditItem(
-        'UTILIZA ESTAQUILLA PARA MEJORAR ANGULO DENT PUEDE LA PLANTACION CARALLE VIA AMARRE EN HIJOS Y/O EN PLANTAS CON ANGULO',
+        'MATAS CAIDAS MAYOR A 3%  DEL ENFUNDE PROMEDIO SEMANAL DEL LOTE',
         25,
       ),
-    ],
-    'APUNTEO CON SUCONT': [
-      AuditItem('PUNTAL FLOJO Y/O MAL ANGULO', 20),
-      AuditItem('MATAS CAIDAS MAYOR A 3%', 20),
-      AuditItem('DEL ENFUNDE PROMEDIO SEMANAL DEL LOTE', 20),
       AuditItem(
-        'PUNTAL RECICLADO PACIMO Y/O DAÑA PARTE BASAL DE LA PLANTA  PUNTAL',
+        'UTILIZA ESTAQUILLA PARA MEJORAR ANGULO DENTRO DE LA PLANTACION Y CABLE VIA',
+        25,
+      ),
+      AuditItem('AMARRE EN HIJOS Y/O EN PLANTAS CON RACIMOS +9 SEM', 25),
+    ],
+    'APUNTALAMIENTO CON PUNTAL': [
+      AuditItem('PUNTAL FLOJO Y/O MAL ANGULO', 20),
+      AuditItem(
+        'MATAS CAIDAS MAYOR A 3% DEL ENFUNDE PROMEDIO SEMANAL DEL LOTE',
         20,
       ),
+      AuditItem('UN PUNTAL', 20),
+      AuditItem('PUNTAL ROZANDO RACIMO Y/O DAÑA PARTE BASAL DE LA HOJA', 20),
+      AuditItem('PUNTAL PODRIDO', 20),
     ],
-    'DRENAJE': [
+    'MANEJO DE AGUAS (RIEGO)': [
       AuditItem('SATURACION DE AREA SIN CAPACIDAD DE CAMPO', 20),
-      AuditItem('CUMPLIMIENTO DE METROS DE DREN', 20),
-      AuditItem('SE OBSERVAN TRIANGULO', 15),
-      AuditItem('SE OBSERVAN TORDOS', 15),
+      AuditItem('CUMPLIMIENTO DE TURNOS DE RIEGO ', 20),
+      AuditItem('SE OBSERVAN TRIANGULO SECOS', 15),
+      AuditItem('SE OBSERVAN FUGAS', 15),
       AuditItem('FALTA DE ASPERSORES', 15),
-      AuditItem('PRECISION EN APLICACION DE AZUFRE (DAJA)', 15),
+      AuditItem('PRESION INADEUADA (ALTA O BAJA)', 15),
     ],
-    'MANEJO DE MALEZAS': [
+    'MANEJO DE AGUAS (DRENAJE)': [
       AuditItem('AGUAS RETENIDAS', 35),
       AuditItem('CANALES SUCIOS', 35),
       AuditItem('ENCHARCAMIENTO POR FALTA DE DRENAJE', 30),
     ],
   };
-
-  Future<void> _saveAudit() async {
-    try {
-      // Crear la data de la auditoría
-      final List<Map<String, dynamic>> auditData = [];
-
-      for (final section in _auditSections.entries) {
-        final sectionName = section.key;
-        final items = section.value;
-
-        for (final item in items) {
-          if (item.rating != null) {
-            auditData.add({
-              'section': sectionName,
-              'item': item.name,
-              'maxScore': item.maxScore,
-              'rating': item.rating,
-              'calculatedScore': item.calculatedScore ?? 0,
-              'photoPath': item.photoPath,
-            });
-          }
-        }
-      }
-
-      if (auditData.isEmpty) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('No hay elementos evaluados para guardar'),
-            backgroundColor: Colors.orange,
-          ),
-        );
-        return;
-      }
-
-      // Guardar en almacenamiento offline
-      await _offlineStorage.savePendingAudit(
-        clientId: 1, // Por ahora hardcoded, debería venir de la selección
-        categoryId: _selectedCrop == 'banano' ? 1 : 2,
-        auditDate: DateTime.now().toIso8601String(),
-        status: 'COMPLETED',
-        auditData: auditData,
-        observations:
-            'Auditoría de ${_selectedCrop.toUpperCase()} - Modo ${_isBasicMode ? 'Básico' : 'Completo'}',
-      );
-
-      // Mostrar confirmación
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Auditoría guardada exitosamente'),
-          backgroundColor: Colors.green,
-        ),
-      );
-
-      // Volver al home
-      Navigator.of(context).pop();
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Error al guardar auditoría: $e'),
-          backgroundColor: Colors.red,
-        ),
-      );
-    }
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -209,54 +292,65 @@ class _AuditScreenState extends State<AuditScreen> {
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   const Text(
-                    'Modo de Auditoría',
+                    'Auditoría',
                     style: TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.bold,
                       color: Color(0xFF004B63),
                     ),
                   ),
-                  Row(
-                    children: [
-                      Text(
-                        'Básica',
-                        style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: _isBasicMode
-                              ? FontWeight.bold
-                              : FontWeight.normal,
-                          color: _isBasicMode
-                              ? const Color(0xFF004B63)
-                              : Colors.grey,
+                  Expanded(
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      children: [
+                        Expanded(
+                          child: Text(
+                            'Básica',
+                            textAlign: TextAlign.right,
+                            style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: _isBasicMode
+                                  ? FontWeight.bold
+                                  : FontWeight.normal,
+                              color: _isBasicMode
+                                  ? const Color(0xFF004B63)
+                                  : Colors.grey,
+                            ),
+                            overflow: TextOverflow.ellipsis,
+                          ),
                         ),
-                      ),
-                      Switch(
-                        value: !_isBasicMode,
-                        onChanged: (value) {
-                          setState(() {
-                            _isBasicMode = !value;
-                          });
-                        },
-                        activeColor: const Color(0xFF004B63),
-                        activeTrackColor: const Color(
-                          0xFF004B63,
-                        ).withOpacity(0.3),
-                        inactiveThumbColor: Colors.grey,
-                        inactiveTrackColor: Colors.grey.withOpacity(0.3),
-                      ),
-                      Text(
-                        'Completa',
-                        style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: !_isBasicMode
-                              ? FontWeight.bold
-                              : FontWeight.normal,
-                          color: !_isBasicMode
-                              ? const Color(0xFF004B63)
-                              : Colors.grey,
+                        Switch(
+                          value: !_isBasicMode,
+                          onChanged: (value) {
+                            setState(() {
+                              _isBasicMode = !value;
+                            });
+                          },
+                          activeColor: const Color(0xFF004B63),
+                          activeTrackColor: const Color(
+                            0xFF004B63,
+                          ).withOpacity(0.3),
+                          inactiveThumbColor: Colors.grey,
+                          inactiveTrackColor: Colors.grey.withOpacity(0.3),
                         ),
-                      ),
-                    ],
+                        Expanded(
+                          child: Text(
+                            'Completa',
+                            textAlign: TextAlign.left,
+                            style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: !_isBasicMode
+                                  ? FontWeight.bold
+                                  : FontWeight.normal,
+                              color: !_isBasicMode
+                                  ? const Color(0xFF004B63)
+                                  : Colors.grey,
+                            ),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ],
               ),
@@ -443,7 +537,7 @@ class _AuditScreenState extends State<AuditScreen> {
                   ),
                 ),
                 child: const Text(
-                  'Finalizar Auditoría',
+                  ' Ver Resumen y Guardar',
                   style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                 ),
               ),
@@ -553,27 +647,27 @@ class _AuditScreenState extends State<AuditScreen> {
                   ),
                   initialValue: item.rating,
                   items: const [
-                    DropdownMenuItem(value: 'Alto', child: Text('Alto (100)')),
+                    DropdownMenuItem(value: 'Alto', child: Text('Alto (30)')),
                     DropdownMenuItem(value: 'Medio', child: Text('Medio (50)')),
-                    DropdownMenuItem(value: 'Bajo', child: Text('Bajo (30)')),
+                    DropdownMenuItem(value: 'Bajo', child: Text('Bajo (100)')),
                   ],
                   onChanged: item.isLocked
                       ? null
                       : (value) {
                           setState(() {
                             item.rating = value;
-                            // Calcular puntuación automática
+                            // Invertir lógica: 'Bajo' es el puntaje más alto, 'Alto' el más bajo
                             switch (value) {
                               case 'Alto':
-                                item.calculatedScore = item.maxScore;
+                                item.calculatedScore = (item.maxScore * 0.3)
+                                    .round();
                                 break;
                               case 'Medio':
                                 item.calculatedScore = (item.maxScore * 0.5)
                                     .round();
                                 break;
                               case 'Bajo':
-                                item.calculatedScore = (item.maxScore * 0.3)
-                                    .round();
+                                item.calculatedScore = item.maxScore;
                                 break;
                             }
                           });
@@ -720,15 +814,12 @@ class _AuditScreenState extends State<AuditScreen> {
   ) {
     // Calcular puntuaciones por sección
     Map<String, Map<String, dynamic>> sectionScores = {};
-
     for (var entry in _auditSections.entries) {
       String sectionName = entry.key;
       List<AuditItem> items = entry.value;
-
       int sectionTotal = 0;
       int sectionMax = 0;
       int sectionCompleted = 0;
-
       for (var item in items) {
         sectionMax += item.maxScore;
         if (item.calculatedScore != null) {
@@ -736,7 +827,6 @@ class _AuditScreenState extends State<AuditScreen> {
           sectionCompleted++;
         }
       }
-
       sectionScores[sectionName] = {
         'score': sectionTotal,
         'maxScore': sectionMax,
@@ -749,388 +839,148 @@ class _AuditScreenState extends State<AuditScreen> {
     showDialog(
       context: context,
       barrierDismissible: false,
-      builder: (context) => AlertDialog(
-        title: Row(
-          children: [
-            Icon(Icons.assignment_turned_in, color: const Color(0xFF004B63)),
-            const SizedBox(width: 8),
-            const Expanded(
-              child: Text(
-                'Resumen de Auditoría',
-                style: TextStyle(
-                  color: Color(0xFF004B63),
-                  fontWeight: FontWeight.bold,
-                ),
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
-          ],
-        ),
-        content: ConstrainedBox(
-          constraints: BoxConstraints(
-            maxWidth: MediaQuery.of(context).size.width * 0.9,
-            maxHeight: MediaQuery.of(context).size.height * 0.8,
-          ),
-          child: SizedBox(
-            width: double.maxFinite,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                // Información general
-                Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF004B63).withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(8),
+      builder: (context) => Dialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        backgroundColor: Colors.white,
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Row(
+                children: [
+                  Icon(
+                    Icons.assignment_turned_in,
+                    color: const Color(0xFF004B63),
+                    size: 32,
                   ),
-                  child: Column(
-                    children: [
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          const Flexible(
-                            child: Text(
-                              'Hacienda:',
-                              style: TextStyle(fontWeight: FontWeight.bold),
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                          const Flexible(
-                            child: Text(
-                              'FINCA MODELO',
-                              style: TextStyle(fontWeight: FontWeight.bold),
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                        ],
+                  const SizedBox(width: 12),
+                  const Expanded(
+                    child: Text(
+                      'Resumen de Auditoría',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFF004B63),
                       ),
-                      const SizedBox(height: 8),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          const Flexible(
-                            child: Text(
-                              'Cultivo:',
-                              style: TextStyle(fontWeight: FontWeight.bold),
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                          Flexible(
-                            child: Text(
-                              _selectedCrop.toUpperCase(),
-                              style: const TextStyle(
-                                fontWeight: FontWeight.bold,
-                                color: Color(0xFF004B63),
-                              ),
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 8),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          const Flexible(
-                            child: Text(
-                              'Fecha:',
-                              style: TextStyle(fontWeight: FontWeight.bold),
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                          Flexible(
-                            child: Text(
-                              '${DateTime.now().day}/${DateTime.now().month}/${DateTime.now().year}',
-                              style: const TextStyle(
-                                fontWeight: FontWeight.bold,
-                              ),
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 8),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          const Flexible(
-                            child: Text(
-                              'Evaluaciones:',
-                              style: TextStyle(fontWeight: FontWeight.bold),
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                          Flexible(
-                            child: Text(
-                              '$completedItems/$totalItems',
-                              style: const TextStyle(
-                                fontWeight: FontWeight.bold,
-                              ),
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-
-                const SizedBox(height: 16),
-
-                // Título de la tabla
-                Container(
-                  padding: const EdgeInsets.symmetric(vertical: 8),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        flex: 3,
-                        child: Container(
-                          padding: const EdgeInsets.all(12),
-                          decoration: const BoxDecoration(
-                            color: Color(
-                              0xFFFFD700,
-                            ), // Amarillo como en la imagen
-                            border: Border(
-                              top: BorderSide(color: Colors.black, width: 2),
-                              left: BorderSide(color: Colors.black, width: 2),
-                              bottom: BorderSide(color: Colors.black, width: 1),
-                              right: BorderSide(color: Colors.black, width: 1),
-                            ),
-                          ),
-                          child: const Text(
-                            'Calificación de Labor',
-                            style: TextStyle(
-                              fontWeight: FontWeight.bold,
-                              fontSize: 14,
-                              color: Colors.black,
-                            ),
-                            textAlign: TextAlign.center,
-                            overflow: TextOverflow.visible,
-                            softWrap: true,
-                          ),
-                        ),
-                      ),
-                      Expanded(
-                        flex: 1,
-                        child: Container(
-                          padding: const EdgeInsets.all(12),
-                          decoration: const BoxDecoration(
-                            color: Color(
-                              0xFFFFD700,
-                            ), // Amarillo como en la imagen
-                            border: Border(
-                              top: BorderSide(color: Colors.black, width: 2),
-                              right: BorderSide(color: Colors.black, width: 2),
-                              bottom: BorderSide(color: Colors.black, width: 1),
-                              left: BorderSide(color: Colors.black, width: 1),
-                            ),
-                          ),
-                          child: const Text(
-                            'Hacienda',
-                            style: TextStyle(
-                              fontWeight: FontWeight.bold,
-                              fontSize: 14,
-                              color: Colors.black,
-                            ),
-                            textAlign: TextAlign.center,
-                            overflow: TextOverflow.visible,
-                            softWrap: true,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-
-                // Lista de calificaciones por sección
-                SizedBox(
-                  height: 300,
-                  child: SingleChildScrollView(
-                    child: Column(
-                      children: sectionScores.entries.map((entry) {
-                        String sectionName = _getSectionDisplayName(entry.key);
-                        var data = entry.value;
-
-                        return Container(
-                          child: Row(
-                            children: [
-                              Expanded(
-                                flex: 3,
-                                child: Container(
-                                  padding: const EdgeInsets.symmetric(
-                                    vertical: 10,
-                                    horizontal: 12,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    border: const Border(
-                                      left: BorderSide(
-                                        color: Colors.black,
-                                        width: 2,
-                                      ),
-                                      right: BorderSide(
-                                        color: Colors.black,
-                                        width: 1,
-                                      ),
-                                      bottom: BorderSide(
-                                        color: Colors.black,
-                                        width: 1,
-                                      ),
-                                    ),
-                                    color: data['completed'] > 0
-                                        ? Colors.white
-                                        : Colors.grey.shade200,
-                                  ),
-                                  child: Text(
-                                    sectionName,
-                                    style: TextStyle(
-                                      fontSize: 13,
-                                      fontWeight: FontWeight.w500,
-                                      color: data['completed'] > 0
-                                          ? Colors.black
-                                          : Colors.grey,
-                                    ),
-                                    overflow: TextOverflow.visible,
-                                    softWrap: true,
-                                  ),
-                                ),
-                              ),
-                              Expanded(
-                                flex: 1,
-                                child: Container(
-                                  padding: const EdgeInsets.symmetric(
-                                    vertical: 10,
-                                    horizontal: 12,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    border: const Border(
-                                      right: BorderSide(
-                                        color: Colors.black,
-                                        width: 2,
-                                      ),
-                                      left: BorderSide(
-                                        color: Colors.black,
-                                        width: 1,
-                                      ),
-                                      bottom: BorderSide(
-                                        color: Colors.black,
-                                        width: 1,
-                                      ),
-                                    ),
-                                    color: data['completed'] > 0
-                                        ? (data['percentage'] >= 80
-                                              ? Colors.green.shade50
-                                              : Colors.white)
-                                        : Colors.grey.shade200,
-                                  ),
-                                  child: Text(
-                                    data['completed'] > 0
-                                        ? '${data['percentage'].toStringAsFixed(0)}'
-                                        : '-',
-                                    style: TextStyle(
-                                      fontSize: 14,
-                                      fontWeight: FontWeight.bold,
-                                      color: data['completed'] > 0
-                                          ? (data['percentage'] >= 80
-                                                ? Colors.green.shade800
-                                                : Colors.black)
-                                          : Colors.grey,
-                                    ),
-                                    textAlign: TextAlign.center,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        );
-                      }).toList(),
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ),
+                ],
+              ),
+              const SizedBox(height: 24),
+              Text(
+                'Completaste $completedItems de $totalItems evaluaciones.',
+                style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w500,
                 ),
-
-                const SizedBox(height: 16),
-
-                // Resumen final
-                Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF004B63),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 12),
+              Text(
+                'Puntuación total: $totalScore / $maxPossibleScore',
+                style: const TextStyle(fontSize: 15, color: Colors.black87),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 24),
+              SizedBox(
+                height: 180,
+                child: SingleChildScrollView(
                   child: Column(
-                    children: [
-                      Text(
-                        'CALIFICACIÓN GENERAL - ${_selectedCrop.toUpperCase()}',
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.bold,
-                          fontSize: 16,
+                    children: sectionScores.entries.map((entry) {
+                      final section = entry.value;
+                      return Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 4),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              flex: 2,
+                              child: Text(
+                                _getSectionDisplayName(entry.key),
+                                style: const TextStyle(fontSize: 14),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                            Expanded(
+                              flex: 1,
+                              child: Text(
+                                '${section['score']} / ${section['maxScore']}',
+                                style: const TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                                textAlign: TextAlign.right,
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              flex: 1,
+                              child: Text(
+                                '${(section['percentage'] as double).toStringAsFixed(1)}%',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: (section['percentage'] as double) >= 80
+                                      ? Colors.green
+                                      : (section['percentage'] as double) >= 60
+                                      ? Colors.orange
+                                      : Colors.red,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                                textAlign: TextAlign.right,
+                              ),
+                            ),
+                          ],
                         ),
-                        textAlign: TextAlign.center,
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        '${((totalScore / maxPossibleScore) * 100).toStringAsFixed(1)}%',
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.bold,
-                          fontSize: 24,
-                        ),
-                      ),
-                      Text(
-                        '$totalScore de $maxPossibleScore puntos',
-                        style: const TextStyle(
-                          color: Colors.white70,
-                          fontSize: 12,
-                        ),
-                      ),
-                    ],
+                      );
+                    }).toList(),
                   ),
                 ),
-
-                const SizedBox(height: 24),
-
-                // Botón para guardar auditoría
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton.icon(
-                    onPressed: _saveAudit,
-                    icon: const Icon(Icons.save),
-                    label: const Text('Guardar Auditoría'),
+              ),
+              const SizedBox(height: 32),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  TextButton(
+                    onPressed: () => Navigator.of(context).pop(),
+                    child: const Text(
+                      'Editar',
+                      style: TextStyle(color: Colors.grey),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  ElevatedButton(
+                    onPressed: () {
+                      Navigator.of(context).pop();
+                      _guardarAuditoriaCampo(
+                        completedItems,
+                        totalItems,
+                        totalScore,
+                        maxPossibleScore,
+                      );
+                    },
                     style: ElevatedButton.styleFrom(
                       backgroundColor: const Color(0xFF004B63),
                       foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(vertical: 16),
-                      textStyle: const TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 24,
+                        vertical: 12,
+                      ),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
                       ),
                     ),
+                    child: const Text(
+                      'Guardar auditoria',
+                      style: TextStyle(fontWeight: FontWeight.bold),
+                    ),
                   ),
-                ),
-              ],
-            ),
+                ],
+              ),
+            ],
           ),
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text(
-              'Continuar Editando',
-              style: TextStyle(color: Colors.grey),
-            ),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              Navigator.of(context).pop();
-              Navigator.of(context).pop(); // Volver al home
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF004B63),
-              foregroundColor: Colors.white,
-            ),
-            child: const Text('Finalizar Auditoría'),
-          ),
-        ],
       ),
     );
   }

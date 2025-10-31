@@ -18,6 +18,12 @@ import java.util.List;
 import java.util.Optional;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.UUID;
+import java.nio.file.Files;
+import java.nio.file.Paths;
+import java.nio.file.StandardOpenOption;
+import java.io.IOException;
+import java.util.Base64;
 
 @RestController
 @RequestMapping("/audits")
@@ -41,6 +47,7 @@ public class AuditController {
 public ResponseEntity<Map<String, Object>> createAudit(@RequestBody Map<String, Object> auditData) {
     Map<String, Object> response = new HashMap<>();
     try {
+
         Audit audit = new Audit();
         audit.setHacienda(auditData.get("hacienda") != null ? auditData.get("hacienda").toString() : null);
         audit.setCultivo(auditData.get("cultivo") != null ? auditData.get("cultivo").toString() : null);
@@ -48,14 +55,10 @@ public ResponseEntity<Map<String, Object>> createAudit(@RequestBody Map<String, 
         audit.setTecnicoId(auditData.get("tecnicoId") != null ? Long.valueOf(auditData.get("tecnicoId").toString()) : null);
         audit.setEstado(auditData.get("estado") != null ? auditData.get("estado").toString() : "PENDIENTE");
         audit.setObservaciones((String) auditData.get("observaciones"));
-        // Si tu entidad Audit tiene estos campos, agrégalos:
-       // if (auditData.get("foto") != null) {
-       //     audit.setFoto(auditData.get("foto").toString());
-       // }
 
         Audit savedAudit = auditRepository.save(audit);
 
-        // Guardar puntuaciones si existen
+        // Guardar puntuaciones y fotos si existen
         if (auditData.containsKey("scores")) {
             @SuppressWarnings("unchecked")
             List<Map<String, Object>> scores = (List<Map<String, Object>>) auditData.get("scores");
@@ -66,6 +69,37 @@ public ResponseEntity<Map<String, Object>> createAudit(@RequestBody Map<String, 
                 score.setPuntuacion(Integer.valueOf(scoreData.get("puntuacion").toString()));
                 score.setObservaciones((String) scoreData.get("observaciones"));
                 auditScoreRepository.save(score);
+
+                // Guardar foto si viene en base64
+                if (scoreData.containsKey("photoBase64") && scoreData.get("photoBase64") != null) {
+                    String photoBase64 = (String) scoreData.get("photoBase64");
+                    try {
+                        // Decodificar base64
+                        byte[] imageBytes = Base64.getDecoder().decode(photoBase64);
+                        // Crear nombre único
+                        String uniqueName = "audit_" + savedAudit.getId() + "_" + UUID.randomUUID() + ".jpg";
+                        String folderPath = "/root/backend-lytiks/photos";
+                        String filePath = folderPath + "/" + uniqueName;
+                        // Guardar archivo
+                        Files.createDirectories(Paths.get(folderPath));
+                        Files.write(Paths.get(filePath), imageBytes, StandardOpenOption.CREATE);
+
+                        AuditPhoto photo = new AuditPhoto();
+                        photo.setAudit(savedAudit);
+                        photo.setCategoria((String) scoreData.get("categoria"));
+                        photo.setFileName(uniqueName);
+                        photo.setFilePath(filePath);
+                        photo.setFileSize((long) imageBytes.length);
+                        photo.setMimeType("image/jpeg");
+                        auditPhotoRepository.save(photo);
+                    } catch (IOException e) {
+                        // Manejar error de guardado de imagen
+                        e.printStackTrace();
+                    } catch (IllegalArgumentException e) {
+                        // Manejar error de base64 inválido
+                        e.printStackTrace();
+                    }
+                }
             }
         }
 

@@ -54,6 +54,7 @@ class SyncService {
   // Sincronizar todos los datos pendientes
   Future<SyncResult> syncAllData() async {
     if (!await hasInternetConnection()) {
+      debugPrint('[SYNC] ❌ No hay conexión a internet');
       return SyncResult(
         success: false,
         message: 'No hay conexión a internet',
@@ -67,32 +68,36 @@ class SyncService {
     List<String> errors = [];
 
     try {
-      // 1. Sincronizar clientes primero
+      debugPrint('[SYNC] Iniciando sincronización de clientes...');
       final clientResult = await _syncClients();
+      debugPrint('[SYNC] Resultado clientes: $clientResult');
       syncedItems += clientResult.syncedItems;
       failedItems += clientResult.failedItems;
       if (clientResult.errors.isNotEmpty) {
         errors.addAll(clientResult.errors);
       }
 
-      // 2. Sincronizar auditorías regulares
+      debugPrint('[SYNC] Iniciando sincronización de auditorías regulares...');
       final auditResult = await _syncAudits();
+      debugPrint('[SYNC] Resultado auditorías: $auditResult');
       syncedItems += auditResult.syncedItems;
       failedItems += auditResult.failedItems;
       if (auditResult.errors.isNotEmpty) {
         errors.addAll(auditResult.errors);
       }
 
-      // 3. Sincronizar auditorías Moko
+      debugPrint('[SYNC] Iniciando sincronización de auditorías Moko...');
       final mokoResult = await _syncMokoAudits();
+      debugPrint('[SYNC] Resultado auditorías Moko: $mokoResult');
       syncedItems += mokoResult.syncedItems;
       failedItems += mokoResult.failedItems;
       if (mokoResult.errors.isNotEmpty) {
         errors.addAll(mokoResult.errors);
       }
 
-      // 4. Sincronizar fotos
+      debugPrint('[SYNC] Iniciando sincronización de fotos...');
       final photoResult = await _syncPhotos();
+      debugPrint('[SYNC] Resultado fotos: $photoResult');
       syncedItems += photoResult.syncedItems;
       failedItems += photoResult.failedItems;
       if (photoResult.errors.isNotEmpty) {
@@ -101,10 +106,14 @@ class SyncService {
 
       // 5. Limpiar datos sincronizados exitosamente
       if (syncedItems > 0) {
+        debugPrint('[SYNC] Limpiando datos sincronizados...');
         await _offlineStorage.cleanSyncedData();
       }
 
       final success = failedItems == 0;
+      debugPrint(
+        '[SYNC] Finalizado. Exito: $success, Sincronizados: $syncedItems, Fallidos: $failedItems, Errores: $errors',
+      );
       return SyncResult(
         success: success,
         message: success
@@ -114,8 +123,9 @@ class SyncService {
         failedItems: failedItems,
         errors: errors,
       );
-    } catch (e) {
-      debugPrint('Error during sync: $e');
+    } catch (e, stack) {
+      debugPrint('[SYNC] Error during sync: $e');
+      debugPrint('[SYNC] Stacktrace: $stack');
       return SyncResult(
         success: false,
         message: 'Error general durante la sincronización: $e',
@@ -172,35 +182,53 @@ class SyncService {
 
     for (final auditData in pendingAudits) {
       try {
-        final auditDataParsed =
-            jsonDecode(auditData['audit_data']) as List<Map<String, dynamic>>;
-
-        final result = await _auditService.createAudit(
-          clientId: auditData['client_id'],
-          categoryId: auditData['category_id'],
-          auditDate: auditData['audit_date'],
-          status: auditData['status'],
-          auditData: auditDataParsed,
-          observations: auditData['observations'],
-          latitude: auditData['latitude'],
-          longitude: auditData['longitude'],
-          imagePath: auditData['image_path'],
+        debugPrint(
+          '[SYNC][AUDIT] Procesando auditoría ID local: ${auditData['id']}',
         );
+        final auditDataParsed = (jsonDecode(auditData['audit_data']) as List)
+            .map((e) => Map<String, dynamic>.from(e as Map))
+            .toList();
+        debugPrint('[SYNC][AUDIT] auditDataParsed: $auditDataParsed');
+
+        // TODO: Map real values for hacienda, tecnicoId, observaciones if available
+        final String hacienda = 'Hacienda Demo';
+        final String cultivo = 'banano'; // or from auditData if available
+        final String fecha =
+            auditData['audit_date'] ?? DateTime.now().toIso8601String();
+        final int tecnicoId = 1;
+        final String estado = auditData['status'] ?? 'COMPLETADA';
+        final String? observaciones = auditData['observations'];
+        final scores = AuditService.buildBackendScores(auditDataParsed);
+
+        final result = await _auditService.createAuditBackend(
+          hacienda: hacienda,
+          cultivo: cultivo,
+          fecha: fecha,
+          tecnicoId: tecnicoId,
+          estado: estado,
+          observaciones: observaciones,
+          scores: scores,
+        );
+        debugPrint('[SYNC][AUDIT] Respuesta backend: $result');
 
         if (result['success'] == true) {
           await _offlineStorage.markAuditAsSynced(auditData['id']);
           syncedItems++;
-          debugPrint('Auditoría sincronizada: ${auditData['id']}');
+          debugPrint(
+            '[SYNC][AUDIT] Auditoría sincronizada: ${auditData['id']}',
+          );
         } else {
           failedItems++;
           errors.add(
             'Error al sincronizar auditoría ${auditData['id']}: ${result['message']}',
           );
+          debugPrint('[SYNC][AUDIT] Error backend: ${result['message']}');
         }
-      } catch (e) {
+      } catch (e, stack) {
         failedItems++;
         errors.add('Error al sincronizar auditoría ${auditData['id']}: $e');
-        debugPrint('Error syncing audit: $e');
+        debugPrint('[SYNC][AUDIT] Error syncing audit: $e');
+        debugPrint('[SYNC][AUDIT] Stacktrace: $stack');
       }
     }
 
@@ -222,15 +250,17 @@ class SyncService {
 
     for (final mokoData in pendingMokoAudits) {
       try {
-        final mokoDataParsed =
-            jsonDecode(mokoData['moko_data']) as List<Map<String, dynamic>>;
+        final List<dynamic> rawList = jsonDecode(mokoData['moko_data']);
+        final List<Map<String, dynamic>> details = rawList
+            .map((e) => Map<String, dynamic>.from(e))
+            .toList();
 
         final result = await _mokoAuditService.createMokoAudit(
-          clientId: mokoData['client_id'],
-          auditDate: mokoData['audit_date'],
-          status: mokoData['status'],
-          mokoData: mokoDataParsed,
-          observations: mokoData['observations'],
+          tecnicoId: mokoData['client_id'],
+          fecha: mokoData['audit_date'],
+          estado: mokoData['status'],
+          details: details,
+          observaciones: mokoData['observations'],
           latitude: mokoData['latitude'],
           longitude: mokoData['longitude'],
         );
