@@ -53,6 +53,12 @@ public class MokoAudit {
     @Column(name = "observaciones", columnDefinition = "TEXT")
     private String observaciones;
     
+    @Column(name = "photo_base64_observaciones", columnDefinition = "TEXT")
+    private String photoBase64Observaciones;
+
+    @Column(name = "photo_base64_seguimiento", columnDefinition = "TEXT")
+    private String photoBase64Seguimiento;
+    
     @OneToMany(mappedBy = "mokoAudit", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
     private List<MokoAuditDetail> details;
     
@@ -188,6 +194,22 @@ public class MokoAudit {
     
     public void setObservaciones(String observaciones) {
         this.observaciones = observaciones;
+    }
+    
+    public String getPhotoBase64Observaciones() {
+        return photoBase64Observaciones;
+    }
+
+    public void setPhotoBase64Observaciones(String photoBase64Observaciones) {
+        this.photoBase64Observaciones = photoBase64Observaciones;
+    }
+
+    public String getPhotoBase64Seguimiento() {
+        return photoBase64Seguimiento;
+    }
+
+    public void setPhotoBase64Seguimiento(String photoBase64Seguimiento) {
+        this.photoBase64Seguimiento = photoBase64Seguimiento;
     }
     
     public List<MokoAuditDetail> getDetails() {

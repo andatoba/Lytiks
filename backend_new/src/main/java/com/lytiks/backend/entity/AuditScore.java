@@ -25,6 +25,9 @@ public class AuditScore {
     @Column(name = "observaciones", columnDefinition = "TEXT")
     private String observaciones;
     
+    @Column(name = "photo_path")
+    private String photoPath;
+    
     // Constructors
     public AuditScore() {}
     
@@ -81,5 +84,13 @@ public class AuditScore {
     
     public void setObservaciones(String observaciones) {
         this.observaciones = observaciones;
+    }
+    
+    public String getPhotoPath() {
+        return photoPath;
+    }
+    
+    public void setPhotoPath(String photoPath) {
+        this.photoPath = photoPath;
     }
 }

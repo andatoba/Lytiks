@@ -2,11 +2,17 @@ package com.lytiks.backend.controller;
 
 import com.lytiks.backend.entity.MokoAudit;
 import com.lytiks.backend.entity.MokoAuditDetail;
+import com.lytiks.backend.entity.MokoAuditPhoto;
 import com.lytiks.backend.repository.MokoAuditRepository;
+import com.lytiks.backend.repository.MokoAuditPhotoRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Paths;
+import java.nio.file.StandardOpenOption;
 import java.time.LocalDateTime;
 import java.util.*;
 
@@ -18,6 +24,9 @@ public class MokoAuditController {
 
     @Autowired
     private MokoAuditRepository mokoAuditRepository;
+
+    @Autowired
+    private MokoAuditPhotoRepository mokoAuditPhotoRepository;
 
     // Crear nueva auditoría de Moko
     @PostMapping
@@ -70,6 +79,53 @@ public class MokoAuditController {
             response.put("success", true);
             response.put("message", "Auditoría Moko creada exitosamente");
             response.put("auditId", savedAudit.getId());
+
+            // Guardar fotos si existen (photoBase64Observaciones y photoBase64Seguimiento)
+            String photoBase64Observaciones = (String) mokoAuditData.get("photoBase64Observaciones");
+            String photoBase64Seguimiento = (String) mokoAuditData.get("photoBase64Seguimiento");
+            String folderPath = "photos/moko";
+            Files.createDirectories(Paths.get(folderPath));
+
+            if (photoBase64Observaciones != null && !photoBase64Observaciones.isEmpty()) {
+                try {
+                    byte[] imageBytes = Base64.getDecoder().decode(photoBase64Observaciones);
+                    String uniqueName = "moko_obs_" + savedAudit.getId() + "_" + UUID.randomUUID() + ".jpg";
+                    String filePath = folderPath + "/" + uniqueName;
+                    Files.write(Paths.get(filePath), imageBytes, StandardOpenOption.CREATE);
+
+                    MokoAuditPhoto photo = new MokoAuditPhoto();
+                    photo.setMokoAudit(savedAudit);
+                    photo.setFileName(uniqueName);
+                    photo.setFilePath(filePath);
+                    photo.setFileSize((long) imageBytes.length);
+                    photo.setMimeType("image/jpeg");
+                    // ...otros campos como categoria, etapaProceso, etc.
+                    mokoAuditPhotoRepository.save(photo);
+                } catch (Exception ex) {
+                    response.put("photoErrorObservaciones", "Error al guardar la foto de observaciones: " + ex.getMessage());
+                }
+            }
+
+            if (photoBase64Seguimiento != null && !photoBase64Seguimiento.isEmpty()) {
+                try {
+                    byte[] imageBytes = Base64.getDecoder().decode(photoBase64Seguimiento);
+                    String uniqueName = "moko_seg_" + savedAudit.getId() + "_" + UUID.randomUUID() + ".jpg";
+                    String filePath = folderPath + "/" + uniqueName;
+                    Files.write(Paths.get(filePath), imageBytes, StandardOpenOption.CREATE);
+
+                    MokoAuditPhoto photo = new MokoAuditPhoto();
+                    photo.setMokoAudit(savedAudit);
+                    photo.setFileName(uniqueName);
+                    photo.setFilePath(filePath);
+                    photo.setFileSize((long) imageBytes.length);
+                    photo.setMimeType("image/jpeg");
+                    // ...otros campos como categoria, etapaProceso, etc.
+                    mokoAuditPhotoRepository.save(photo);
+                } catch (Exception ex) {
+                    response.put("photoErrorSeguimiento", "Error al guardar la foto de seguimiento: " + ex.getMessage());
+                }
+            }
+
             return ResponseEntity.ok(response);
         } catch (Exception e) {
             response.put("success", false);

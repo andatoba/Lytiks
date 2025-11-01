@@ -14,6 +14,23 @@ import java.util.Optional;
 @RequestMapping("/auth")
 @CrossOrigin(origins = "*")
 public class AuthController {
+    // Endpoint para obtener perfil de usuario por username
+    @GetMapping("/profile/{username}")
+    public ResponseEntity<?> getProfile(@PathVariable String username) {
+        Optional<User> userOpt = userRepository.findByUsername(username);
+        if (userOpt.isEmpty()) {
+            return ResponseEntity.status(404).body(Map.of("error", "Usuario no encontrado"));
+        }
+        User user = userOpt.get();
+        return ResponseEntity.ok(Map.of(
+            "id", user.getId(),
+            "username", user.getUsername(),
+            "firstName", user.getFirstName(),
+            "lastName", user.getLastName(),
+            "email", user.getEmail(),
+            "role", user.getRole().toString()
+        ));
+    }
     
     @Autowired
     private UserRepository userRepository;

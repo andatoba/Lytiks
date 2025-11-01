@@ -1,9 +1,14 @@
 package com.lytiks.backend.controller;
-
 import com.lytiks.backend.entity.SigatokaAudit;
 import com.lytiks.backend.entity.SigatokaParameter;
+import com.lytiks.backend.entity.SigatokaPhoto;
 import com.lytiks.backend.repository.SigatokaAuditRepository;
 import com.lytiks.backend.repository.SigatokaParameterRepository;
+import com.lytiks.backend.repository.SigatokaPhotoRepository;
+import java.nio.file.Files;
+import java.nio.file.Paths;
+import java.nio.file.StandardOpenOption;
+import java.util.Base64;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -15,9 +20,12 @@ import java.util.Map;
 import java.util.Optional;
 
 @RestController
-@RequestMapping("/api/sigatoka")
+@RequestMapping("/sigatoka")
 @CrossOrigin(origins = "*")
 public class SigatokaController {
+
+    @Autowired
+    private SigatokaPhotoRepository sigatokaPhotoRepository;
 
     @Autowired
     private SigatokaAuditRepository sigatokaAuditRepository;
@@ -50,26 +58,45 @@ public class SigatokaController {
             audit.setFecha(LocalDateTime.now());
             
             SigatokaAudit savedAudit = sigatokaAuditRepository.save(audit);
-            
+
             // Guardar parámetros
             if (auditData.containsKey("parameters")) {
                 @SuppressWarnings("unchecked")
                 List<Map<String, Object>> parameters = (List<Map<String, Object>>) auditData.get("parameters");
-                
                 for (Map<String, Object> paramData : parameters) {
                     SigatokaParameter parameter = new SigatokaParameter();
                     parameter.setSigatokaAudit(savedAudit);
                     parameter.setParameterName((String) paramData.get("parameterName"));
                     parameter.setWeekNumber(Integer.valueOf(paramData.get("weekNumber").toString()));
-                    
                     if (paramData.get("value") != null) {
                         parameter.setValue(Double.valueOf(paramData.get("value").toString()));
                     }
-                    
                     sigatokaParameterRepository.save(parameter);
                 }
             }
-            
+
+            // Guardar foto si viene en base64
+            if (auditData.containsKey("photoBase64") && auditData.get("photoBase64") != null) {
+                try {
+                    String base64 = (String) auditData.get("photoBase64");
+                    byte[] imageBytes = Base64.getDecoder().decode(base64);
+                    String folderPath = "photos/sigatoka/";
+                    Files.createDirectories(Paths.get(folderPath));
+                    String fileName = "sigatoka_" + savedAudit.getId() + "_" + System.currentTimeMillis() + ".jpg";
+                    String filePath = folderPath + fileName;
+                    Files.write(Paths.get(filePath), imageBytes, StandardOpenOption.CREATE);
+                    // Guardar entidad SigatokaPhoto
+                    SigatokaPhoto photo = new SigatokaPhoto();
+                    photo.setSigatokaAudit(savedAudit);
+                    photo.setPhotoPath(filePath);
+                    photo.setDescription("Foto evidencia auditoría");
+                    photo.setPhotoType("EVIDENCIA");
+                    sigatokaPhotoRepository.save(photo);
+                } catch (Exception ex) {
+                    response.put("photoError", "Error al guardar la foto: " + ex.getMessage());
+                }
+            }
+
             response.put("success", true);
             response.put("message", "Auditoría Sigatoka creada exitosamente");
             response.put("auditId", savedAudit.getId());
@@ -136,6 +163,28 @@ public class SigatokaController {
                 SigatokaAudit audit = auditOpt.get();
                 audit.setEstado(statusData.get("estado"));
                 sigatokaAuditRepository.save(audit);
+
+                // Guardar foto si viene en base64
+                if (statusData.containsKey("photoBase64") && statusData.get("photoBase64") != null) {
+                    try {
+                        String base64 = statusData.get("photoBase64");
+                        byte[] imageBytes = Base64.getDecoder().decode(base64);
+                        String folderPath = "photos/sigatoka/";
+                        Files.createDirectories(Paths.get(folderPath));
+                        String fileName = "sigatoka_" + audit.getId() + "_" + System.currentTimeMillis() + ".jpg";
+                        String filePath = folderPath + fileName;
+                        Files.write(Paths.get(filePath), imageBytes, StandardOpenOption.CREATE);
+                        // Guardar entidad SigatokaPhoto
+                        SigatokaPhoto photo = new SigatokaPhoto();
+                        photo.setSigatokaAudit(audit);
+                        photo.setPhotoPath(filePath);
+                        photo.setDescription("Foto evidencia auditoría");
+                        photo.setPhotoType("EVIDENCIA");
+                        sigatokaPhotoRepository.save(photo);
+                    } catch (Exception ex) {
+                        response.put("photoError", "Error al guardar la foto: " + ex.getMessage());
+                    }
+                }
                 
                 response.put("success", true);
                 response.put("message", "Estado actualizado exitosamente");

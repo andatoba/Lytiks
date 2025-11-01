@@ -5,6 +5,7 @@ C:\Users\User\Desktop\Lytiks\backend_new\src\main\java\com\lytiks\backend\entity
 C:\Users\User\Desktop\Lytiks\backend_new\src\main\java\com\lytiks\backend\entity\MokoAudit.java
 C:\Users\User\Desktop\Lytiks\backend_new\src\main\java\com\lytiks\backend\entity\AuditPhoto.java
 C:\Users\User\Desktop\Lytiks\backend_new\src\main\java\com\lytiks\backend\controller\ClientController.java
+C:\Users\User\Desktop\Lytiks\backend_new\src\main\java\com\lytiks\backend\repository\SigatokaPhotoRepository.java
 C:\Users\User\Desktop\Lytiks\backend_new\src\main\java\com\lytiks\backend\repository\UserRepository.java
 C:\Users\User\Desktop\Lytiks\backend_new\src\main\java\com\lytiks\backend\entity\Audit.java
 C:\Users\User\Desktop\Lytiks\backend_new\src\main\java\com\lytiks\backend\repository\MokoAuditRepository.java
@@ -17,6 +18,7 @@ C:\Users\User\Desktop\Lytiks\backend_new\src\main\java\com\lytiks\backend\Lytiks
 C:\Users\User\Desktop\Lytiks\backend_new\src\main\java\com\lytiks\backend\controller\AuditController.java
 C:\Users\User\Desktop\Lytiks\backend_new\src\main\java\com\lytiks\backend\entity\SigatokaAudit.java
 C:\Users\User\Desktop\Lytiks\backend_new\src\main\java\com\lytiks\backend\controller\AuthController.java
+C:\Users\User\Desktop\Lytiks\backend_new\src\main\java\com\lytiks\backend\repository\MokoAuditPhotoRepository.java
 C:\Users\User\Desktop\Lytiks\backend_new\src\main\java\com\lytiks\backend\config\DataInitializer.java
 C:\Users\User\Desktop\Lytiks\backend_new\src\main\java\com\lytiks\backend\config\SecurityConfig.java
 C:\Users\User\Desktop\Lytiks\backend_new\src\main\java\com\lytiks\backend\repository\AuditRepository.java

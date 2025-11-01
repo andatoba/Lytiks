@@ -47,7 +47,6 @@ public class AuditController {
 public ResponseEntity<Map<String, Object>> createAudit(@RequestBody Map<String, Object> auditData) {
     Map<String, Object> response = new HashMap<>();
     try {
-
         Audit audit = new Audit();
         audit.setHacienda(auditData.get("hacienda") != null ? auditData.get("hacienda").toString() : null);
         audit.setCultivo(auditData.get("cultivo") != null ? auditData.get("cultivo").toString() : null);
@@ -68,7 +67,6 @@ public ResponseEntity<Map<String, Object>> createAudit(@RequestBody Map<String, 
                 score.setCategoria((String) scoreData.get("categoria"));
                 score.setPuntuacion(Integer.valueOf(scoreData.get("puntuacion").toString()));
                 score.setObservaciones((String) scoreData.get("observaciones"));
-                auditScoreRepository.save(score);
 
                 // Guardar foto si viene en base64
                 if (scoreData.containsKey("photoBase64") && scoreData.get("photoBase64") != null) {
@@ -76,17 +74,23 @@ public ResponseEntity<Map<String, Object>> createAudit(@RequestBody Map<String, 
                     try {
                         // Decodificar base64
                         byte[] imageBytes = Base64.getDecoder().decode(photoBase64);
-                        // Crear nombre único
-                        String uniqueName = "audit_" + savedAudit.getId() + "_" + UUID.randomUUID() + ".jpg";
-                        String folderPath = "/root/backend-lytiks/photos";
+                        // Crear nombre único referencial
+                        String categoria = (String) scoreData.get("categoria");
+                        String categoriaSanitized = categoria.replaceAll("[^a-zA-Z0-9]", "_");
+                        String uniqueName = "audit_" + savedAudit.getId() + "_" + categoriaSanitized + "_" + UUID.randomUUID() + ".jpg";
+                        String folderPath = "photos/auditoria";
                         String filePath = folderPath + "/" + uniqueName;
                         // Guardar archivo
                         Files.createDirectories(Paths.get(folderPath));
                         Files.write(Paths.get(filePath), imageBytes, StandardOpenOption.CREATE);
 
+                        // Guardar ruta en AuditScore
+                        score.setPhotoPath(filePath);
+
+                        // Guardar también en AuditPhoto si quieres mantener ambos registros
                         AuditPhoto photo = new AuditPhoto();
                         photo.setAudit(savedAudit);
-                        photo.setCategoria((String) scoreData.get("categoria"));
+                        photo.setCategoria(categoria);
                         photo.setFileName(uniqueName);
                         photo.setFilePath(filePath);
                         photo.setFileSize((long) imageBytes.length);
@@ -100,6 +104,7 @@ public ResponseEntity<Map<String, Object>> createAudit(@RequestBody Map<String, 
                         e.printStackTrace();
                     }
                 }
+                auditScoreRepository.save(score);
             }
         }
 
