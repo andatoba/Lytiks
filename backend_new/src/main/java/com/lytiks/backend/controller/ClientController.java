@@ -68,8 +68,8 @@ public class ClientController {
             client.setTelefono((String) clientData.get("telefono"));
             client.setEmail((String) clientData.get("email"));
             client.setDireccion((String) clientData.get("direccion"));
-            client.setMunicipio((String) clientData.get("municipio"));
-            client.setDepartamento((String) clientData.get("departamento"));
+            client.setParroquia((String) clientData.get("parroquia"));
+            // eliminado departamento
             client.setFincaNombre((String) clientData.get("fincaNombre"));
             
             if (clientData.get("fincaHectareas") != null) {
@@ -77,8 +77,6 @@ public class ClientController {
             }
             
             client.setCultivosPrincipales((String) clientData.get("cultivosPrincipales"));
-            client.setTipoProductor((String) clientData.get("tipoProductor"));
-            client.setAsociacion((String) clientData.get("asociacion"));
             
             if (clientData.get("geolocalizacionLat") != null) {
                 client.setGeolocalizacionLat(Double.valueOf(clientData.get("geolocalizacionLat").toString()));
@@ -138,12 +136,10 @@ public class ClientController {
                 if (clientData.containsKey("direccion")) {
                     client.setDireccion((String) clientData.get("direccion"));
                 }
-                if (clientData.containsKey("municipio")) {
-                    client.setMunicipio((String) clientData.get("municipio"));
+                if (clientData.containsKey("parroquia")) {
+                    client.setParroquia((String) clientData.get("parroquia"));
                 }
-                if (clientData.containsKey("departamento")) {
-                    client.setDepartamento((String) clientData.get("departamento"));
-                }
+                // eliminado departamento
                 if (clientData.containsKey("fincaNombre")) {
                     client.setFincaNombre((String) clientData.get("fincaNombre"));
                 }
@@ -152,12 +148,6 @@ public class ClientController {
                 }
                 if (clientData.containsKey("cultivosPrincipales")) {
                     client.setCultivosPrincipales((String) clientData.get("cultivosPrincipales"));
-                }
-                if (clientData.containsKey("tipoProductor")) {
-                    client.setTipoProductor((String) clientData.get("tipoProductor"));
-                }
-                if (clientData.containsKey("asociacion")) {
-                    client.setAsociacion((String) clientData.get("asociacion"));
                 }
                 if (clientData.containsKey("geolocalizacionLat")) {
                     client.setGeolocalizacionLat(Double.valueOf(clientData.get("geolocalizacionLat").toString()));

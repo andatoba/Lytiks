@@ -28,11 +28,9 @@ public class Client {
     @Column(name = "direccion", columnDefinition = "TEXT")
     private String direccion;
     
-    @Column(name = "municipio")
-    private String municipio;
+    @Column(name = "parroquia")
+    private String parroquia;
     
-    @Column(name = "departamento")
-    private String departamento;
     
     @Column(name = "finca_nombre")
     private String fincaNombre;
@@ -43,11 +41,7 @@ public class Client {
     @Column(name = "cultivos_principales")
     private String cultivosPrincipales;
     
-    @Column(name = "tipo_productor")
-    private String tipoProductor; // PEQUEÑO, MEDIANO, GRANDE
-    
-    @Column(name = "asociacion")
-    private String asociacion;
+    // ...existing code...
     
     @Column(name = "geolocalizacion_lat")
     private Double geolocalizacionLat;
@@ -139,21 +133,15 @@ public class Client {
         this.direccion = direccion;
     }
     
-    public String getMunicipio() {
-        return municipio;
+    public String getParroquia() {
+        return parroquia;
     }
     
-    public void setMunicipio(String municipio) {
-        this.municipio = municipio;
+    public void setParroquia(String parroquia) {
+        this.parroquia = parroquia;
     }
     
-    public String getDepartamento() {
-        return departamento;
-    }
-    
-    public void setDepartamento(String departamento) {
-        this.departamento = departamento;
-    }
+    // eliminado departamento
     
     public String getFincaNombre() {
         return fincaNombre;
@@ -179,21 +167,7 @@ public class Client {
         this.cultivosPrincipales = cultivosPrincipales;
     }
     
-    public String getTipoProductor() {
-        return tipoProductor;
-    }
-    
-    public void setTipoProductor(String tipoProductor) {
-        this.tipoProductor = tipoProductor;
-    }
-    
-    public String getAsociacion() {
-        return asociacion;
-    }
-    
-    public void setAsociacion(String asociacion) {
-        this.asociacion = asociacion;
-    }
+    // ...existing code...
     
     public Double getGeolocalizacionLat() {
         return geolocalizacionLat;
