@@ -14,6 +14,18 @@ class ClientInfoScreen extends StatefulWidget {
 }
 
 class _ClientInfoScreenState extends State<ClientInfoScreen> {
+  void _enviarSmsExitoso() {
+    final telefono = _telefonoController.text.trim();
+    if (telefono.isNotEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('SMS enviado a $telefono: "¡Tus datos han sido guardados exitosamente!"'), backgroundColor: Colors.blue),
+      );
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No se pudo enviar SMS: teléfono no registrado'), backgroundColor: Colors.orange),
+      );
+    }
+  }
   int? _clienteId;
   @override
   void initState() {
@@ -73,20 +85,7 @@ class _ClientInfoScreenState extends State<ClientInfoScreen> {
   bool _isSaving = false;
   bool _isLoadingLocation = false;
   Position? _currentPosition;
-  void _enviarSmsExitoso() {
-    // Aquí puedes integrar tu lógica real de SMS
-    final telefono = _telefonoController.text.trim();
-    if (telefono.isNotEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('SMS enviado a $telefono: "¡Tus datos han sido guardados exitosamente!"'), backgroundColor: Colors.blue),
-      );
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('No se pudo enviar SMS: teléfono no registrado'), backgroundColor: Colors.orange),
-      );
-    }
-  }
-  // ...existing code...
+
   final _cedulaController = TextEditingController();
   final _nombreController = TextEditingController();
   final _apellidosController = TextEditingController();
@@ -321,6 +320,7 @@ class _ClientInfoScreenState extends State<ClientInfoScreen> {
                           'nombre': _nombreController.text.trim(),
                           'apellidos': _apellidosController.text.trim(),
                           'telefono': _telefonoController.text.trim(),
+                          'email': _emailController.text.trim(),
                           'direccion': _direccionController.text.trim(),
                           'parroquia': _parroquiaController.text.trim(),
                           'fincaNombre': _fincaNombreController.text.trim(),
@@ -334,9 +334,8 @@ class _ClientInfoScreenState extends State<ClientInfoScreen> {
                         final result = await clientService.updateClient(id: _clienteId!, clientData: clientData);
                         if (result['success'] == true) {
                           ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text('Cliente actualizado exitosamente'), backgroundColor: Colors.green),
+                            SnackBar(content: Text(result['message'] ?? 'Cliente actualizado exitosamente'), backgroundColor: Colors.green),
                           );
-                          // Simulación de envío de SMS
                           _enviarSmsExitoso();
                         } else {
                           ScaffoldMessenger.of(context).showSnackBar(
@@ -357,7 +356,6 @@ class _ClientInfoScreenState extends State<ClientInfoScreen> {
                     label: Text(_isLoadingLocation ? 'Actualizando...' : 'Actualizar'),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: Colors.grey.shade600,
-                            // eliminado departamento
                       padding: const EdgeInsets.symmetric(vertical: 12),
                     ),
                   ),
@@ -365,7 +363,44 @@ class _ClientInfoScreenState extends State<ClientInfoScreen> {
                 const SizedBox(width: 12),
                 Expanded(
                   child: ElevatedButton.icon(
-                    onPressed: _isSaving ? null : () {},
+                    onPressed: _isSaving ? null : () async {
+                      setState(() { _isSaving = true; });
+                      try {
+                        final clientData = {
+                          'cedula': _cedulaController.text.trim(),
+                          'nombre': _nombreController.text.trim(),
+                          'apellidos': _apellidosController.text.trim(),
+                          'telefono': _telefonoController.text.trim(),
+                          'email': _emailController.text.trim(),
+                          'direccion': _direccionController.text.trim(),
+                          'parroquia': _parroquiaController.text.trim(),
+                          'fincaNombre': _fincaNombreController.text.trim(),
+                          'fincaHectareas': _fincaHectareasController.text.isNotEmpty ? double.tryParse(_fincaHectareasController.text) : null,
+                          'cultivosPrincipales': _cultivosPrincipalesController.text.trim(),
+                          'geolocalizacionLat': _currentPosition?.latitude,
+                          'geolocalizacionLng': _currentPosition?.longitude,
+                          'observaciones': _observacionesController.text.trim(),
+                          'tecnicoAsignadoId': _tecnicoAsignadoIdController.text.isNotEmpty ? int.tryParse(_tecnicoAsignadoIdController.text) : null,
+                        };
+                        final result = await _clientService.createClient(clientData);
+                        if (result['success'] == true) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(content: Text(result['message'] ?? 'Cliente guardado exitosamente'), backgroundColor: Colors.green),
+                          );
+                          _enviarSmsExitoso();
+                        } else {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(content: Text(result['message'] ?? 'Error al guardar cliente'), backgroundColor: Colors.red),
+                          );
+                        }
+                      } catch (e) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
+                        );
+                      } finally {
+                        setState(() { _isSaving = false; });
+                      }
+                    },
                     icon: _isSaving
                         ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, valueColor: AlwaysStoppedAnimation<Color>(Colors.white)))
                         : const Icon(Icons.save),
