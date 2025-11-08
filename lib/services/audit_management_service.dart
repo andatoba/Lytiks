@@ -1,7 +1,10 @@
 import 'dart:convert';
+
 import 'package:http/http.dart' as http;
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 class AuditManagementService {
+  final storage = const FlutterSecureStorage();
   static const String baseUrl = 'http://5.161.198.89:8081/api';
 
   // Obtener todas las auditorías (Moko, Sigatoka y regulares)
@@ -136,9 +139,14 @@ class AuditManagementService {
     Map<String, dynamic> auditData,
   ) async {
     try {
+      // Leer el token JWT almacenado
+      final token = await storage.read(key: 'token');
       final response = await http.post(
         Uri.parse('$baseUrl/sigatoka/create'),
-        headers: {'Content-Type': 'application/json'},
+        headers: {
+          'Content-Type': 'application/json',
+          if (token != null) 'Authorization': 'Bearer $token',
+        },
         body: json.encode(auditData),
       );
 

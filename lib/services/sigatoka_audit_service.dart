@@ -18,6 +18,7 @@ class SigatokaAuditService {
     String? estadoGeneral,
     Map<String, Map<String, double?>>? basicParams,
     Map<String, List<double?>>? completeParams,
+    String? photoBase64,
   }) async {
     try {
       // Preparar parámetros para envío
@@ -68,6 +69,7 @@ class SigatokaAuditService {
         'stoverRecomendado': stoverRecomendado,
         'estadoGeneral': estadoGeneral ?? _calculateOverallStatus(parameters),
         'parameters': parameters,
+        if (photoBase64 != null) 'photoBase64': photoBase64,
       };
 
       final response = await http.post(

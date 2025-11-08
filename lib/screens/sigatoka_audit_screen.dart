@@ -1,6 +1,8 @@
+import '../services/sigatoka_audit_service.dart';
 import 'package:flutter/material.dart';
 import 'dart:io';
 import 'package:image_picker/image_picker.dart';
+import 'dart:convert';
 
 class SigatokaAuditScreen extends StatefulWidget {
   final Map<String, dynamic>? clientData;
@@ -12,6 +14,8 @@ class SigatokaAuditScreen extends StatefulWidget {
 }
 
 class _SigatokaAuditScreenState extends State<SigatokaAuditScreen> {
+  final SigatokaAuditService _sigatokaAuditService = SigatokaAuditService();
+  String? _sigatokaPhotoBase64;
   File? _sigatokaPhoto;
   String? _sigatokaPhotoPath;
   String _selectedCrop = 'Banano';
@@ -463,9 +467,18 @@ class _SigatokaAuditScreenState extends State<SigatokaAuditScreen> {
       imageQuality: 70,
     );
     if (pickedFile != null) {
+      // Guardar la foto con nombre único
+      final directory = await Directory.systemTemp.createTemp();
+      final uniqueName =
+          'sigatoka_${DateTime.now().millisecondsSinceEpoch}_${pickedFile.name}';
+      final newPath = '${directory.path}/$uniqueName';
+      final newFile = await File(pickedFile.path).copy(newPath);
       setState(() {
-        _sigatokaPhoto = File(pickedFile.path);
-        _sigatokaPhotoPath = pickedFile.path;
+        _sigatokaPhoto = newFile;
+        _sigatokaPhotoPath = newFile.path;
+        // Codificar a base64
+        final bytes = newFile.readAsBytesSync();
+        _sigatokaPhotoBase64 = base64Encode(bytes);
       });
     }
   }
@@ -904,35 +917,57 @@ class _SigatokaAuditScreenState extends State<SigatokaAuditScreen> {
 
   void _saveAudit() {
     // Usar las variables para evitar warnings
-    final auditData = {
-      'crop': _selectedCrop,
-      'observations': _observations,
-      'recommendations': _recommendations,
-      'realStover': _realStover,
-      'recommendedStover': _recommendedStover,
-      'basicParams': _basicParams,
-    };
-
-    // TODO: Implementar guardado real en base de datos
-    print('Guardando auditoría Sigatoka: $auditData');
-
+    // Mostrar indicador de carga
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Auditoría Guardada'),
-        content: const Text(
-          'La auditoría de Sigatoka ha sido guardada exitosamente.',
+      barrierDismissible: false,
+      builder: (context) => const AlertDialog(
+        content: Row(
+          children: [
+            CircularProgressIndicator(),
+            SizedBox(width: 16),
+            Text('Guardando auditoría...'),
+          ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () {
-              Navigator.of(context).pop();
-              Navigator.of(context).pop();
-            },
-            child: const Text('Aceptar'),
-          ),
-        ],
       ),
     );
+
+    _sigatokaAuditService
+        .createSigatokaAudit(
+          nivelAnalisis: 'Básico',
+          tipoCultivo: _selectedCrop,
+          hacienda: '', // Completa según tu lógica
+          lote: '', // Completa según tu lógica
+          tecnicoId: 1, // Completa según tu lógica
+          observaciones: _observations,
+          recomendaciones: _recommendations,
+          stoverReal: _realStover,
+          stoverRecomendado: _recommendedStover,
+          basicParams: _basicParams,
+          photoBase64: _sigatokaPhotoBase64,
+        )
+        .then((result) {
+          Navigator.of(context).pop(); // Cerrar indicador de carga
+          showDialog(
+            context: context,
+            builder: (context) => AlertDialog(
+              title: Text(
+                result['success'] == true ? 'Auditoría Guardada' : 'Error',
+              ),
+              content: Text(result['message'] ?? 'Error desconocido'),
+              actions: [
+                TextButton(
+                  onPressed: () {
+                    Navigator.of(context).pop();
+                    if (result['success'] == true) {
+                      Navigator.of(context).pop();
+                    }
+                  },
+                  child: const Text('Aceptar'),
+                ),
+              ],
+            ),
+          );
+        });
   }
 }

@@ -3,16 +3,12 @@ import 'package:sqflite/sqflite.dart';
 import 'package:path/path.dart';
 
 class OfflineStorageService {
-  static Database? _database;
-  static const String _databaseName = 'lytiks_offline.db';
-  static const int _databaseVersion = 1;
-
-  // Singleton
   static final OfflineStorageService _instance =
       OfflineStorageService._internal();
   factory OfflineStorageService() => _instance;
   OfflineStorageService._internal();
 
+  static Database? _database;
   Future<Database> get database async {
     if (_database != null) return _database!;
     _database = await _initDatabase();
@@ -20,82 +16,87 @@ class OfflineStorageService {
   }
 
   Future<Database> _initDatabase() async {
-    String path = join(await getDatabasesPath(), _databaseName);
+    final dbPath = await getDatabasesPath();
+    final path = join(dbPath, 'offline_audits.db');
     return await openDatabase(
       path,
-      version: _databaseVersion,
-      onCreate: _onCreate,
+      version: 2,
+      onCreate: (db, version) async {
+        await db.execute('''
+          CREATE TABLE pending_audits (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            client_id INTEGER,
+            category_id INTEGER,
+            audit_date TEXT,
+            status TEXT,
+            audit_data TEXT,
+            observations TEXT,
+            latitude REAL,
+            longitude REAL,
+            image_path TEXT,
+            created_at TEXT,
+            is_synced INTEGER DEFAULT 0
+          )
+        ''');
+        await db.execute('''
+          CREATE TABLE pending_moko_audits (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            client_id INTEGER,
+            audit_date TEXT,
+            status TEXT,
+            moko_data TEXT,
+            observations TEXT,
+            latitude REAL,
+            longitude REAL,
+            photo_base64_observaciones TEXT,
+            photo_base64_seguimiento TEXT,
+            created_at TEXT,
+            is_synced INTEGER DEFAULT 0
+          )
+        ''');
+        await db.execute('''
+          CREATE TABLE pending_clients (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            cedula TEXT,
+            nombre TEXT,
+            apellidos TEXT,
+            telefono TEXT,
+            email TEXT,
+            direccion TEXT,
+            geolocalizacion_lat REAL,
+            geolocalizacion_lng REAL,
+            nombre_finca TEXT,
+            area_cultivo REAL,
+            tipo_cultivo TEXT,
+            tecnico_asignado TEXT,
+            created_at TEXT,
+            is_synced INTEGER DEFAULT 0
+          )
+        ''');
+        await db.execute('''
+          CREATE TABLE pending_audit_photos (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            audit_id INTEGER,
+            audit_type TEXT,
+            photo_path TEXT,
+            description TEXT,
+            created_at TEXT,
+            is_synced INTEGER DEFAULT 0
+          )
+        ''');
+      },
+      onUpgrade: (db, oldVersion, newVersion) async {
+        if (oldVersion < 2) {
+          // Agregar columnas si no existen
+          await db.execute(
+            '''ALTER TABLE pending_moko_audits ADD COLUMN photo_base64_observaciones TEXT;''',
+          );
+          await db.execute(
+            '''ALTER TABLE pending_moko_audits ADD COLUMN photo_base64_seguimiento TEXT;''',
+          );
+        }
+      },
     );
-  }
-
-  Future<void> _onCreate(Database db, int version) async {
-    // Tabla para auditorías pendientes
-    await db.execute('''
-      CREATE TABLE pending_audits (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        client_id INTEGER,
-        category_id INTEGER,
-        audit_date TEXT,
-        status TEXT,
-        audit_data TEXT,
-        observations TEXT,
-        latitude REAL,
-        longitude REAL,
-        image_path TEXT,
-        created_at TEXT,
-        is_synced INTEGER DEFAULT 0
-      )
-    ''');
-
-    // Tabla para auditorías Moko pendientes
-    await db.execute('''
-      CREATE TABLE pending_moko_audits (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        client_id INTEGER,
-        audit_date TEXT,
-        status TEXT,
-        moko_data TEXT,
-        observations TEXT,
-        latitude REAL,
-        longitude REAL,
-        created_at TEXT,
-        is_synced INTEGER DEFAULT 0
-      )
-    ''');
-
-    // Tabla para clientes pendientes
-    await db.execute('''
-      CREATE TABLE pending_clients (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        cedula TEXT,
-        nombre TEXT,
-        apellidos TEXT,
-        telefono TEXT,
-        email TEXT,
-        direccion TEXT,
-        geolocalizacion_lat REAL,
-        geolocalizacion_lng REAL,
-        nombre_finca TEXT,
-        area_cultivo REAL,
-        tipo_cultivo TEXT,
-        tecnico_asignado TEXT,
-        created_at TEXT,
-        is_synced INTEGER DEFAULT 0
-      )
-    ''');
-
-    // Tabla para fotos de auditorías pendientes
-    await db.execute('''
-      CREATE TABLE pending_audit_photos (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        audit_id INTEGER,
-        audit_type TEXT,
-        photo_path TEXT,
-        description TEXT,
-        created_at TEXT,
-        is_synced INTEGER DEFAULT 0
-      )
-    ''');
   }
 
   // AUDITORÍAS REGULARES
@@ -155,6 +156,8 @@ class OfflineStorageService {
     String? observations,
     double? latitude,
     double? longitude,
+    String? photoBase64Observaciones,
+    String? photoBase64Seguimiento,
   }) async {
     final db = await database;
     return await db.insert('pending_moko_audits', {
@@ -165,6 +168,8 @@ class OfflineStorageService {
       'observations': observations,
       'latitude': latitude,
       'longitude': longitude,
+      'photo_base64_observaciones': photoBase64Observaciones,
+      'photo_base64_seguimiento': photoBase64Seguimiento,
       'created_at': DateTime.now().toIso8601String(),
       'is_synced': 0,
     });

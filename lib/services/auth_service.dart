@@ -3,6 +3,35 @@ import 'package:http/http.dart' as http;
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 class AuthService {
+  // Obtener perfil real del usuario desde el backend
+  Future<Map<String, dynamic>?> getProfile(String username) async {
+    final url = await baseUrl;
+    final response = await http.get(
+      Uri.parse('$url/auth/profile/$username'),
+      headers: {'Content-Type': 'application/json'},
+    );
+    if (response.statusCode == 200) {
+      return json.decode(response.body);
+    } else {
+      return null;
+    }
+  }
+
+  // Obtener cantidad de auditorías realizadas por el usuario (por su id)
+  Future<int> getSigatokaAuditCount(int tecnicoId) async {
+    final url = await baseUrl;
+    final response = await http.get(
+      Uri.parse('$url/sigatoka/technician/$tecnicoId'),
+      headers: {'Content-Type': 'application/json'},
+    );
+    if (response.statusCode == 200) {
+      final List<dynamic> data = json.decode(response.body);
+      return data.length;
+    } else {
+      return 0;
+    }
+  }
+
   // URL por defecto del backend Spring Boot corriendo en CentOS VM
   final String _defaultBaseUrl = 'http://5.161.198.89:8081/api';
   final storage = const FlutterSecureStorage();
@@ -68,6 +97,18 @@ class AuthService {
 
   Future<String?> getToken() async {
     return await storage.read(key: 'token');
+  }
+
+  // Obtener username del usuario autenticado
+  Future<String?> getUsername() async {
+    final userData = await getUserData();
+    return userData?['username'];
+  }
+
+  // Obtener id del usuario autenticado
+  Future<int?> getUserId() async {
+    final userData = await getUserData();
+    return userData?['id'];
   }
 
   Future<void> logout() async {

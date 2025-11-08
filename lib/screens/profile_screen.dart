@@ -12,6 +12,8 @@ class ProfileScreen extends StatefulWidget {
 class _ProfileScreenState extends State<ProfileScreen> {
   final AuthService _authService = AuthService();
   Map<String, dynamic>? userData;
+  Map<String, dynamic>? userProfile;
+  int auditCount = 0;
   bool isLoading = true;
 
   @override
@@ -23,13 +25,31 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Future<void> _loadUserData() async {
     try {
       final data = await _authService.getUserData();
-      if (mounted) {
-        setState(() {
-          userData = data;
-          isLoading = false;
-        });
+      String? username = data != null ? data['username'] : null;
+      if (username == null) {
+        username = await _authService.getUsername();
+      }
+      print('[Perfil] Username usado para perfil: $username');
+      if (username != null) {
+        final profile = await _authService.getProfile(username);
+        print('[Perfil] Respuesta del backend para perfil: $profile');
+        if (mounted) {
+          setState(() {
+            userData = data;
+            userProfile = profile;
+            auditCount = 0; // Ya no se consulta el conteo de auditorías
+            isLoading = false;
+          });
+        }
+      } else {
+        if (mounted) {
+          setState(() {
+            isLoading = false;
+          });
+        }
       }
     } catch (e) {
+      print('[Perfil] Error al cargar datos de usuario: $e');
       if (mounted) {
         setState(() {
           isLoading = false;
@@ -75,7 +95,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       backgroundColor: Colors.grey[50],
       body: isLoading
           ? const Center(child: CircularProgressIndicator())
-          : userData == null
+          : (userData == null && userProfile == null)
           ? const Center(
               child: Text('No hay información de usuario disponible'),
             )
@@ -120,7 +140,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
                         // Nombre completo
                         Text(
-                          '${userData!['firstName']} ${userData!['lastName']}',
+                          userProfile != null
+                              ? '${userProfile!['firstName']} ${userProfile!['lastName']}'
+                              : '${userData!['firstName']} ${userData!['lastName']}',
                           style: const TextStyle(
                             fontSize: 24,
                             fontWeight: FontWeight.bold,
@@ -160,7 +182,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
                               ),
                               const SizedBox(width: 8),
                               Text(
-                                _authService.getRoleName(userData!['role']),
+                                _authService.getRoleName(
+                                  userProfile != null
+                                      ? userProfile!['role']
+                                      : userData!['role'],
+                                ),
                                 style: const TextStyle(
                                   color: Colors.white,
                                   fontWeight: FontWeight.bold,
@@ -183,17 +209,25 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       _buildInfoItem(
                         icon: Icons.account_circle,
                         label: 'Usuario',
-                        value: userData!['username'],
+                        value: userProfile != null
+                            ? userProfile!['username']
+                            : userData!['username'],
                       ),
                       _buildInfoItem(
                         icon: Icons.email,
                         label: 'Correo Electrónico',
-                        value: userData!['email'] ?? 'No disponible',
+                        value: userProfile != null
+                            ? (userProfile!['email'] ?? 'No disponible')
+                            : (userData!['email'] ?? 'No disponible'),
                       ),
                       _buildInfoItem(
                         icon: Icons.badge,
                         label: 'Rol del Sistema',
-                        value: _authService.getRoleName(userData!['role']),
+                        value: _authService.getRoleName(
+                          userProfile != null
+                              ? userProfile!['role']
+                              : userData!['role'],
+                        ),
                       ),
                     ],
                   ),
@@ -207,12 +241,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       _buildInfoItem(
                         icon: Icons.assignment,
                         label: 'Auditorías Realizadas',
-                        value: '12', // Esto debería venir del backend
-                      ),
-                      _buildInfoItem(
-                        icon: Icons.calendar_today,
-                        label: 'Último Acceso',
-                        value: 'Hoy',
+                        value: auditCount.toString(),
                       ),
                     ],
                   ),

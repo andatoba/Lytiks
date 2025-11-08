@@ -28,6 +28,8 @@ class MokoAuditService {
     String? observaciones,
     double? latitude,
     double? longitude,
+    String? photoBase64Observaciones,
+    String? photoBase64Seguimiento,
   }) async {
     try {
       final headers = await _getHeaders();
@@ -41,6 +43,10 @@ class MokoAuditService {
         'observaciones': observaciones,
         'latitude': latitude,
         'longitude': longitude,
+        if (photoBase64Observaciones != null)
+          'photoBase64Observaciones': photoBase64Observaciones,
+        if (photoBase64Seguimiento != null)
+          'photoBase64Seguimiento': photoBase64Seguimiento,
       };
 
       final response = await http.post(

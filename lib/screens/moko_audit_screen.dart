@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:convert';
 import 'package:image_picker/image_picker.dart';
 
 import 'package:flutter/material.dart';
@@ -36,6 +37,10 @@ class _MokoAuditScreenState extends State<MokoAuditScreen> {
   String? _mokoPhotoPathObservaciones;
   File? _mokoPhotoSeguimiento;
   String? _mokoPhotoPathSeguimiento;
+
+  // Base64 de las fotos
+  String? _mokoPhotoBase64Observaciones;
+  String? _mokoPhotoBase64Seguimiento;
 
   @override
   Widget build(BuildContext context) {
@@ -717,13 +722,24 @@ class _MokoAuditScreenState extends State<MokoAuditScreen> {
         },
       ];
 
+      // Codificar fotos a base64 si existen
+      if (_mokoPhotoPathObservaciones != null) {
+        final bytes = File(_mokoPhotoPathObservaciones!).readAsBytesSync();
+        _mokoPhotoBase64Observaciones = base64Encode(bytes);
+      }
+      if (_mokoPhotoPathSeguimiento != null) {
+        final bytes = File(_mokoPhotoPathSeguimiento!).readAsBytesSync();
+        _mokoPhotoBase64Seguimiento = base64Encode(bytes);
+      }
+
       final auditData = {
         'tecnicoId': widget.clientData?['id'] ?? 1,
         'fecha': DateTime.now().toIso8601String(),
         'estado': 'COMPLETADA',
         'details': details,
         'observaciones': observacionesAuditoria,
-        // 'seguimiento' eliminado porque el backend no lo espera
+        'photoBase64Observaciones': _mokoPhotoBase64Observaciones,
+        'photoBase64Seguimiento': _mokoPhotoBase64Seguimiento,
       };
 
       // 1. Guardar en SQLite primero (siempre)
@@ -733,6 +749,8 @@ class _MokoAuditScreenState extends State<MokoAuditScreen> {
         status: auditData['estado'],
         mokoData: List<Map<String, dynamic>>.from(auditData['details']),
         observations: auditData['observaciones'],
+        photoBase64Observaciones: _mokoPhotoBase64Observaciones,
+        photoBase64Seguimiento: _mokoPhotoBase64Seguimiento,
       );
 
       // 2. Verificar conexión y sincronizar si es posible
@@ -748,6 +766,10 @@ class _MokoAuditScreenState extends State<MokoAuditScreen> {
             estado: auditData['estado'],
             details: List<Map<String, dynamic>>.from(auditData['details']),
             observaciones: auditData['observaciones'],
+            latitude: null,
+            longitude: null,
+            photoBase64Observaciones: _mokoPhotoBase64Observaciones,
+            photoBase64Seguimiento: _mokoPhotoBase64Seguimiento,
           );
 
           if (result['success'] == true) {
@@ -760,7 +782,7 @@ class _MokoAuditScreenState extends State<MokoAuditScreen> {
           }
         } catch (e) {
           message =
-              'Auditoría guardada localmente. Error en sincronización: ${e.toString()}';
+              'Auditoría guardada localmente. Error en sincronización: [${e.toString()}';
         }
       } else {
         message =
@@ -815,13 +837,19 @@ class _MokoAuditScreenState extends State<MokoAuditScreen> {
       imageQuality: 70,
     );
     if (pickedFile != null) {
+      // Guardar la foto con nombre único
+      final directory = await Directory.systemTemp.createTemp();
+      final uniqueName =
+          'moko_${tipo}_${DateTime.now().millisecondsSinceEpoch}_${pickedFile.name}';
+      final newPath = '${directory.path}/$uniqueName';
+      final newFile = await File(pickedFile.path).copy(newPath);
       setState(() {
         if (tipo == 'observaciones') {
-          _mokoPhotoObservaciones = File(pickedFile.path);
-          _mokoPhotoPathObservaciones = pickedFile.path;
+          _mokoPhotoObservaciones = newFile;
+          _mokoPhotoPathObservaciones = newFile.path;
         } else if (tipo == 'seguimiento') {
-          _mokoPhotoSeguimiento = File(pickedFile.path);
-          _mokoPhotoPathSeguimiento = pickedFile.path;
+          _mokoPhotoSeguimiento = newFile;
+          _mokoPhotoPathSeguimiento = newFile.path;
         }
       });
     }
