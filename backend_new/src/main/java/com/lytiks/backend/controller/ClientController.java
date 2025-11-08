@@ -51,7 +51,7 @@ public class ClientController {
     public ResponseEntity<Map<String, Object>> createClient(@RequestBody Map<String, Object> clientData) {
         Map<String, Object> response = new HashMap<>();
         
-        try {
+    try {
             String cedula = (String) clientData.get("cedula");
             
             // Verificar si ya existe un cliente con esa cédula
@@ -68,8 +68,8 @@ public class ClientController {
             client.setTelefono((String) clientData.get("telefono"));
             client.setEmail((String) clientData.get("email"));
             client.setDireccion((String) clientData.get("direccion"));
-            client.setMunicipio((String) clientData.get("municipio"));
-            client.setDepartamento((String) clientData.get("departamento"));
+            client.setParroquia((String) clientData.get("parroquia"));
+            // eliminado departamento
             client.setFincaNombre((String) clientData.get("fincaNombre"));
             
             if (clientData.get("fincaHectareas") != null) {
@@ -77,8 +77,6 @@ public class ClientController {
             }
             
             client.setCultivosPrincipales((String) clientData.get("cultivosPrincipales"));
-            client.setTipoProductor((String) clientData.get("tipoProductor"));
-            client.setAsociacion((String) clientData.get("asociacion"));
             
             if (clientData.get("geolocalizacionLat") != null) {
                 client.setGeolocalizacionLat(Double.valueOf(clientData.get("geolocalizacionLat").toString()));
@@ -102,6 +100,7 @@ public class ClientController {
             return ResponseEntity.ok(response);
             
         } catch (Exception e) {
+            e.printStackTrace(); // Log detallado en consola
             response.put("success", false);
             response.put("message", "Error al crear cliente: " + e.getMessage());
             return ResponseEntity.badRequest().body(response);
@@ -121,64 +120,87 @@ public class ClientController {
             
             if (clientOpt.isPresent()) {
                 Client client = clientOpt.get();
-                
-                // Actualizar campos si están presentes
-                if (clientData.containsKey("nombre")) {
-                    client.setNombre((String) clientData.get("nombre"));
-                }
-                if (clientData.containsKey("apellidos")) {
-                    client.setApellidos((String) clientData.get("apellidos"));
-                }
+                boolean anyChange = false;
+                // Actualizar campos si están presentes (siempre actualiza aunque sean nulos o vacíos)
+                // Solo permitir actualización de los siguientes campos:
                 if (clientData.containsKey("telefono")) {
                     client.setTelefono((String) clientData.get("telefono"));
+                    anyChange = true;
                 }
                 if (clientData.containsKey("email")) {
                     client.setEmail((String) clientData.get("email"));
+                    anyChange = true;
                 }
                 if (clientData.containsKey("direccion")) {
                     client.setDireccion((String) clientData.get("direccion"));
+                    anyChange = true;
                 }
-                if (clientData.containsKey("municipio")) {
-                    client.setMunicipio((String) clientData.get("municipio"));
+                if (clientData.containsKey("parroquia")) {
+                    client.setParroquia((String) clientData.get("parroquia"));
+                    anyChange = true;
                 }
-                if (clientData.containsKey("departamento")) {
-                    client.setDepartamento((String) clientData.get("departamento"));
-                }
+                // eliminado departamento
                 if (clientData.containsKey("fincaNombre")) {
                     client.setFincaNombre((String) clientData.get("fincaNombre"));
+                    anyChange = true;
                 }
                 if (clientData.containsKey("fincaHectareas")) {
-                    client.setFincaHectareas(Double.valueOf(clientData.get("fincaHectareas").toString()));
+                    Object hect = clientData.get("fincaHectareas");
+                    if (hect != null && !hect.toString().isEmpty()) {
+                        try {
+                            client.setFincaHectareas(Double.valueOf(hect.toString()));
+                        } catch (NumberFormatException ex) {
+                            client.setFincaHectareas(null);
+                        }
+                    } else {
+                        client.setFincaHectareas(null);
+                    }
+                    anyChange = true;
                 }
                 if (clientData.containsKey("cultivosPrincipales")) {
                     client.setCultivosPrincipales((String) clientData.get("cultivosPrincipales"));
-                }
-                if (clientData.containsKey("tipoProductor")) {
-                    client.setTipoProductor((String) clientData.get("tipoProductor"));
-                }
-                if (clientData.containsKey("asociacion")) {
-                    client.setAsociacion((String) clientData.get("asociacion"));
+                    anyChange = true;
                 }
                 if (clientData.containsKey("geolocalizacionLat")) {
-                    client.setGeolocalizacionLat(Double.valueOf(clientData.get("geolocalizacionLat").toString()));
+                    Object lat = clientData.get("geolocalizacionLat");
+                    if (lat != null && !lat.toString().isEmpty()) {
+                        try {
+                            client.setGeolocalizacionLat(Double.valueOf(lat.toString()));
+                        } catch (NumberFormatException ex) {
+                            client.setGeolocalizacionLat(null);
+                        }
+                    } else {
+                        client.setGeolocalizacionLat(null);
+                    }
+                    anyChange = true;
                 }
                 if (clientData.containsKey("geolocalizacionLng")) {
-                    client.setGeolocalizacionLng(Double.valueOf(clientData.get("geolocalizacionLng").toString()));
+                    Object lng = clientData.get("geolocalizacionLng");
+                    if (lng != null && !lng.toString().isEmpty()) {
+                        try {
+                            client.setGeolocalizacionLng(Double.valueOf(lng.toString()));
+                        } catch (NumberFormatException ex) {
+                            client.setGeolocalizacionLng(null);
+                        }
+                    } else {
+                        client.setGeolocalizacionLng(null);
+                    }
+                    anyChange = true;
                 }
                 if (clientData.containsKey("observaciones")) {
                     client.setObservaciones((String) clientData.get("observaciones"));
+                    anyChange = true;
                 }
                 if (clientData.containsKey("estado")) {
                     client.setEstado((String) clientData.get("estado"));
+                    anyChange = true;
                 }
-                
+                // Si no se envió ningún campo, igual se actualiza la fecha
                 client.setFechaActualizacion(LocalDateTime.now());
                 clientRepository.save(client);
-                
                 response.put("success", true);
                 response.put("message", "Cliente actualizado exitosamente");
                 return ResponseEntity.ok(response);
-                
             } else {
                 response.put("success", false);
                 response.put("message", "Cliente no encontrado");

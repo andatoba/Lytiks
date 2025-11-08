@@ -71,15 +71,16 @@ public class DataInitializer implements CommandLineRunner {
             cliente1.setTelefono("+57 300 1234567");
             cliente1.setEmail("juan.rodriguez@email.com");
             cliente1.setDireccion("Vereda La Esperanza, Km 15 vía Medellín");
-            cliente1.setMunicipio("Apartadó");
-            cliente1.setDepartamento("Antioquia");
+            cliente1.setParroquia("La Esperanza");
             cliente1.setFincaNombre("Finca Los Plátanos");
             cliente1.setFincaHectareas(25.5);
             cliente1.setCultivosPrincipales("BANANO");
-            cliente1.setTipoProductor("MEDIANO");
-            cliente1.setAsociacion("AUGURA");
             cliente1.setFechaRegistro(LocalDateTime.now().minusDays(30));
             cliente1.setEstado("ACTIVO");
+            cliente1.setGeolocalizacionLat(6.25184);
+            cliente1.setGeolocalizacionLng(-75.56359);
+            cliente1.setObservaciones("Cliente de prueba para banano");
+            cliente1.setTecnicoAsignadoId(1L);
             clientRepository.save(cliente1);
 
             // Cliente 2 - Palma
@@ -90,15 +91,16 @@ public class DataInitializer implements CommandLineRunner {
             cliente2.setTelefono("+57 301 9876543");
             cliente2.setEmail("maria.gomez@email.com");
             cliente2.setDireccion("Corregimiento San José, Finca La Palma");
-            cliente2.setMunicipio("Tumaco");
-            cliente2.setDepartamento("Nariño");
+            cliente2.setParroquia("San José");
             cliente2.setFincaNombre("Palmas del Pacífico");
             cliente2.setFincaHectareas(45.0);
             cliente2.setCultivosPrincipales("PALMA");
-            cliente2.setTipoProductor("GRANDE");
-            cliente2.setAsociacion("FEDEPALMA");
             cliente2.setFechaRegistro(LocalDateTime.now().minusDays(15));
             cliente2.setEstado("ACTIVO");
+            cliente2.setGeolocalizacionLat(3.45164);
+            cliente2.setGeolocalizacionLng(-76.53201);
+            cliente2.setObservaciones("Cliente de prueba para palma");
+            cliente2.setTecnicoAsignadoId(1L);
             clientRepository.save(cliente2);
 
             // Cliente 3 - Banano y Plátano
@@ -109,15 +111,16 @@ public class DataInitializer implements CommandLineRunner {
             cliente3.setTelefono("+57 315 5556789");
             cliente3.setEmail("carlos.martinez@email.com");
             cliente3.setDireccion("Zona Rural, Sector El Dorado");
-            cliente3.setMunicipio("Carepa");
-            cliente3.setDepartamento("Antioquia");
+            cliente3.setParroquia("El Dorado");
             cliente3.setFincaNombre("El Dorado Verde");
             cliente3.setFincaHectareas(18.3);
             cliente3.setCultivosPrincipales("BANANO, PLÁTANO");
-            cliente3.setTipoProductor("PEQUEÑO");
-            cliente3.setAsociacion("APROBANANO");
             cliente3.setFechaRegistro(LocalDateTime.now().minusDays(7));
             cliente3.setEstado("ACTIVO");
+            cliente3.setGeolocalizacionLat(7.11392);
+            cliente3.setGeolocalizacionLng(-73.1198);
+            cliente3.setObservaciones("Cliente de prueba para banano y plátano");
+            cliente3.setTecnicoAsignadoId(1L);
             clientRepository.save(cliente3);
 
             System.out.println("✅ 3 clientes de prueba creados exitosamente");

@@ -164,29 +164,18 @@ class ClientService {
     }
   }
 
-  // Actualizar un cliente
+  // Actualizar un cliente (PUT con JSON completo)
   Future<Map<String, dynamic>> updateClient({
     required int id,
-    required String name,
-    required String email,
-    required String phone,
-    required String address,
-    String? company,
+    required Map<String, dynamic> clientData,
   }) async {
     try {
       final headers = await _getHeaders();
       final url = await baseUrl;
       final response = await http.put(
-        Uri.parse('$url/clients/$id'),
+        Uri.parse('$url/clients/update/$id'),
         headers: headers,
-        body: json.encode({
-          'id': id,
-          'name': name,
-          'email': email,
-          'phone': phone,
-          'address': address,
-          'company': company,
-        }),
+        body: json.encode(clientData),
       );
 
       if (response.statusCode == 200) {

@@ -34,14 +34,6 @@ public interface ClientRepository extends JpaRepository<Client, Long> {
     // Buscar clientes activos
     List<Client> findByEstado(String estado);
     
-    // Buscar clientes por municipio
-    List<Client> findByMunicipioContainingIgnoreCase(String municipio);
-    
-    // Buscar clientes por departamento
-    List<Client> findByDepartamentoContainingIgnoreCase(String departamento);
-    
-    // Buscar clientes por tipo de productor
-    List<Client> findByTipoProductor(String tipoProductor);
     
     // Buscar clientes por cultivos principales
     List<Client> findByCultivosPrincipalesContainingIgnoreCase(String cultivo);
