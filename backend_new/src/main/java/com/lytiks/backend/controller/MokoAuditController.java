@@ -28,17 +28,41 @@ public class MokoAuditController {
     @Autowired
     private MokoAuditPhotoRepository mokoAuditPhotoRepository;
 
+    @Autowired
+    private com.lytiks.backend.repository.ClientRepository clientRepository;
+
     // Crear nueva auditoría de Moko
     @PostMapping
     public ResponseEntity<Map<String, Object>> createMokoAudit(@RequestBody Map<String, Object> mokoAuditData) {
         Map<String, Object> response = new HashMap<>();
         try {
             MokoAudit audit = new MokoAudit();
+            
             // Mapear clientId a tecnicoId si viene de Flutter
-            if (mokoAuditData.get("clientId") != null) {
+            if (mokoAuditData.get("clienteId") != null) {
+                audit.setTecnicoId(Long.valueOf(mokoAuditData.get("clienteId").toString()));
+            } else if (mokoAuditData.get("clientId") != null) {
                 audit.setTecnicoId(Long.valueOf(mokoAuditData.get("clientId").toString()));
             } else if (mokoAuditData.get("tecnicoId") != null) {
                 audit.setTecnicoId(Long.valueOf(mokoAuditData.get("tecnicoId").toString()));
+            }
+
+            // Asociar cliente por cédula si se proporciona
+            if (mokoAuditData.containsKey("cedulaCliente") && mokoAuditData.get("cedulaCliente") != null) {
+                String cedula = mokoAuditData.get("cedulaCliente").toString();
+                Optional<com.lytiks.backend.entity.Client> clientOpt = clientRepository.findByCedula(cedula);
+                if (clientOpt.isPresent()) {
+                    audit.setClienteId(clientOpt.get().getId());
+                    System.out.println("Cliente asociado a auditoría Moko: " + clientOpt.get().getNombre());
+                } else {
+                    response.put("success", false);
+                    response.put("message", "No se encontró cliente con cédula: " + cedula);
+                    return ResponseEntity.badRequest().body(response);
+                }
+            } else {
+                response.put("success", false);
+                response.put("message", "Debe proporcionar la cédula del cliente");
+                return ResponseEntity.badRequest().body(response);
             }
             audit.setHacienda((String) mokoAuditData.get("hacienda"));
             audit.setLote((String) mokoAuditData.get("lote"));
@@ -48,15 +72,15 @@ public class MokoAuditController {
             // Puedes mapear otros campos aquí según tu modelo
 
             // Guardar detalles si existen
-            if (mokoAuditData.containsKey("mokoData")) {
+            if (mokoAuditData.containsKey("details")) {
                 List<MokoAuditDetail> details = new ArrayList<>();
-                Object mokoDataObj = mokoAuditData.get("mokoData");
-                if (mokoDataObj instanceof List<?>) {
-                    List<?> mokoDataList = (List<?>) mokoDataObj;
-                    for (Object detailObj : mokoDataList) {
+                Object detailsObj = mokoAuditData.get("details");
+                if (detailsObj instanceof List<?>) {
+                    List<?> detailsList = (List<?>) detailsObj;
+                    for (Object detailObj : detailsList) {
                         if (detailObj instanceof Map) {
                             @SuppressWarnings("unchecked")
-                            Map<String, Object> detailData = (Map<String, Object>) detailObj; // Safe due to runtime check
+                            Map<String, Object> detailData = (Map<String, Object>) detailObj;
                             MokoAuditDetail detail = new MokoAuditDetail();
                             detail.setMokoAudit(audit);
                             detail.setCategoria((String) detailData.get("categoria"));

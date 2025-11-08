@@ -7,6 +7,10 @@ import java.util.List;
 @Entity
 @Table(name = "audits")
 public class Audit {
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "client_id")
+    private Client client;
+
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
@@ -127,5 +131,13 @@ public class Audit {
     
     public void setPhotos(List<AuditPhoto> photos) {
         this.photos = photos;
+    }
+
+    public Client getClient() {
+        return client;
+    }
+
+    public void setClient(Client client) {
+        this.client = client;
     }
 }

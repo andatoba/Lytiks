@@ -4,12 +4,22 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter/foundation.dart';
 
 class AuditService {
-  final String _defaultBaseUrl = 'http://5.161.198.89:8081/api';
+  static const String _host = '5.161.198.89';
+  static const int _port = 8081;
+  static const String _basePath = '/api';
   final storage = const FlutterSecureStorage();
 
-  Future<String> get baseUrl async {
+  Future<Uri> get baseUri async {
     final savedUrl = await storage.read(key: 'server_url');
-    return savedUrl ?? _defaultBaseUrl;
+    if (savedUrl != null && savedUrl.isNotEmpty) {
+      return Uri.parse(savedUrl);
+    }
+    return Uri(
+      scheme: 'http',
+      host: _host,
+      port: _port,
+      path: _basePath,
+    );
   }
 
   Future<Map<String, String>> _getHeaders() async {
@@ -24,8 +34,8 @@ class AuditService {
   Future<bool> testConnection() async {
     try {
       // Usar un endpoint simple que no requiere autenticación
-      final url = Uri.parse('${await baseUrl}/clients');
-      final response = await http.get(url).timeout(const Duration(seconds: 5));
+      final uri = (await baseUri).replace(path: '${_basePath}/clients');
+      final response = await http.get(uri).timeout(const Duration(seconds: 5));
 
       // Si obtenemos cualquier respuesta válida del servidor, tenemos conexión
       return response.statusCode >= 200 && response.statusCode < 500;
@@ -44,22 +54,27 @@ class AuditService {
     required String estado,
     String? observaciones,
     required List<Map<String, dynamic>> scores,
+    String? cedulaCliente,
   }) async {
     try {
       final headers = await _getHeaders();
-      final url = await baseUrl;
+      final uri = (await baseUri).replace(path: '${_basePath}/audits/create');
+      final Map<String, dynamic> body = {
+        'hacienda': hacienda,
+        'cultivo': cultivo,
+        'fecha': fecha,
+        'tecnicoId': tecnicoId,
+        'estado': estado,
+        'observaciones': observaciones,
+        'scores': scores,
+      };
+      if (cedulaCliente != null && cedulaCliente.isNotEmpty) {
+        body['cedulaCliente'] = cedulaCliente;
+      }
       final response = await http.post(
-        Uri.parse('$url/audits/create'),
+        uri,
         headers: headers,
-        body: json.encode({
-          'hacienda': hacienda,
-          'cultivo': cultivo,
-          'fecha': fecha,
-          'tecnicoId': tecnicoId,
-          'estado': estado,
-          'observaciones': observaciones,
-          'scores': scores,
-        }),
+        body: json.encode(body),
       );
 
       if (response.statusCode == 201 || response.statusCode == 200) {
@@ -97,8 +112,9 @@ class AuditService {
   Future<List<Map<String, dynamic>>> getAudits() async {
     try {
       final headers = await _getHeaders();
+      final uri = (await baseUri).replace(path: '${_basePath}/audits');
       final response = await http.get(
-        Uri.parse('$baseUrl/audits'),
+        uri,
         headers: headers,
       );
 
@@ -122,8 +138,9 @@ class AuditService {
   Future<List<Map<String, dynamic>>> getAuditsByClient(int clientId) async {
     try {
       final headers = await _getHeaders();
+      final uri = (await baseUri).replace(path: '${_basePath}/audits/client/$clientId');
       final response = await http.get(
-        Uri.parse('$baseUrl/audits/client/$clientId'),
+        uri,
         headers: headers,
       );
 
@@ -149,8 +166,9 @@ class AuditService {
   Future<Map<String, dynamic>> getAuditById(int id) async {
     try {
       final headers = await _getHeaders();
+      final uri = (await baseUri).replace(path: '${_basePath}/audits/$id');
       final response = await http.get(
-        Uri.parse('$baseUrl/audits/$id'),
+        uri,
         headers: headers,
       );
 
@@ -175,8 +193,9 @@ class AuditService {
   Future<List<Map<String, dynamic>>> getAuditCategories() async {
     try {
       final headers = await _getHeaders();
+      final uri = (await baseUri).replace(path: '${_basePath}/audit-categories');
       final response = await http.get(
-        Uri.parse('$baseUrl/audit-categories'),
+        uri,
         headers: headers,
       );
 
@@ -200,8 +219,9 @@ class AuditService {
   Future<Map<String, dynamic>> updateAuditStatus(int id, String status) async {
     try {
       final headers = await _getHeaders();
+      final uri = (await baseUri).replace(path: '${_basePath}/audits/$id/status');
       final response = await http.put(
-        Uri.parse('$baseUrl/audits/$id/status'),
+        uri,
         headers: headers,
         body: json.encode({'status': status}),
       );
@@ -227,9 +247,10 @@ class AuditService {
   Future<String> uploadAuditImage(String imagePath, int auditId) async {
     try {
       final token = await storage.read(key: 'token');
+      final uri = (await baseUri).replace(path: '${_basePath}/audits/$auditId/image');
       final request = http.MultipartRequest(
         'POST',
-        Uri.parse('$baseUrl/audits/$auditId/image'),
+        uri,
       );
 
       request.headers['Authorization'] = 'Bearer $token';

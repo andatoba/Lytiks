@@ -29,6 +29,8 @@ import java.util.Base64;
 @RequestMapping("/audits")
 @CrossOrigin(origins = "*")
 public class AuditController {
+    @Autowired
+    private com.lytiks.backend.repository.ClientRepository clientRepository;
 
     @Autowired
     private AuditRepository auditRepository;
@@ -54,6 +56,23 @@ public ResponseEntity<Map<String, Object>> createAudit(@RequestBody Map<String, 
         audit.setTecnicoId(auditData.get("tecnicoId") != null ? Long.valueOf(auditData.get("tecnicoId").toString()) : null);
         audit.setEstado(auditData.get("estado") != null ? auditData.get("estado").toString() : "PENDIENTE");
         audit.setObservaciones((String) auditData.get("observaciones"));
+
+        // Asociar cliente por cédula
+        if (auditData.containsKey("cedulaCliente") && auditData.get("cedulaCliente") != null) {
+            String cedula = auditData.get("cedulaCliente").toString();
+            Optional<com.lytiks.backend.entity.Client> clientOpt = clientRepository.findByCedula(cedula);
+            if (clientOpt.isPresent()) {
+                audit.setClient(clientOpt.get());
+            } else {
+                response.put("success", false);
+                response.put("message", "No se encontró un cliente con la cédula proporcionada");
+                return ResponseEntity.badRequest().body(response);
+            }
+        } else {
+            response.put("success", false);
+            response.put("message", "Debe proporcionar la cédula del cliente");
+            return ResponseEntity.badRequest().body(response);
+        }
 
         Audit savedAudit = auditRepository.save(audit);
 

@@ -41,6 +41,9 @@ public class MokoAudit {
     @Column(name = "tecnico_id")
     private Long tecnicoId;
     
+    @Column(name = "cliente_id")
+    private Long clienteId;
+    
     @Column(name = "hacienda")
     private String hacienda;
     
@@ -162,6 +165,14 @@ public class MokoAudit {
     
     public void setTecnicoId(Long tecnicoId) {
         this.tecnicoId = tecnicoId;
+    }
+    
+    public Long getClienteId() {
+        return clienteId;
+    }
+    
+    public void setClienteId(Long clienteId) {
+        this.clienteId = clienteId;
     }
     
     public String getHacienda() {

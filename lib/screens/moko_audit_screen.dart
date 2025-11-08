@@ -2,9 +2,11 @@ import 'dart:io';
 import 'package:image_picker/image_picker.dart';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import '../services/sync_service.dart';
 import '../services/moko_audit_service.dart';
 import '../services/offline_storage_service.dart';
+import '../services/client_service.dart';
 
 class MokoAuditScreen extends StatefulWidget {
   final Map<String, dynamic>? clientData;
@@ -31,11 +33,37 @@ class _MokoAuditScreenState extends State<MokoAuditScreen> {
   final SyncService _syncService = SyncService();
   final MokoAuditService _mokoAuditService = MokoAuditService();
   final OfflineStorageService _offlineStorage = OfflineStorageService();
+  final ClientService _clientService = ClientService();
+
+  // Cliente seleccionado
+  Map<String, dynamic>? _selectedClient;
+  final TextEditingController _cedulaController = TextEditingController();
 
   File? _mokoPhotoObservaciones;
   String? _mokoPhotoPathObservaciones;
   File? _mokoPhotoSeguimiento;
   String? _mokoPhotoPathSeguimiento;
+
+  @override
+  void initState() {
+    super.initState();
+    _initializeDatabase();
+  }
+
+  Future<void> _initializeDatabase() async {
+    try {
+      await _offlineStorage.initialize();
+      debugPrint('✅ Base de datos inicializada correctamente en Moko screen');
+    } catch (e) {
+      debugPrint('❌ Error inicializando base de datos en Moko screen: $e');
+    }
+  }
+
+  @override
+  void dispose() {
+    _cedulaController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -62,6 +90,8 @@ class _MokoAuditScreenState extends State<MokoAuditScreen> {
       child: Column(
         children: [
           _buildInfoMoko(),
+          const SizedBox(height: 20),
+          _buildClientSearchSection(),
           const SizedBox(height: 20),
           _buildTitulo('PROGRAMA DE MANEJO'),
           _buildPreguntaSiNo(
@@ -592,6 +622,18 @@ class _MokoAuditScreenState extends State<MokoAuditScreen> {
   }
 
   Future<void> _guardarAuditoria() async {
+    // Verificar que haya un cliente seleccionado
+    if (_selectedClient == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Debe seleccionar un cliente antes de guardar la auditoría.'),
+          backgroundColor: Colors.orange,
+          duration: Duration(seconds: 3),
+        ),
+      );
+      return;
+    }
+
     try {
       // Mostrar indicador de carga
       showDialog(
@@ -718,17 +760,18 @@ class _MokoAuditScreenState extends State<MokoAuditScreen> {
       ];
 
       final auditData = {
-        'tecnicoId': widget.clientData?['id'] ?? 1,
+        'clienteId': _selectedClient!['id'],
+        'cedulaCliente': _selectedClient!['cedula'],
+        'tecnicoId': 1, // TODO: Obtener el ID del técnico actual
         'fecha': DateTime.now().toIso8601String(),
         'estado': 'COMPLETADA',
         'details': details,
         'observaciones': observacionesAuditoria,
-        // 'seguimiento' eliminado porque el backend no lo espera
       };
 
       // 1. Guardar en SQLite primero (siempre)
       final localId = await _offlineStorage.savePendingMokoAudit(
-        clientId: auditData['tecnicoId'],
+        clientId: auditData['clienteId'],
         auditDate: auditData['fecha'],
         status: auditData['estado'],
         mokoData: List<Map<String, dynamic>>.from(auditData['details']),
@@ -748,6 +791,8 @@ class _MokoAuditScreenState extends State<MokoAuditScreen> {
             estado: auditData['estado'],
             details: List<Map<String, dynamic>>.from(auditData['details']),
             observaciones: auditData['observaciones'],
+            clienteId: auditData['clienteId'],
+            cedulaCliente: auditData['cedulaCliente'],
           );
 
           if (result['success'] == true) {
@@ -803,6 +848,196 @@ class _MokoAuditScreenState extends State<MokoAuditScreen> {
               child: const Text('Aceptar'),
             ),
           ],
+        ),
+      );
+    }
+  }
+
+  Widget _buildClientSearchSection() {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: const Color(0xFF004B63)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.grey.withOpacity(0.1),
+            spreadRadius: 1,
+            blurRadius: 3,
+            offset: const Offset(0, 1),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(
+                Icons.person_search,
+                color: const Color(0xFF004B63),
+                size: 24,
+              ),
+              const SizedBox(width: 8),
+              const Text(
+                'Buscar Cliente',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: Color(0xFF004B63),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              Expanded(
+                child: TextField(
+                  controller: _cedulaController,
+                  keyboardType: TextInputType.number,
+                  decoration: InputDecoration(
+                    labelText: 'Cédula del Cliente',
+                    hintText: 'Ingrese la cédula',
+                    prefixIcon: const Icon(Icons.badge),
+                    border: const OutlineInputBorder(),
+                    suffixIcon: IconButton(
+                      icon: const Icon(Icons.search),
+                      onPressed: _searchClientByCedula,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          if (_selectedClient != null) ...[
+            const SizedBox(height: 16),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.green.shade50,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.green.shade200),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.check_circle, color: Colors.green.shade600),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Cliente: ${_selectedClient!['nombre'] ?? ''} ${_selectedClient!['apellidos'] ?? ''}',
+                          style: const TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 14,
+                          ),
+                        ),
+                        if (_selectedClient!['telefono'] != null && _selectedClient!['telefono'].toString().isNotEmpty)
+                          Text(
+                            'Teléfono: ${_selectedClient!['telefono']}',
+                            style: const TextStyle(fontSize: 12),
+                          ),
+                        if (_selectedClient!['direccion'] != null && _selectedClient!['direccion'].toString().isNotEmpty)
+                          Text(
+                            'Dirección: ${_selectedClient!['direccion']}',
+                            style: const TextStyle(fontSize: 12),
+                          ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Future<void> _searchClientByCedula() async {
+    final cedula = _cedulaController.text.trim();
+    if (cedula.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Ingrese una cédula para buscar.'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+
+    // Mostrar indicador de carga
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => const AlertDialog(
+        content: Row(
+          children: [
+            CircularProgressIndicator(),
+            SizedBox(width: 16),
+            Text('Buscando cliente...'),
+          ],
+        ),
+      ),
+    );
+
+    try {
+      final client = await _clientService.searchClientByCedula(cedula);
+      
+      // Cerrar diálogo de carga
+      Navigator.of(context).pop();
+
+      if (client != null) {
+        setState(() {
+          _selectedClient = client;
+        });
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Cliente encontrado y seleccionado.'),
+            backgroundColor: Colors.green,
+            duration: Duration(seconds: 2),
+          ),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('No se encontró ningún cliente con esta cédula'),
+            backgroundColor: Colors.orange,
+            duration: Duration(seconds: 3),
+          ),
+        );
+      }
+    } catch (e) {
+      // Cerrar diálogo de carga si hay error
+      Navigator.of(context).pop();
+      
+      String errorMessage = 'Error al buscar cliente';
+      if (e.toString().contains('Failed to fetch') || 
+          e.toString().contains('Error de conexión')) {
+        errorMessage = 'No se pudo conectar con el servidor. Por favor:\n'
+                     '1. Verifique su conexión a internet\n'
+                     '2. Compruebe que el servidor esté en línea\n'
+                     '3. Intente nuevamente en unos momentos';
+      } else {
+        errorMessage = 'Error al buscar cliente: $e';
+      }
+      
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(errorMessage),
+          backgroundColor: Colors.red,
+          duration: const Duration(seconds: 5),
+          action: SnackBarAction(
+            label: 'OK',
+            textColor: Colors.white,
+            onPressed: () {
+              ScaffoldMessenger.of(context).hideCurrentSnackBar();
+            },
+          ),
         ),
       );
     }

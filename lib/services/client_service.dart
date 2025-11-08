@@ -3,44 +3,148 @@ import 'package:http/http.dart' as http;
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 class ClientService {
-  final String _defaultBaseUrl = 'http://5.161.198.89:8081/api';
+  static const String _host = '5.161.198.89';
+  static const int _port = 8081;
+  static const String _basePath = '/api';
+  
   final storage = const FlutterSecureStorage();
+  
+  // Verificar si hay token válido
+  Future<bool> hasValidToken() async {
+    final token = await storage.read(key: 'token');
+    return token != null && token.isNotEmpty;
+  }
 
-  Future<String> get baseUrl async {
-    final savedUrl = await storage.read(key: 'server_url');
-    return savedUrl ?? _defaultBaseUrl;
+  Future<Uri> get baseUri async {
+    return Uri(
+      scheme: 'http',
+      host: _host,
+      port: _port,
+      path: _basePath,
+    );
   }
 
   Future<Map<String, String>> _getHeaders() async {
     final token = await storage.read(key: 'token');
-    return {
+    
+    print('\n🔐 Obteniendo headers para la petición:');
+    print('Token almacenado completo: $token');
+    
+    if (token == null || token.isEmpty) {
+      print('❌ No se encontró token de autenticación');
+      throw Exception('No hay token de autenticación. Por favor inicie sesión nuevamente.');
+    }
+
+    final headers = {
       'Content-Type': 'application/json',
+      'Accept': 'application/json',
       'Authorization': 'Bearer $token',
     };
+    
+    print('📤 Headers completos que se enviarán:');
+    headers.forEach((key, value) => print('  $key: $value'));
+    
+    return headers;
   }
 
   // Buscar cliente por cédula para autocompletado
-  Future<Map<String, dynamic>> searchClientByCedula(String cedula) async {
+  // Verificar disponibilidad del servidor
+  Future<bool> _checkServerAvailability() async {
     try {
-      final headers = await _getHeaders();
-      final url = await baseUrl;
+      final baseURL = await baseUri;
+      final uri = Uri(
+        scheme: baseURL.scheme,
+        host: baseURL.host,
+        port: baseURL.port,
+        path: '$_basePath/health'
+      );
+      print('🌐 Verificando disponibilidad del servidor en: ${uri.toString()}');
+      final response = await http.get(uri)
+          .timeout(const Duration(seconds: 5));
+      print('📡 Respuesta health check: ${response.statusCode}');
+      return response.statusCode == 200;
+    } catch (e) {
+      print('❌ Error en health check: $e');
+      return false;
+    }
+  }
 
+  Future<Map<String, dynamic>?> searchClientByCedula(String cedula) async {
+    try {
+      print('\n🔍 Iniciando búsqueda de cliente por cédula: $cedula');
+      
+      final headers = await _getHeaders();
+      final uri = (await baseUri).replace(path: '$_basePath/clients/search/cedula/$cedula');
+      
+      print('🌐 URL completa de búsqueda: ${uri.toString()}');
+
+      print('\n🔍 Iniciando búsqueda de cliente');
+      print('🔍 Cédula: $cedula');
+      print('🌐 URL completa: ${uri.toString()}');
+      print('🔐 Headers completos: $headers');
+      print('🌍 URI parseada: ${uri.toString()}');
+      print('   - Scheme: ${uri.scheme}');
+      print('   - Host: ${uri.host}');
+      print('   - Port: ${uri.port}');
+      print('   - Path: ${uri.path}');
+
+      // Intentar la conexión con un timeout más largo para redes lentas
       final response = await http.get(
-        Uri.parse('$url/clients/search/cedula/$cedula'),
+        uri,
         headers: headers,
+      ).timeout(
+        const Duration(seconds: 30),
+        onTimeout: () {
+          throw Exception('La conexión está tomando demasiado tiempo. Verifica tu conexión a internet.');
+        },
       );
 
+      print('📡 Response status: ${response.statusCode}');
+      print('📡 Response body: ${response.body}');
+
+      print('\n📥 Respuesta del servidor:');
+      print('   - Status code: ${response.statusCode}');
+      print('   - Headers: ${response.headers}');
+      print('   - Body: ${response.body}');
+
       if (response.statusCode == 200) {
-        return json.decode(response.body);
+        final responseData = json.decode(response.body);
+        print('✅ Cliente encontrado: $responseData');
+        
+        // Si la respuesta contiene un error, retornar null
+        if (responseData.containsKey('error')) {
+          print('❌ Error del servidor: ${responseData['error']}');
+          return null;
+        }
+        
+        // La respuesta ahora contiene directamente los datos del cliente
+        return responseData;
       } else if (response.statusCode == 401) {
+        print('❌ Error 401: Token expirado');
         throw Exception('Token expirado. Por favor, inicia sesión nuevamente.');
+      } else if (response.statusCode == 404) {
+        print('❌ Error 404: Cliente no encontrado');
+        return null;
       } else {
-        // En caso de error, retornar que no se encontró
-        return {'found': false, 'message': 'Cliente no encontrado'};
+        print('❌ Error ${response.statusCode}: ${response.body}');
+        throw Exception('Error al buscar cliente: ${response.body}');
       }
     } catch (e) {
-      // En caso de error de conexión
-      return {'found': false, 'error': 'Error de conexión: $e'};
+      print('\n❌ Error detallado:');
+      print('   Tipo de error: ${e.runtimeType}');
+      print('   Mensaje: $e');
+      
+      if (e.toString().contains('TimeoutException')) {
+        throw Exception('Tiempo de espera agotado. Por favor, inténtelo nuevamente.');
+      } else if (e.toString().contains('SocketException')) {
+        throw Exception('No se puede conectar al servidor. Verifica tu conexión a internet y que el servidor esté disponible.');
+      } else if (e.toString().contains('HandshakeException')) {
+        throw Exception('Error de seguridad en la conexión. Verifica la configuración SSL del servidor.');
+      } else if (e.toString().contains('Certificate')) {
+        throw Exception('Error de certificado SSL. La conexión no es segura.');
+      }
+      
+      throw Exception('Error de conexión: $e');
     }
   }
 
@@ -50,12 +154,37 @@ class ClientService {
   ) async {
     try {
       final headers = await _getHeaders();
-      final url = await baseUrl;
+      final uri = (await baseUri).replace(path: '${_basePath}/clients/create');
+      
+      // Asegurar tipos de datos correctos antes de enviar
+      final sanitizedData = {
+        'cedula': clientData['cedula']?.toString(),
+        'nombre': clientData['nombre']?.toString(),
+        'apellidos': clientData['apellidos']?.toString(),
+        'telefono': clientData['telefono']?.toString(),
+        'email': clientData['email']?.toString(),
+        'direccion': clientData['direccion']?.toString(),
+        'parroquia': clientData['parroquia']?.toString(),
+        'fincaNombre': clientData['fincaNombre']?.toString(),
+        'fincaHectareas': clientData['fincaHectareas'] != null ? 
+            double.tryParse(clientData['fincaHectareas'].toString()) : null,
+        'cultivosPrincipales': clientData['cultivosPrincipales']?.toString(),
+        'geolocalizacionLat': clientData['geolocalizacionLat'] != null ? 
+            double.parse(clientData['geolocalizacionLat'].toString()) : null,
+        'geolocalizacionLng': clientData['geolocalizacionLng'] != null ? 
+            double.parse(clientData['geolocalizacionLng'].toString()) : null,
+        'observaciones': clientData['observaciones']?.toString(),
+        'tecnicoAsignadoId': clientData['tecnicoAsignadoId'] != null ? 
+            int.parse(clientData['tecnicoAsignadoId'].toString()) : null
+      };
+
+      print('📤 Datos sanitizados que se enviarán al servidor:');
+      sanitizedData.forEach((key, value) => print('  $key: $value (${value?.runtimeType})'));
 
       final response = await http.post(
-        Uri.parse('$url/clients/create'),
+        uri,
         headers: headers,
-        body: json.encode(clientData),
+        body: json.encode(sanitizedData),
       );
 
       if (response.statusCode == 201 || response.statusCode == 200) {
@@ -83,9 +212,9 @@ class ClientService {
   }) async {
     try {
       final headers = await _getHeaders();
-      final url = await baseUrl;
+      final uri = (await baseUri).replace(path: '${_basePath}/clients');
       final response = await http.post(
-        Uri.parse('$url/clients'),
+        uri,
         headers: headers,
         body: json.encode({
           'name': name,
@@ -115,9 +244,9 @@ class ClientService {
   Future<List<Map<String, dynamic>>> getClients() async {
     try {
       final headers = await _getHeaders();
-      final url = await baseUrl;
+      final uri = (await baseUri).replace(path: '${_basePath}/clients');
       final response = await http.get(
-        Uri.parse('$url/clients'),
+        uri,
         headers: headers,
       );
 
@@ -141,9 +270,9 @@ class ClientService {
   Future<Map<String, dynamic>> getClientById(int id) async {
     try {
       final headers = await _getHeaders();
-      final url = await baseUrl;
+      final uri = (await baseUri).replace(path: '${_basePath}/clients/$id');
       final response = await http.get(
-        Uri.parse('$url/clients/$id'),
+        uri,
         headers: headers,
       );
 
@@ -171,9 +300,9 @@ class ClientService {
   }) async {
     try {
       final headers = await _getHeaders();
-      final url = await baseUrl;
+      final uri = (await baseUri).replace(path: '${_basePath}/clients/update/$id');
       final response = await http.put(
-        Uri.parse('$url/clients/update/$id'),
+        uri,
         headers: headers,
         body: json.encode(clientData),
       );
@@ -199,9 +328,9 @@ class ClientService {
   Future<void> deleteClient(int id) async {
     try {
       final headers = await _getHeaders();
-      final url = await baseUrl;
+      final uri = (await baseUri).replace(path: '${_basePath}/clients/$id');
       final response = await http.delete(
-        Uri.parse('$url/clients/$id'),
+        uri,
         headers: headers,
       );
 

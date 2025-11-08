@@ -3,37 +3,75 @@ import 'package:http/http.dart' as http;
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 class AuthService {
-  // URL por defecto del backend Spring Boot corriendo en CentOS VM
-  final String _defaultBaseUrl = 'http://5.161.198.89:8081/api';
+  static const String _host = '5.161.198.89';
+  static const int _port = 8081;
+  static const String _basePath = '/api';
   final storage = const FlutterSecureStorage();
 
-  Future<String> get baseUrl async {
+  Future<Uri> get baseUri async {
     final savedUrl = await storage.read(key: 'server_url');
-    return savedUrl ?? _defaultBaseUrl;
+    if (savedUrl != null && savedUrl.isNotEmpty) {
+      return Uri.parse(savedUrl);
+    }
+    return Uri(
+      scheme: 'http',
+      host: _host,
+      port: _port,
+      path: _basePath,
+    );
   }
 
   Future<Map<String, dynamic>> login(String username, String password) async {
     try {
-      final url = await baseUrl;
-      print('🔗 AuthService: Intentando conectar a $url/auth/login');
+      final base = await baseUri;
+      final uri = base.replace(path: '${base.path}/auth/login');
+      print('🔗 AuthService: Intentando conectar a ${uri.toString()}');
+      print('URI parseado:');
+      print('  Scheme: ${uri.scheme}');
+      print('  Host: ${uri.host}');
+      print('  Port: ${uri.port}');
+      print('  Path: ${uri.path}');
+      
+      final body = json.encode({'username': username, 'password': password});
+      print('Body de la petición: $body');
 
+      print('⏳ Iniciando petición HTTP...');
       final response = await http
           .post(
-            Uri.parse('$url/auth/login'),
-            headers: {'Content-Type': 'application/json'},
-            body: json.encode({'username': username, 'password': password}),
+            uri,
+            headers: {
+              'Content-Type': 'application/json',
+              'Accept': 'application/json',
+            },
+            body: body,
           )
-          .timeout(const Duration(seconds: 10));
+          .timeout(
+            const Duration(seconds: 30),
+            onTimeout: () {
+              print('❌ Error: La petición excedió el tiempo de espera (30 segundos)');
+              throw Exception('Tiempo de espera agotado');
+            },
+          );
 
       print('📡 AuthService: Response status: ${response.statusCode}');
       print('📡 AuthService: Response body: ${response.body}');
 
       if (response.statusCode == 200) {
         final responseData = json.decode(response.body);
+        
+        print('🔐 Token recibido: ${responseData['token']}');
+        
+        if (responseData['token'] == null || responseData['token'].toString().isEmpty) {
+          throw Exception('El servidor no devolvió un token válido');
+        }
 
         // Guardar el token y la información del usuario
-        await storage.write(key: 'token', value: responseData['token']);
+        await storage.write(key: 'token', value: responseData['token'].toString());
         await storage.write(key: 'user_data', value: json.encode(responseData));
+        
+        // Verificar que el token se guardó correctamente
+        final savedToken = await storage.read(key: 'token');
+        print('💾 Token guardado: $savedToken');
 
         return responseData;
       } else if (response.statusCode == 401) {

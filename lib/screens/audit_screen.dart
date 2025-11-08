@@ -1,10 +1,23 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'dart:io';
 import 'package:image_picker/image_picker.dart';
 import 'dart:convert';
 import '../utils/lytiks_utils.dart';
 import '../services/offline_storage_service.dart';
 import '../services/audit_service.dart';
+import '../services/client_service.dart';
+
+class AuditItem {
+  final String name;
+  final int maxScore;
+  String? rating;
+  int? calculatedScore;
+  String? photoPath;
+  bool isLocked;
+
+  AuditItem(this.name, this.maxScore) : isLocked = false;
+}
 
 class AuditScreen extends StatefulWidget {
   const AuditScreen({super.key});
@@ -14,151 +27,31 @@ class AuditScreen extends StatefulWidget {
 }
 
 class _AuditScreenState extends State<AuditScreen> {
-  // Servicios para auditoría de campo
   final OfflineStorageService _offlineStorageCampo = OfflineStorageService();
-  // TODO: Agregar aquí el servicio de sincronización de auditoría de campo si existe (por ejemplo, AuditSyncService)
-  Future<void> _guardarAuditoriaCampo(
-    int completedItems,
-    int totalItems,
-    int totalScore,
-    int maxPossibleScore,
-  ) async {
+  final TextEditingController _cedulaController = TextEditingController();
+  final ClientService _clientService = ClientService();
+  final ImagePicker _picker = ImagePicker();
+  
+  Map<String, dynamic>? _selectedClient;
+  bool _isBasicMode = true;
+  String _selectedCrop = 'banano';
+
+  @override
+  void initState() {
+    super.initState();
+    _initializeDatabase();
+  }
+
+  Future<void> _initializeDatabase() async {
     try {
-      // Mostrar indicador de carga
-      showDialog(
-        context: context,
-        barrierDismissible: false,
-        builder: (context) => const AlertDialog(
-          content: Row(
-            children: [
-              CircularProgressIndicator(),
-              SizedBox(width: 16),
-              Text('Guardando auditoría...'),
-            ],
-          ),
-        ),
-      );
-
-      // Preparar datos de la auditoría de campo
-      final List<Map<String, dynamic>> details = [];
-      for (final section in _auditSections.entries) {
-        final sectionName = section.key;
-        final items = section.value;
-        for (final item in items) {
-          if (item.rating != null) {
-            details.add({
-              'section': sectionName,
-              'item': item.name,
-              'maxScore': item.maxScore,
-              'rating': item.rating,
-              'calculatedScore': item.calculatedScore ?? 0,
-              'photoBase64': item.photoPath != null
-                  ? base64Encode(File(item.photoPath!).readAsBytesSync())
-                  : null,
-            });
-          }
-        }
-      }
-
-      // Guardar en SQLite primero (tabla pending_audits)
-      final int clientId = 1; // TODO: Reemplazar con el ID real del cliente
-      final int categoryId =
-          1; // TODO: Reemplazar con el ID real de la categoría
-      await _offlineStorageCampo.savePendingAudit(
-        clientId: clientId,
-        categoryId: categoryId,
-        auditDate: DateTime.now().toIso8601String(),
-        status: 'COMPLETADA',
-        auditData: details,
-        observations: null,
-        latitude: null,
-        longitude: null,
-        imagePath: null,
-      );
-
-      // Intentar sincronizar con backend solo si hay internet
-      final auditService = AuditService();
-      final String hacienda = 'Hacienda Demo';
-      final String cultivo = _selectedCrop;
-      final String fecha = DateTime.now().toIso8601String();
-      final int tecnicoId = 1;
-      final String estado = 'COMPLETADA';
-      final String? observaciones = null;
-      final scores = AuditService.buildBackendScores(details);
-
-      bool hayInternet = false;
-      try {
-        hayInternet = await auditService.testConnection();
-      } catch (_) {
-        hayInternet = false;
-      }
-
-      String mensaje;
-      if (hayInternet) {
-        try {
-          await auditService.createAuditBackend(
-            hacienda: hacienda,
-            cultivo: cultivo,
-            fecha: fecha,
-            tecnicoId: tecnicoId,
-            estado: estado,
-            observaciones: observaciones,
-            scores: scores,
-          );
-          mensaje = 'Auditoría guardada y sincronizada exitosamente.';
-        } catch (e) {
-          mensaje =
-              'Auditoría guardada localmente, se sincronizará cuando haya conexión estable.';
-        }
-      } else {
-        mensaje =
-            'Auditoría guardada localmente, se sincronizará cuando haya conexión estable.';
-      }
-
-      // Cerrar indicador de carga
-      Navigator.of(context).pop();
-
-      // Mostrar resultado
-      showDialog(
-        context: context,
-        builder: (context) => AlertDialog(
-          title: const Text('Auditoría Guardada'),
-          content: Text(mensaje),
-          actions: [
-            TextButton(
-              onPressed: () {
-                Navigator.of(context).pop();
-                Navigator.of(context).pop();
-              },
-              child: const Text('Aceptar'),
-            ),
-          ],
-        ),
-      );
+      await _offlineStorageCampo.initialize();
+      debugPrint('✅ Base de datos inicializada correctamente en Audit screen');
     } catch (e) {
-      Navigator.of(context).pop();
-      showDialog(
-        context: context,
-        builder: (context) => AlertDialog(
-          title: const Text('Error'),
-          content: Text('Error al guardar la auditoría: ${e.toString()}'),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text('Aceptar'),
-            ),
-          ],
-        ),
-      );
+      debugPrint('❌ Error inicializando base de datos en Audit screen: $e');
     }
   }
 
-  final ImagePicker _picker = ImagePicker();
-  bool _isBasicMode = true; // true para básica, false para completa
-  String _selectedCrop =
-      'banano'; // tipo de cultivo seleccionado: 'banano' o 'palma'
-
-  // Estructura de datos para los elementos de evaluación (mismo para ambos cultivos)
+  // Estructura de datos para los elementos de evaluación
   final Map<String, List<AuditItem>> _auditSections = {
     'ENFUNDE': [
       AuditItem('ATRASO DE LABOR E MAL IDENTIFICACION', 20),
@@ -175,22 +68,15 @@ class _AuditScreenState extends State<AuditScreen> {
       AuditItem('NO GENERA DOBLES PERIFERICOS', 20),
     ],
     'COSECHA': [
-      AuditItem('FFE + FFI (6,01% a 7,99%)', 10),
+      AuditItem('FFE + FFI (6.01% a 7.99%)', 10),
       AuditItem('FFE + FFI (8 a 9%)', 15),
-      AuditItem('FFE+FFI (=>9,01%)', 20),
+      AuditItem('FFE+FFI (>=9.01%)', 20),
       AuditItem('NO SE LLEVA PARCELA DE CALIBRACION', 15),
-      AuditItem(
-        'LIBRO DE AR (LLEVA REGISTRO DIARIO DE LOTES COSECHADOS) PLANIFICACION DE COSECHA',
-        20,
-      ),
-      AuditItem(
-        'LOTES CON FRECUENCIA MAYOR A 5 DÍAS / MAL PLANIFICACION DE COSECHA',
-        20,
-      ),
+      AuditItem('LIBRO DE AR (LLEVA REGISTRO DIARIO DE LOTES COSECHADOS)', 20),
     ],
     'DESHOJE FITOSANITARIO': [
       AuditItem('TEJIDO NECROTICO SIN CORTAR', 40),
-      AuditItem('ELIMINAR TEJIDO VERDE Y/O CON ESTRÍAS', 30),
+      AuditItem('ELIMINAN TEJIDO VERDE Y/O CON ESTRIAS', 30),
       AuditItem('LA LONGITUD DE LA PALANCA NO ES LA CORRECTA', 30),
     ],
     'DESHOJE NORMAL': [
@@ -203,35 +89,26 @@ class _AuditScreenState extends State<AuditScreen> {
       AuditItem('SIN DESVIAR', 50),
       AuditItem('HIJOS MALTRATADOS', 50),
     ],
-    'APUNTALAMIENTO CON SUNCHOT': [
+    'APUNTALAMIENTO CON SUCHON': [
       AuditItem('ZUNCHO FLOJO Y/O MAL ANGULO MAL COLOCADO', 25),
-      AuditItem(
-        'MATAS CAIDAS MAYOR A 3%  DEL ENFUNDE PROMEDIO SEMANAL DEL LOTE',
-        25,
-      ),
-      AuditItem(
-        'UTILIZA ESTAQUILLA PARA MEJORAR ANGULO DENTRO DE LA PLANTACION Y CABLE VIA',
-        25,
-      ),
+      AuditItem('MATAS CAIDAS MAYOR A 3% DEL ENFUNDE PROMEDIO SEMANAL DEL LOTE', 25),
+      AuditItem('UTILIZA ESTAQUILLA PARA MEJORAR ANGULO DENTRO DE LA PLANTACION Y CABLE VIA', 25),
       AuditItem('AMARRE EN HIJOS Y/O EN PLANTAS CON RACIMOS +9 SEM', 25),
     ],
     'APUNTALAMIENTO CON PUNTAL': [
       AuditItem('PUNTAL FLOJO Y/O MAL ANGULO', 20),
-      AuditItem(
-        'MATAS CAIDAS MAYOR A 3% DEL ENFUNDE PROMEDIO SEMANAL DEL LOTE',
-        20,
-      ),
+      AuditItem('MATAS CAIDAS MAYOR A 3% DEL ENFUNDE PROMEDIO SEMANAL DEL LOTE', 20),
       AuditItem('UN PUNTAL', 20),
       AuditItem('PUNTAL ROZANDO RACIMO Y/O DAÑA PARTE BASAL DE LA HOJA', 20),
       AuditItem('PUNTAL PODRIDO', 20),
     ],
     'MANEJO DE AGUAS (RIEGO)': [
       AuditItem('SATURACION DE AREA SIN CAPACIDAD DE CAMPO', 20),
-      AuditItem('CUMPLIMIENTO DE TURNOS DE RIEGO ', 20),
-      AuditItem('SE OBSERVAN TRIANGULO SECOS', 15),
+      AuditItem('CUMPLIMIENTO DE TURNOS DE RIEGO', 20),
+      AuditItem('SE OBSERVAN TRIANGULO SECOS O DESERT', 15),
       AuditItem('SE OBSERVAN FUGAS', 15),
       AuditItem('FALTA DE ASPERSORES', 15),
-      AuditItem('PRESION INADEUADA (ALTA O BAJA)', 15),
+      AuditItem('PRESION INADECUADA (ALTA O BAJA)', 15),
     ],
     'MANEJO DE AGUAS (DRENAJE)': [
       AuditItem('AGUAS RETENIDAS', 35),
@@ -243,303 +120,459 @@ class _AuditScreenState extends State<AuditScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: Colors.grey[50],
       appBar: AppBar(
-        title: Row(
-          children: [
-            const Text('Auditoría de Campo'),
-            const SizedBox(width: 8),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-              decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.2),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Text(
-                _selectedCrop.toUpperCase(),
-                style: const TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            ),
-          ],
-        ),
         backgroundColor: const Color(0xFF004B63),
-        foregroundColor: Colors.white,
+        title: const Text(
+          'Auditoría de Cultivos',
+          style: TextStyle(color: Colors.white),
+        ),
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back, color: Colors.white),
+          onPressed: () => Navigator.pop(context),
+        ),
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
         child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Switch para modo básico/completo
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(16),
-              margin: const EdgeInsets.only(bottom: 16),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: const Color(0xFF004B63)),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.1),
-                    blurRadius: 4,
-                    offset: const Offset(0, 2),
+            _buildInfoCard(),
+            const SizedBox(height: 20),
+            _buildClientSearchSection(),
+            const SizedBox(height: 20),
+            _buildConfigurationCard(),
+            const SizedBox(height: 20),
+            ..._auditSections.entries.map((entry) => 
+              _buildAuditSection(entry.key, entry.value)
+            ).toList(),
+            const SizedBox(height: 20),
+            _buildSaveButton(),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildInfoCard() {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 20),
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [Color(0xFF388E3C), Color(0xFF2E7D32)],
+        ),
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black12,
+            spreadRadius: 2,
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: const Icon(
+              Icons.agriculture,
+              color: Color(0xFF388E3C),
+              size: 32,
+            ),
+          ),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: const [
+                Text(
+                  'Auditoría de Cultivos',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
                   ),
-                ],
+                ),
+                SizedBox(height: 8),
+                Text(
+                  'Evaluación integral de\nprácticas agrícolas',
+                  style: TextStyle(color: Colors.white70, fontSize: 14),
+                ),
+                SizedBox(height: 8),
+                Text(
+                  'Esta auditoría evalúa las prácticas agrícolas\nimplementadas en el cultivo para optimizar\nla productividad y calidad.',
+                  style: TextStyle(color: Colors.white60, fontSize: 12),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildClientSearchSection() {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: const Color(0xFF004B63)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.grey.withOpacity(0.1),
+            spreadRadius: 1,
+            blurRadius: 3,
+            offset: const Offset(0, 1),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(
+                Icons.person_search,
+                color: const Color(0xFF004B63),
+                size: 24,
               ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  const Text(
-                    'Auditoría',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                      color: Color(0xFF004B63),
+              const SizedBox(width: 8),
+              const Text(
+                'Buscar Cliente',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: Color(0xFF004B63),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              Expanded(
+                child: TextField(
+                  controller: _cedulaController,
+                  keyboardType: TextInputType.number,
+                  decoration: InputDecoration(
+                    labelText: 'Cédula del Cliente',
+                    hintText: 'Ingrese la cédula',
+                    prefixIcon: const Icon(Icons.badge),
+                    border: const OutlineInputBorder(),
+                    suffixIcon: IconButton(
+                      icon: const Icon(Icons.search),
+                      onPressed: _searchClientByCedula,
                     ),
                   ),
+                ),
+              ),
+            ],
+          ),
+          if (_selectedClient != null) ...[
+            const SizedBox(height: 16),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.green.shade50,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.green.shade200),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.check_circle, color: Colors.green.shade600),
+                  const SizedBox(width: 8),
                   Expanded(
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.end,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Expanded(
-                          child: Text(
-                            'Básica',
-                            textAlign: TextAlign.right,
-                            style: TextStyle(
-                              fontSize: 14,
-                              fontWeight: _isBasicMode
-                                  ? FontWeight.bold
-                                  : FontWeight.normal,
-                              color: _isBasicMode
-                                  ? const Color(0xFF004B63)
-                                  : Colors.grey,
-                            ),
-                            overflow: TextOverflow.ellipsis,
+                        Text(
+                          'Cliente: ${_selectedClient!['nombre'] ?? ''} ${_selectedClient!['apellidos'] ?? ''}',
+                          style: const TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 14,
                           ),
                         ),
-                        Switch(
-                          value: !_isBasicMode,
-                          onChanged: (value) {
-                            setState(() {
-                              _isBasicMode = !value;
-                            });
-                          },
-                          activeColor: const Color(0xFF004B63),
-                          activeTrackColor: const Color(
-                            0xFF004B63,
-                          ).withOpacity(0.3),
-                          inactiveThumbColor: Colors.grey,
-                          inactiveTrackColor: Colors.grey.withOpacity(0.3),
-                        ),
-                        Expanded(
-                          child: Text(
-                            'Completa',
-                            textAlign: TextAlign.left,
-                            style: TextStyle(
-                              fontSize: 14,
-                              fontWeight: !_isBasicMode
-                                  ? FontWeight.bold
-                                  : FontWeight.normal,
-                              color: !_isBasicMode
-                                  ? const Color(0xFF004B63)
-                                  : Colors.grey,
-                            ),
-                            overflow: TextOverflow.ellipsis,
+                        if (_selectedClient!['telefono'] != null && _selectedClient!['telefono'].toString().isNotEmpty)
+                          Text(
+                            'Teléfono: ${_selectedClient!['telefono']}',
+                            style: const TextStyle(fontSize: 12),
                           ),
-                        ),
+                        if (_selectedClient!['direccion'] != null && _selectedClient!['direccion'].toString().isNotEmpty)
+                          Text(
+                            'Dirección: ${_selectedClient!['direccion']}',
+                            style: const TextStyle(fontSize: 12),
+                          ),
                       ],
                     ),
                   ),
                 ],
               ),
             ),
-            // Selector de cultivo
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: const Color(0xFF004B63)),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.1),
-                    blurRadius: 4,
-                    offset: const Offset(0, 2),
-                  ),
-                ],
+          ],
+        ],
+      ),
+    );
+  }
+
+  Future<void> _searchClientByCedula() async {
+    final cedula = _cedulaController.text.trim();
+    if (cedula.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Ingrese un número de cédula'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+
+    try {
+      // Mostrar indicador de carga
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => const AlertDialog(
+          content: Row(
+            children: [
+              CircularProgressIndicator(),
+              SizedBox(width: 16),
+              Text('Buscando cliente...'),
+            ],
+          ),
+        ),
+      );
+
+      final response = await _clientService.searchClientByCedula(cedula);
+      
+      // Cerrar diálogo de carga
+      Navigator.of(context).pop();
+
+      if (response != null) {
+        setState(() {
+          _selectedClient = response;
+        });
+        
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Cliente encontrado: ${response['nombre']}'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Cliente no encontrado'),
+            backgroundColor: Colors.orange,
+          ),
+        );
+      }
+    } catch (e) {
+      // Cerrar diálogo de carga si hay error
+      Navigator.of(context).pop();
+      
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
+  Widget _buildConfigurationCard() {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.grey.withOpacity(0.1),
+            spreadRadius: 1,
+            blurRadius: 3,
+            offset: const Offset(0, 1),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(
+                Icons.settings,
+                color: const Color(0xFF388E3C),
+                size: 24,
               ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+              const SizedBox(width: 8),
+              const Text(
+                'Configuración de Auditoría',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: Color(0xFF388E3C),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          
+          if (_selectedClient == null) ...[
+            Container(
+              padding: const EdgeInsets.all(12),
+              margin: const EdgeInsets.only(bottom: 16),
+              decoration: BoxDecoration(
+                color: Colors.amber.shade50,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.amber.shade200),
+              ),
+              child: Row(
                 children: [
-                  const Text(
-                    'Seleccionar Cultivo',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                      color: Color(0xFF004B63),
+                  Icon(Icons.warning_amber_rounded, color: Colors.amber.shade600),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      'Para poder guardar la auditoría, debe seleccionar primero un cliente',
+                      style: TextStyle(
+                        color: Colors.amber.shade800, 
+                        fontWeight: FontWeight.w500,
+                        fontSize: 13,
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 12),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: GestureDetector(
-                          onTap: () {
-                            setState(() {
-                              _selectedCrop = 'banano';
-                            });
-                          },
-                          child: Container(
-                            padding: const EdgeInsets.all(16),
-                            decoration: BoxDecoration(
-                              color: _selectedCrop == 'banano'
-                                  ? const Color(0xFF004B63)
-                                  : Colors.grey.shade100,
-                              borderRadius: BorderRadius.circular(8),
-                              border: Border.all(
-                                color: _selectedCrop == 'banano'
-                                    ? const Color(0xFF004B63)
-                                    : Colors.grey.shade300,
-                              ),
-                            ),
-                            child: Row(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                Icon(
-                                  Icons.agriculture,
-                                  color: _selectedCrop == 'banano'
-                                      ? Colors.white
-                                      : Colors.grey.shade600,
-                                  size: 20,
-                                ),
-                                const SizedBox(width: 8),
-                                Text(
-                                  'BANANO',
-                                  style: TextStyle(
-                                    fontWeight: FontWeight.bold,
-                                    color: _selectedCrop == 'banano'
-                                        ? Colors.white
-                                        : Colors.grey.shade600,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: GestureDetector(
-                          onTap: () {
-                            setState(() {
-                              _selectedCrop = 'palma';
-                            });
-                          },
-                          child: Container(
-                            padding: const EdgeInsets.all(16),
-                            decoration: BoxDecoration(
-                              color: _selectedCrop == 'palma'
-                                  ? const Color(0xFF004B63)
-                                  : Colors.grey.shade100,
-                              borderRadius: BorderRadius.circular(8),
-                              border: Border.all(
-                                color: _selectedCrop == 'palma'
-                                    ? const Color(0xFF004B63)
-                                    : Colors.grey.shade300,
-                              ),
-                            ),
-                            child: Row(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                Icon(
-                                  Icons.park,
-                                  color: _selectedCrop == 'palma'
-                                      ? Colors.white
-                                      : Colors.grey.shade600,
-                                  size: 20,
-                                ),
-                                const SizedBox(width: 8),
-                                Text(
-                                  'PALMA',
-                                  style: TextStyle(
-                                    fontWeight: FontWeight.bold,
-                                    color: _selectedCrop == 'palma'
-                                        ? Colors.white
-                                        : Colors.grey.shade600,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
                   ),
                 ],
               ),
             ),
+          ],
+          
+          _buildModeSelector(),
+          const SizedBox(height: 16),
+          _buildCropSelector(),
+        ],
+      ),
+    );
+  }
 
-            const SizedBox(height: 16),
-
-            // Información del modo
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: const Color(0xFF004B63).withOpacity(0.1),
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: const Color(0xFF004B63)),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Cultivo: ${_selectedCrop.toUpperCase()} - Modo: ${_isBasicMode ? "Evaluación Básica" : "Evaluación Completa"}',
-                    style: const TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                      color: Color(0xFF004B63),
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    _isBasicMode
-                        ? 'Relleno parcial de parámetros principales para ${_selectedCrop}'
-                        : 'Relleno total de todos los parámetros de evaluación para ${_selectedCrop}',
-                    style: const TextStyle(fontSize: 14),
-                  ),
-                ],
+  Widget _buildModeSelector() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'Tipo de Auditoría',
+          style: TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.bold,
+            color: Color(0xFF004B63),
+          ),
+        ),
+        const SizedBox(height: 12),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Expanded(
+              child: Text(
+                'Básica',
+                textAlign: TextAlign.right,
+                style: TextStyle(fontSize: 16),
               ),
             ),
-            const SizedBox(height: 20),
+            const SizedBox(width: 8),
+            Switch(
+              value: !_isBasicMode,
+              onChanged: (value) {
+                setState(() {
+                  _isBasicMode = !value;
+                });
+              },
+              activeColor: const Color(0xFF004B63),
+            ),
+            const SizedBox(width: 8),
+            const Expanded(
+              child: Text(
+                'Completa',
+                textAlign: TextAlign.left,
+                style: TextStyle(fontSize: 16),
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
 
-            // Secciones de evaluación
-            ..._auditSections.entries
-                .map((entry) => _buildAuditSection(entry.key, entry.value))
-                .toList(),
+  Widget _buildCropSelector() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'Tipo de Cultivo',
+          style: TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.bold,
+            color: Color(0xFF004B63),
+          ),
+        ),
+        const SizedBox(height: 12),
+        Row(
+          children: [
+            Expanded(
+              child: _buildCropOption(
+                'Banano',
+                'banano',
+                Icons.eco,
+                isSelected: _selectedCrop == 'banano',
+                onTap: () => setState(() => _selectedCrop = 'banano'),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: _buildCropOption(
+                'Palma',
+                'palma',
+                Icons.park,
+                isSelected: _selectedCrop == 'palma',
+                onTap: () => setState(() => _selectedCrop = 'palma'),
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
 
-            const SizedBox(height: 20),
-
-            // Botón para guardar resultados
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton(
-                onPressed: _saveAuditResults,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF004B63),
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                ),
-                child: const Text(
-                  ' Ver Resumen y Guardar',
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                ),
+  Widget _buildCropOption(String title, String value, IconData icon, {required bool isSelected, required VoidCallback onTap}) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: isSelected ? const Color(0xFF004B63).withOpacity(0.1) : Colors.grey[100],
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(
+            color: isSelected ? const Color(0xFF004B63) : Colors.grey[300]!,
+            width: 2,
+          ),
+        ),
+        child: Column(
+          children: [
+            Icon(
+              icon,
+              color: isSelected ? const Color(0xFF004B63) : Colors.grey[600],
+              size: 32,
+            ),
+            const SizedBox(width: 8),
+            Text(
+              title,
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                color: isSelected ? const Color(0xFF004B63) : Colors.grey[700],
               ),
             ),
           ],
@@ -548,39 +581,36 @@ class _AuditScreenState extends State<AuditScreen> {
     );
   }
 
-  Widget _buildAuditSection(String sectionTitle, List<AuditItem> items) {
-    return Card(
+  Widget _buildAuditSection(String sectionName, List<AuditItem> items) {
+    return Container(
       margin: const EdgeInsets.only(bottom: 16),
-      elevation: 4,
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Título de la sección
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
-              decoration: BoxDecoration(
-                color: const Color(0xFF004B63),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Text(
-                sectionTitle,
-                style: const TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.white,
-                ),
-                textAlign: TextAlign.center,
-              ),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(8),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.grey.withOpacity(0.1),
+            spreadRadius: 1,
+            blurRadius: 3,
+            offset: const Offset(0, 1),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            sectionName,
+            style: const TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+              color: Color(0xFF004B63),
             ),
-            const SizedBox(height: 16),
-
-            // Items de evaluación
-            ...items.map((item) => _buildAuditItem(item)).toList(),
-          ],
-        ),
+          ),
+          const SizedBox(height: 16),
+          ...items.map((item) => _buildAuditItem(item)).toList(),
+        ],
       ),
     );
   }
@@ -590,124 +620,86 @@ class _AuditScreenState extends State<AuditScreen> {
       margin: const EdgeInsets.only(bottom: 16),
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        border: Border.all(color: Colors.grey.shade300),
+        color: Colors.grey[50],
         borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Colors.grey[200]!),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Nombre del item
           Text(
             item.name,
-            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+            style: const TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.bold,
+            ),
           ),
           const SizedBox(height: 8),
-
-          // Puntuación máxima
-          Text(
-            'Puntuación máxima: ${item.maxScore}',
-            style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
-          ),
-          const SizedBox(height: 12),
-
           Row(
             children: [
-              // Botón de cámara
               Expanded(
-                flex: 2,
-                child: ElevatedButton.icon(
-                  onPressed: () => _takePhoto(item),
-                  icon: const Icon(Icons.camera_alt, size: 16),
-                  label: Text(
-                    item.photoPath != null ? 'Foto tomada' : 'Tomar foto',
-                    style: const TextStyle(fontSize: 12),
-                  ),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: item.photoPath != null
-                        ? LytiksUtils.successColor
-                        : LytiksUtils.primaryColor,
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(vertical: 8),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 12),
-
-              // Dropdown de calificación
-              Expanded(
-                flex: 3,
                 child: DropdownButtonFormField<String>(
+                  value: item.rating,
                   decoration: const InputDecoration(
                     labelText: 'Calificación',
                     border: OutlineInputBorder(),
-                    contentPadding: EdgeInsets.symmetric(
-                      horizontal: 8,
-                      vertical: 8,
-                    ),
                   ),
-                  initialValue: item.rating,
                   items: const [
                     DropdownMenuItem(value: 'Alto', child: Text('Alto (30)')),
                     DropdownMenuItem(value: 'Medio', child: Text('Medio (50)')),
                     DropdownMenuItem(value: 'Bajo', child: Text('Bajo (100)')),
                   ],
-                  onChanged: item.isLocked
-                      ? null
-                      : (value) {
-                          setState(() {
-                            item.rating = value;
-                            // Invertir lógica: 'Bajo' es el puntaje más alto, 'Alto' el más bajo
-                            switch (value) {
-                              case 'Alto':
-                                item.calculatedScore = (item.maxScore * 0.3)
-                                    .round();
-                                break;
-                              case 'Medio':
-                                item.calculatedScore = (item.maxScore * 0.5)
-                                    .round();
-                                break;
-                              case 'Bajo':
-                                item.calculatedScore = item.maxScore;
-                                break;
-                            }
-                          });
-                        },
+                  onChanged: (value) {
+                    setState(() {
+                      item.rating = value;
+                      if (value != null) {
+                        switch (value) {
+                          case 'Alto':
+                            item.calculatedScore = (item.maxScore * 0.3).round();
+                            break;
+                          case 'Medio':
+                            item.calculatedScore = (item.maxScore * 0.5).round();
+                            break;
+                          case 'Bajo':
+                            item.calculatedScore = item.maxScore;
+                            break;
+                        }
+                      }
+                    });
+                  },
+                ),
+              ),
+              const SizedBox(width: 12),
+              ElevatedButton.icon(
+                onPressed: () => _takePhoto(item),
+                icon: const Icon(Icons.camera_alt, size: 16),
+                label: Text(
+                  item.photoPath != null ? 'Foto tomada' : 'Tomar foto',
+                  style: const TextStyle(fontSize: 12),
+                ),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: item.photoPath != null 
+                    ? Colors.green 
+                    : const Color(0xFF004B63),
+                  foregroundColor: Colors.white,
                 ),
               ),
             ],
           ),
-
           if (item.calculatedScore != null) ...[
             const SizedBox(height: 8),
             Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
-                color: _getScoreColor(item.calculatedScore!, item.maxScore),
+                color: const Color(0xFF004B63).withOpacity(0.1),
                 borderRadius: BorderRadius.circular(4),
               ),
               child: Text(
                 'Puntuación: ${item.calculatedScore}/${item.maxScore}',
                 style: const TextStyle(
-                  fontSize: 12,
                   fontWeight: FontWeight.bold,
-                  color: Colors.white,
+                  color: Color(0xFF004B63),
                 ),
-              ),
-            ),
-          ],
-
-          if (item.photoPath != null) ...[
-            const SizedBox(height: 8),
-            Container(
-              height: 100,
-              width: double.infinity,
-              decoration: BoxDecoration(
-                border: Border.all(color: Colors.grey.shade300),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(8),
-                child: Image.file(File(item.photoPath!), fit: BoxFit.cover),
               ),
             ),
           ],
@@ -716,310 +708,227 @@ class _AuditScreenState extends State<AuditScreen> {
     );
   }
 
-  Color _getScoreColor(int score, int maxScore) {
-    double percentage = (score / maxScore) * 100;
-    return LytiksUtils.getScoreColor(percentage);
-  }
-
-  Future<void> _takePhoto(AuditItem item) async {
-    if (item.isLocked) return;
-
-    try {
-      final XFile? photo = await _picker.pickImage(
-        source: ImageSource.camera,
-        imageQuality: 80,
-      );
-
-      if (photo != null) {
-        setState(() {
-          item.photoPath = photo.path;
-        });
-
-        LytiksUtils.showSuccessSnackBar(context, 'Foto capturada exitosamente');
-      }
-    } catch (e) {
-      LytiksUtils.showErrorSnackBar(context, 'Error al tomar la foto: $e');
-    }
-  }
-
-  void _saveAuditResults() {
-    // Verificar que todas las evaluaciones tengan foto y calificación
-    bool allComplete = true;
-    int totalItems = 0;
-    int completedItems = 0;
-
-    for (var section in _auditSections.values) {
-      for (var item in section) {
-        totalItems++;
-        if (item.photoPath != null && item.rating != null) {
-          completedItems++;
-        } else {
-          allComplete = false;
-        }
-      }
-    }
-
-    if (_isBasicMode) {
-      // En modo básico, permitir guardar con evaluación parcial
-      if (completedItems == 0) {
-        LytiksUtils.showWarningSnackBar(
-          context,
-          'Debe completar al menos una evaluación',
-        );
-        return;
-      }
-    } else {
-      // En modo completo, requerir todas las evaluaciones
-      if (!allComplete) {
-        LytiksUtils.showWarningSnackBar(
-          context,
-          'Debe completar todas las evaluaciones ($completedItems/$totalItems)',
-        );
-        return;
-      }
-    }
-
-    // Bloquear resultados después de guardar
-    setState(() {
-      for (var section in _auditSections.values) {
-        for (var item in section) {
-          if (item.photoPath != null && item.rating != null) {
-            item.isLocked = true;
-          }
-        }
-      }
-    });
-
-    // Calcular puntuación total
-    int totalScore = 0;
-    int maxPossibleScore = 0;
-
-    for (var section in _auditSections.values) {
-      for (var item in section) {
-        maxPossibleScore += item.maxScore;
-        if (item.calculatedScore != null) {
-          totalScore += item.calculatedScore!;
-        }
-      }
-    }
-
-    _showAuditSummary(completedItems, totalItems, totalScore, maxPossibleScore);
-  }
-
-  void _showAuditSummary(
-    int completedItems,
-    int totalItems,
-    int totalScore,
-    int maxPossibleScore,
-  ) {
-    // Calcular puntuaciones por sección
-    Map<String, Map<String, dynamic>> sectionScores = {};
-    for (var entry in _auditSections.entries) {
-      String sectionName = entry.key;
-      List<AuditItem> items = entry.value;
-      int sectionTotal = 0;
-      int sectionMax = 0;
-      int sectionCompleted = 0;
-      for (var item in items) {
-        sectionMax += item.maxScore;
-        if (item.calculatedScore != null) {
-          sectionTotal += item.calculatedScore!;
-          sectionCompleted++;
-        }
-      }
-      sectionScores[sectionName] = {
-        'score': sectionTotal,
-        'maxScore': sectionMax,
-        'completed': sectionCompleted,
-        'total': items.length,
-        'percentage': sectionMax > 0 ? (sectionTotal / sectionMax * 100) : 0.0,
-      };
-    }
-
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => Dialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        backgroundColor: Colors.white,
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              Row(
-                children: [
-                  Icon(
-                    Icons.assignment_turned_in,
-                    color: const Color(0xFF004B63),
-                    size: 32,
-                  ),
-                  const SizedBox(width: 12),
-                  const Expanded(
-                    child: Text(
-                      'Resumen de Auditoría',
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                        color: Color(0xFF004B63),
-                      ),
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 24),
-              Text(
-                'Completaste $completedItems de $totalItems evaluaciones.',
-                style: const TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w500,
-                ),
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 12),
-              Text(
-                'Puntuación total: $totalScore / $maxPossibleScore',
-                style: const TextStyle(fontSize: 15, color: Colors.black87),
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 24),
-              SizedBox(
-                height: 180,
-                child: SingleChildScrollView(
-                  child: Column(
-                    children: sectionScores.entries.map((entry) {
-                      final section = entry.value;
-                      return Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 4),
-                        child: Row(
-                          children: [
-                            Expanded(
-                              flex: 2,
-                              child: Text(
-                                _getSectionDisplayName(entry.key),
-                                style: const TextStyle(fontSize: 14),
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-                            Expanded(
-                              flex: 1,
-                              child: Text(
-                                '${section['score']} / ${section['maxScore']}',
-                                style: const TextStyle(
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                                textAlign: TextAlign.right,
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              flex: 1,
-                              child: Text(
-                                '${(section['percentage'] as double).toStringAsFixed(1)}%',
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  color: (section['percentage'] as double) >= 80
-                                      ? Colors.green
-                                      : (section['percentage'] as double) >= 60
-                                      ? Colors.orange
-                                      : Colors.red,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                                textAlign: TextAlign.right,
-                              ),
-                            ),
-                          ],
-                        ),
-                      );
-                    }).toList(),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 32),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.end,
-                children: [
-                  TextButton(
-                    onPressed: () => Navigator.of(context).pop(),
-                    child: const Text(
-                      'Editar',
-                      style: TextStyle(color: Colors.grey),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  ElevatedButton(
-                    onPressed: () {
-                      Navigator.of(context).pop();
-                      _guardarAuditoriaCampo(
-                        completedItems,
-                        totalItems,
-                        totalScore,
-                        maxPossibleScore,
-                      );
-                    },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF004B63),
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 24,
-                        vertical: 12,
-                      ),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                    ),
-                    child: const Text(
-                      'Guardar auditoria',
-                      style: TextStyle(fontWeight: FontWeight.bold),
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
+  Widget _buildSaveButton() {
+    return SizedBox(
+      width: double.infinity,
+      child: ElevatedButton(
+        onPressed: _saveAuditResults,
+        style: ElevatedButton.styleFrom(
+          backgroundColor: const Color(0xFF004B63),
+          foregroundColor: Colors.white,
+          padding: const EdgeInsets.symmetric(vertical: 16),
+        ),
+        child: const Text(
+          'Guardar Auditoría',
+          style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
         ),
       ),
     );
   }
 
-  String _getSectionDisplayName(String sectionKey) {
-    switch (sectionKey) {
-      case 'ENFUNDE':
-        return 'Enfunde';
-      case 'SELECCION':
-        return 'Selección';
-      case 'COSECHA':
-        return 'Cosecha';
-      case 'DESHOJE NORMAL':
-        return 'Deshoje normal';
-      case 'DESHOJE FITOSANITARIO':
-        return 'Deshoje Fitosantario';
-      case 'DESHIJE':
-        return 'Desvío de hijos';
-      case 'APLICACION PUNTO CON SUCONT':
-        return 'Apuntalamiento';
-      case 'APUNTEO CON SUCONT':
-        return 'Apunteo con Sucont';
-      case 'DRENAJE':
-        return 'Manejo de aguas';
-      case 'MANEJO DE MALEZAS':
-        return 'Manejo de Malezas';
-      default:
-        return sectionKey;
+  Future<void> _takePhoto(AuditItem item) async {
+    try {
+      final XFile? photo = await _picker.pickImage(
+        source: ImageSource.camera,
+        imageQuality: 70,
+      );
+      if (photo != null) {
+        setState(() {
+          item.photoPath = photo.path;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Foto capturada exitosamente')),
+        );
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error al tomar la foto: $e')),
+      );
     }
   }
-}
 
-class AuditItem {
-  final String name;
-  final int maxScore;
-  String? rating;
-  int? calculatedScore;
-  String? photoPath;
-  bool isLocked;
+  Future<void> _saveAuditResults() async {
+    // Verificar que haya un cliente seleccionado
+    if (_selectedClient == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Debe seleccionar un cliente antes de guardar la auditoría'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
 
-  AuditItem(this.name, this.maxScore) : isLocked = false;
+    // Validar que se hayan completado algunas evaluaciones
+    int completedItems = 0;
+    int totalItems = 0;
+
+    for (var section in _auditSections.values) {
+      for (var item in section) {
+        totalItems++;
+        if (item.rating != null) {
+          completedItems++;
+        }
+      }
+    }
+
+    if (_isBasicMode) {
+      if (completedItems == 0) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Debe completar al menos una evaluación')),
+        );
+        return;
+      }
+    } else {
+      if (completedItems < totalItems) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Debe completar todas las evaluaciones ($completedItems/$totalItems)')),
+        );
+        return;
+      }
+    }
+
+    try {
+      // Mostrar indicador de carga
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => const AlertDialog(
+          content: Row(
+            children: [
+              CircularProgressIndicator(),
+              SizedBox(width: 16),
+              Text('Guardando auditoría...'),
+            ],
+          ),
+        ),
+      );
+
+      // Crear los datos de la auditoría
+      final auditData = <String, dynamic>{};
+      
+      for (final section in _auditSections.entries) {
+        auditData[section.key] = section.value.map((item) => {
+          'name': item.name,
+          'maxScore': item.maxScore,
+          'rating': item.rating,
+          'calculatedScore': item.calculatedScore,
+          'photoPath': item.photoPath,
+        }).toList();
+      }
+
+      // Validaciones adicionales
+      if (_selectedClient == null) {
+        throw Exception('Cliente no seleccionado');
+      }
+      
+      if (!_selectedClient!.containsKey('cedula') || _selectedClient!['cedula'] == null) {
+        throw Exception('Cliente sin cédula válida');
+      }
+
+      final clientId = _selectedClient!['id'] as int;
+      final categoryId = _selectedCrop == 'banano' ? 1 : 2;
+
+      await _offlineStorageCampo.savePendingAudit(
+        cedulaCliente: _selectedClient!['cedula'] as String,
+        clientId: clientId,
+        categoryId: categoryId,
+        auditDate: DateTime.now().toIso8601String(),
+        status: 'COMPLETADA',
+        auditData: [auditData], // Convertir el mapa en una lista
+        observations: 'Auditoría ${_isBasicMode ? 'básica' : 'completa'} de $_selectedCrop',
+      );
+
+      // Construir mensaje de éxito
+      final int totalScore = _calculateTotalScore();
+      final int maxPossibleScore = _calculateMaxPossibleScore();
+      final double percentage = (totalScore / maxPossibleScore) * 100;
+      
+      final String hacienda = _selectedClient!['hacienda'] ?? 'No especificada';
+      final String cultivo = _selectedCrop;
+      final String tipoAuditoria = _isBasicMode ? 'Básica' : 'Completa';
+      final String clienteNombre = '${_selectedClient!['nombre']} ${_selectedClient!['apellidos']}';
+      final String cedulaCliente = _selectedClient!['cedula'] as String;
+
+      final String mensaje = '''
+Auditoría guardada exitosamente:
+
+Cliente: $clienteNombre
+Cédula: $cedulaCliente
+Hacienda: $hacienda
+Cultivo: ${cultivo.toUpperCase()}
+Tipo: $tipoAuditoria
+
+Puntuación total: $totalScore/$maxPossibleScore (${percentage.toStringAsFixed(1)}%)
+Elementos evaluados: $completedItems/$totalItems
+
+Los datos se han guardado localmente y se sincronizarán cuando haya conexión.
+''';
+
+      // Cerrar diálogo de carga
+      Navigator.of(context).pop();
+
+      // Mostrar diálogo de éxito
+      showDialog(
+        context: context,
+        builder: (BuildContext context) {
+          return AlertDialog(
+            title: const Text('Auditoría Guardada'),
+            content: Text(mensaje),
+            actions: [
+              TextButton(
+                onPressed: () {
+                  Navigator.of(context).pop(); // Cerrar diálogo
+                  Navigator.of(context).pop(); // Volver a la pantalla anterior
+                },
+                child: const Text('Aceptar'),
+              ),
+            ],
+          );
+        },
+      );
+
+    } catch (e) {
+      // Cerrar diálogo de carga
+      Navigator.of(context).pop();
+      
+      showDialog(
+        context: context,
+        builder: (BuildContext context) {
+          return AlertDialog(
+            title: const Text('Error'),
+            content: Text('Error al guardar la auditoría: ${e.toString()}'),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(),
+                child: const Text('Aceptar'),
+              ),
+            ],
+          );
+        },
+      );
+    }
+  }
+
+  int _calculateTotalScore() {
+    int totalScore = 0;
+    for (var section in _auditSections.values) {
+      for (var item in section) {
+        if (item.calculatedScore != null) {
+          totalScore += item.calculatedScore!;
+        }
+      }
+    }
+    return totalScore;
+  }
+
+  int _calculateMaxPossibleScore() {
+    int maxPossibleScore = 0;
+    for (var section in _auditSections.values) {
+      for (var item in section) {
+        maxPossibleScore += item.maxScore;
+      }
+    }
+    return maxPossibleScore;
+  }
 }

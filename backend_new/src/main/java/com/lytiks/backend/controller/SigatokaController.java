@@ -1,7 +1,9 @@
 package com.lytiks.backend.controller;
+import com.lytiks.backend.entity.Client;
 import com.lytiks.backend.entity.SigatokaAudit;
 import com.lytiks.backend.entity.SigatokaParameter;
 import com.lytiks.backend.entity.SigatokaPhoto;
+import com.lytiks.backend.repository.ClientRepository;
 import com.lytiks.backend.repository.SigatokaAuditRepository;
 import com.lytiks.backend.repository.SigatokaParameterRepository;
 import com.lytiks.backend.repository.SigatokaPhotoRepository;
@@ -32,6 +34,9 @@ public class SigatokaController {
     
     @Autowired
     private SigatokaParameterRepository sigatokaParameterRepository;
+    
+    @Autowired
+    private ClientRepository clientRepository;
 
     // Crear nueva auditoría Sigatoka
     @PostMapping("/create")
@@ -54,7 +59,22 @@ public class SigatokaController {
                 audit.setStoverRecomendado(Double.valueOf(auditData.get("stoverRecomendado").toString()));
             }
             
-            audit.setEstadoGeneral((String) auditData.get("estadoGeneral"));
+            
+            // Validar y asociar cliente si se proporciona cédula
+            if (auditData.containsKey("cedulaCliente") && auditData.get("cedulaCliente") != null) {
+                String cedulaCliente = (String) auditData.get("cedulaCliente");
+                if (!cedulaCliente.trim().isEmpty()) {
+                    Optional<Client> clientOpt = clientRepository.findByCedula(cedulaCliente);
+                    if (clientOpt.isPresent()) {
+                        audit.setClienteId(clientOpt.get().getId());
+                    } else {
+                        response.put("success", false);
+                        response.put("message", "Cliente con cédula " + cedulaCliente + " no encontrado");
+                        return ResponseEntity.badRequest().body(response);
+                    }
+                }
+            }
+            
             audit.setFecha(LocalDateTime.now());
             
             SigatokaAudit savedAudit = sigatokaAuditRepository.save(audit);
@@ -220,6 +240,29 @@ public class SigatokaController {
             return ResponseEntity.ok(audits);
         } catch (Exception e) {
             return ResponseEntity.badRequest().build();
+        }
+    }
+    
+    // Buscar cliente por cédula
+    @GetMapping("/client/{cedula}")
+    public ResponseEntity<Map<String, Object>> getClientByCedula(@PathVariable String cedula) {
+        Map<String, Object> response = new HashMap<>();
+        try {
+            Optional<Client> clientOpt = clientRepository.findByCedula(cedula);
+            if (clientOpt.isPresent()) {
+                Client client = clientOpt.get();
+                response.put("success", true);
+                response.put("client", client);
+                return ResponseEntity.ok(response);
+            } else {
+                response.put("success", false);
+                response.put("message", "Cliente no encontrado");
+                return ResponseEntity.status(404).body(response);
+            }
+        } catch (Exception e) {
+            response.put("success", false);
+            response.put("message", "Error al buscar cliente: " + e.getMessage());
+            return ResponseEntity.badRequest().body(response);
         }
     }
 }
