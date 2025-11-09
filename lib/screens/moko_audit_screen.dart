@@ -401,6 +401,7 @@ class _MokoAuditScreenState extends State<MokoAuditScreen> {
             Text('Buscando cliente...'),
           ],
         ),
+        
       ),
     );
 
