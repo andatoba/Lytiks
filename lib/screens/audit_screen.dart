@@ -1,11 +1,8 @@
+import 'dart:async' as dart_async;
+
 import 'package:flutter/material.dart';
-import 'package:flutter/foundation.dart';
-import 'dart:io';
 import 'package:image_picker/image_picker.dart';
-import 'dart:convert';
-import '../utils/lytiks_utils.dart';
 import '../services/offline_storage_service.dart';
-import '../services/audit_service.dart';
 import '../services/client_service.dart';
 
 class AuditItem {
@@ -31,7 +28,7 @@ class _AuditScreenState extends State<AuditScreen> {
   final TextEditingController _cedulaController = TextEditingController();
   final ClientService _clientService = ClientService();
   final ImagePicker _picker = ImagePicker();
-  
+
   Map<String, dynamic>? _selectedClient;
   bool _isBasicMode = true;
   String _selectedCrop = 'banano';
@@ -42,7 +39,7 @@ class _AuditScreenState extends State<AuditScreen> {
     _initializeDatabase();
   }
 
-  Future<void> _initializeDatabase() async {
+  dart_async.Future<void> _initializeDatabase() async {
     try {
       await _offlineStorageCampo.initialize();
       debugPrint('✅ Base de datos inicializada correctamente en Audit screen');
@@ -89,15 +86,24 @@ class _AuditScreenState extends State<AuditScreen> {
       AuditItem('SIN DESVIAR', 50),
       AuditItem('HIJOS MALTRATADOS', 50),
     ],
-    'APUNTALAMIENTO CON SUCHON': [
+    'APUNTALAMIENTO CON ZUNCHO': [
       AuditItem('ZUNCHO FLOJO Y/O MAL ANGULO MAL COLOCADO', 25),
-      AuditItem('MATAS CAIDAS MAYOR A 3% DEL ENFUNDE PROMEDIO SEMANAL DEL LOTE', 25),
-      AuditItem('UTILIZA ESTAQUILLA PARA MEJORAR ANGULO DENTRO DE LA PLANTACION Y CABLE VIA', 25),
+      AuditItem(
+        'MATAS CAIDAS MAYOR A 3% DEL ENFUNDE PROMEDIO SEMANAL DEL LOTE',
+        25,
+      ),
+      AuditItem(
+        'UTILIZA ESTAQUILLA PARA MEJORAR ANGULO DENTRO DE LA PLANTACION Y CABLE VIA',
+        25,
+      ),
       AuditItem('AMARRE EN HIJOS Y/O EN PLANTAS CON RACIMOS +9 SEM', 25),
     ],
     'APUNTALAMIENTO CON PUNTAL': [
       AuditItem('PUNTAL FLOJO Y/O MAL ANGULO', 20),
-      AuditItem('MATAS CAIDAS MAYOR A 3% DEL ENFUNDE PROMEDIO SEMANAL DEL LOTE', 20),
+      AuditItem(
+        'MATAS CAIDAS MAYOR A 3% DEL ENFUNDE PROMEDIO SEMANAL DEL LOTE',
+        20,
+      ),
       AuditItem('UN PUNTAL', 20),
       AuditItem('PUNTAL ROZANDO RACIMO Y/O DAÑA PARTE BASAL DE LA HOJA', 20),
       AuditItem('PUNTAL PODRIDO', 20),
@@ -105,9 +111,13 @@ class _AuditScreenState extends State<AuditScreen> {
     'MANEJO DE AGUAS (RIEGO)': [
       AuditItem('SATURACION DE AREA SIN CAPACIDAD DE CAMPO', 20),
       AuditItem('CUMPLIMIENTO DE TURNOS DE RIEGO', 20),
-      AuditItem('SE OBSERVAN TRIANGULO SECOS O DESERT', 15),
+      AuditItem('SE OBSERVAN TRIANGULO SECOS', 15),
       AuditItem('SE OBSERVAN FUGAS', 15),
       AuditItem('FALTA DE ASPERSORES', 15),
+      AuditItem(
+        'Lotes con frecuencia mayor a 5 días / mala planificación de cosecha',
+        15,
+      ),
       AuditItem('PRESION INADECUADA (ALTA O BAJA)', 15),
     ],
     'MANEJO DE AGUAS (DRENAJE)': [
@@ -143,9 +153,9 @@ class _AuditScreenState extends State<AuditScreen> {
             const SizedBox(height: 20),
             _buildConfigurationCard(),
             const SizedBox(height: 20),
-            ..._auditSections.entries.map((entry) => 
-              _buildAuditSection(entry.key, entry.value)
-            ).toList(),
+            ..._auditSections.entries
+                .map((entry) => _buildAuditSection(entry.key, entry.value))
+                .toList(),
             const SizedBox(height: 20),
             _buildSaveButton(),
           ],
@@ -299,12 +309,14 @@ class _AuditScreenState extends State<AuditScreen> {
                             fontSize: 14,
                           ),
                         ),
-                        if (_selectedClient!['telefono'] != null && _selectedClient!['telefono'].toString().isNotEmpty)
+                        if (_selectedClient!['telefono'] != null &&
+                            _selectedClient!['telefono'].toString().isNotEmpty)
                           Text(
                             'Teléfono: ${_selectedClient!['telefono']}',
                             style: const TextStyle(fontSize: 12),
                           ),
-                        if (_selectedClient!['direccion'] != null && _selectedClient!['direccion'].toString().isNotEmpty)
+                        if (_selectedClient!['direccion'] != null &&
+                            _selectedClient!['direccion'].toString().isNotEmpty)
                           Text(
                             'Dirección: ${_selectedClient!['direccion']}',
                             style: const TextStyle(fontSize: 12),
@@ -321,7 +333,7 @@ class _AuditScreenState extends State<AuditScreen> {
     );
   }
 
-  Future<void> _searchClientByCedula() async {
+  dart_async.Future<void> _searchClientByCedula() async {
     final cedula = _cedulaController.text.trim();
     if (cedula.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -350,7 +362,7 @@ class _AuditScreenState extends State<AuditScreen> {
       );
 
       final response = await _clientService.searchClientByCedula(cedula);
-      
+
       // Cerrar diálogo de carga
       Navigator.of(context).pop();
 
@@ -358,7 +370,7 @@ class _AuditScreenState extends State<AuditScreen> {
         setState(() {
           _selectedClient = response;
         });
-        
+
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Cliente encontrado: ${response['nombre']}'),
@@ -376,12 +388,9 @@ class _AuditScreenState extends State<AuditScreen> {
     } catch (e) {
       // Cerrar diálogo de carga si hay error
       Navigator.of(context).pop();
-      
+
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Error: $e'),
-          backgroundColor: Colors.red,
-        ),
+        SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
       );
     }
   }
@@ -406,11 +415,7 @@ class _AuditScreenState extends State<AuditScreen> {
         children: [
           Row(
             children: [
-              Icon(
-                Icons.settings,
-                color: const Color(0xFF388E3C),
-                size: 24,
-              ),
+              Icon(Icons.settings, color: const Color(0xFF388E3C), size: 24),
               const SizedBox(width: 8),
               const Text(
                 'Configuración de Auditoría',
@@ -423,7 +428,7 @@ class _AuditScreenState extends State<AuditScreen> {
             ],
           ),
           const SizedBox(height: 16),
-          
+
           if (_selectedClient == null) ...[
             Container(
               padding: const EdgeInsets.all(12),
@@ -435,13 +440,16 @@ class _AuditScreenState extends State<AuditScreen> {
               ),
               child: Row(
                 children: [
-                  Icon(Icons.warning_amber_rounded, color: Colors.amber.shade600),
+                  Icon(
+                    Icons.warning_amber_rounded,
+                    color: Colors.amber.shade600,
+                  ),
                   const SizedBox(width: 12),
                   Expanded(
                     child: Text(
                       'Para poder guardar la auditoría, debe seleccionar primero un cliente',
                       style: TextStyle(
-                        color: Colors.amber.shade800, 
+                        color: Colors.amber.shade800,
                         fontWeight: FontWeight.w500,
                         fontSize: 13,
                       ),
@@ -451,7 +459,7 @@ class _AuditScreenState extends State<AuditScreen> {
               ),
             ),
           ],
-          
+
           _buildModeSelector(),
           const SizedBox(height: 16),
           _buildCropSelector(),
@@ -547,13 +555,21 @@ class _AuditScreenState extends State<AuditScreen> {
     );
   }
 
-  Widget _buildCropOption(String title, String value, IconData icon, {required bool isSelected, required VoidCallback onTap}) {
+  Widget _buildCropOption(
+    String title,
+    String value,
+    IconData icon, {
+    required bool isSelected,
+    required VoidCallback onTap,
+  }) {
     return GestureDetector(
       onTap: onTap,
       child: Container(
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
-          color: isSelected ? const Color(0xFF004B63).withOpacity(0.1) : Colors.grey[100],
+          color: isSelected
+              ? const Color(0xFF004B63).withOpacity(0.1)
+              : Colors.grey[100],
           borderRadius: BorderRadius.circular(8),
           border: Border.all(
             color: isSelected ? const Color(0xFF004B63) : Colors.grey[300]!,
@@ -629,10 +645,7 @@ class _AuditScreenState extends State<AuditScreen> {
         children: [
           Text(
             item.name,
-            style: const TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.bold,
-            ),
+            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
           ),
           const SizedBox(height: 8),
           Row(
@@ -655,10 +668,12 @@ class _AuditScreenState extends State<AuditScreen> {
                       if (value != null) {
                         switch (value) {
                           case 'Alto':
-                            item.calculatedScore = (item.maxScore * 0.3).round();
+                            item.calculatedScore = (item.maxScore * 0.3)
+                                .round();
                             break;
                           case 'Medio':
-                            item.calculatedScore = (item.maxScore * 0.5).round();
+                            item.calculatedScore = (item.maxScore * 0.5)
+                                .round();
                             break;
                           case 'Bajo':
                             item.calculatedScore = item.maxScore;
@@ -678,9 +693,9 @@ class _AuditScreenState extends State<AuditScreen> {
                   style: const TextStyle(fontSize: 12),
                 ),
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: item.photoPath != null 
-                    ? Colors.green 
-                    : const Color(0xFF004B63),
+                  backgroundColor: item.photoPath != null
+                      ? Colors.green
+                      : const Color(0xFF004B63),
                   foregroundColor: Colors.white,
                 ),
               ),
@@ -726,7 +741,7 @@ class _AuditScreenState extends State<AuditScreen> {
     );
   }
 
-  Future<void> _takePhoto(AuditItem item) async {
+  dart_async.Future<void> _takePhoto(AuditItem item) async {
     try {
       final XFile? photo = await _picker.pickImage(
         source: ImageSource.camera,
@@ -741,18 +756,20 @@ class _AuditScreenState extends State<AuditScreen> {
         );
       }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error al tomar la foto: $e')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Error al tomar la foto: $e')));
     }
   }
 
-  Future<void> _saveAuditResults() async {
+  dart_async.Future<void> _saveAuditResults() async {
     // Verificar que haya un cliente seleccionado
     if (_selectedClient == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Debe seleccionar un cliente antes de guardar la auditoría'),
+          content: Text(
+            'Debe seleccionar un cliente antes de guardar la auditoría',
+          ),
           backgroundColor: Colors.orange,
         ),
       );
@@ -775,14 +792,20 @@ class _AuditScreenState extends State<AuditScreen> {
     if (_isBasicMode) {
       if (completedItems == 0) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Debe completar al menos una evaluación')),
+          const SnackBar(
+            content: Text('Debe completar al menos una evaluación'),
+          ),
         );
         return;
       }
     } else {
       if (completedItems < totalItems) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Debe completar todas las evaluaciones ($completedItems/$totalItems)')),
+          SnackBar(
+            content: Text(
+              'Debe completar todas las evaluaciones ($completedItems/$totalItems)',
+            ),
+          ),
         );
         return;
       }
@@ -806,23 +829,28 @@ class _AuditScreenState extends State<AuditScreen> {
 
       // Crear los datos de la auditoría
       final auditData = <String, dynamic>{};
-      
+
       for (final section in _auditSections.entries) {
-        auditData[section.key] = section.value.map((item) => {
-          'name': item.name,
-          'maxScore': item.maxScore,
-          'rating': item.rating,
-          'calculatedScore': item.calculatedScore,
-          'photoPath': item.photoPath,
-        }).toList();
+        auditData[section.key] = section.value
+            .map(
+              (item) => {
+                'name': item.name,
+                'maxScore': item.maxScore,
+                'rating': item.rating,
+                'calculatedScore': item.calculatedScore,
+                'photoPath': item.photoPath,
+              },
+            )
+            .toList();
       }
 
       // Validaciones adicionales
       if (_selectedClient == null) {
         throw Exception('Cliente no seleccionado');
       }
-      
-      if (!_selectedClient!.containsKey('cedula') || _selectedClient!['cedula'] == null) {
+
+      if (!_selectedClient!.containsKey('cedula') ||
+          _selectedClient!['cedula'] == null) {
         throw Exception('Cliente sin cédula válida');
       }
 
@@ -836,21 +864,24 @@ class _AuditScreenState extends State<AuditScreen> {
         auditDate: DateTime.now().toIso8601String(),
         status: 'COMPLETADA',
         auditData: [auditData], // Convertir el mapa en una lista
-        observations: 'Auditoría ${_isBasicMode ? 'básica' : 'completa'} de $_selectedCrop',
+        observations:
+            'Auditoría ${_isBasicMode ? 'básica' : 'completa'} de $_selectedCrop',
       );
 
       // Construir mensaje de éxito
       final int totalScore = _calculateTotalScore();
       final int maxPossibleScore = _calculateMaxPossibleScore();
       final double percentage = (totalScore / maxPossibleScore) * 100;
-      
+
       final String hacienda = _selectedClient!['hacienda'] ?? 'No especificada';
       final String cultivo = _selectedCrop;
       final String tipoAuditoria = _isBasicMode ? 'Básica' : 'Completa';
-      final String clienteNombre = '${_selectedClient!['nombre']} ${_selectedClient!['apellidos']}';
+      final String clienteNombre =
+          '${_selectedClient!['nombre']} ${_selectedClient!['apellidos']}';
       final String cedulaCliente = _selectedClient!['cedula'] as String;
 
-      final String mensaje = '''
+      final String mensaje =
+          '''
 Auditoría guardada exitosamente:
 
 Cliente: $clienteNombre
@@ -887,11 +918,10 @@ Los datos se han guardado localmente y se sincronizarán cuando haya conexión.
           );
         },
       );
-
     } catch (e) {
       // Cerrar diálogo de carga
       Navigator.of(context).pop();
-      
+
       showDialog(
         context: context,
         builder: (BuildContext context) {

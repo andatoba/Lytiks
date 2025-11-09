@@ -6,9 +6,9 @@ class ClientService {
   static const String _host = '5.161.198.89';
   static const int _port = 8081;
   static const String _basePath = '/api';
-  
+
   final storage = const FlutterSecureStorage();
-  
+
   // Verificar si hay token válido
   Future<bool> hasValidToken() async {
     final token = await storage.read(key: 'token');
@@ -16,23 +16,20 @@ class ClientService {
   }
 
   Future<Uri> get baseUri async {
-    return Uri(
-      scheme: 'http',
-      host: _host,
-      port: _port,
-      path: _basePath,
-    );
+    return Uri(scheme: 'http', host: _host, port: _port, path: _basePath);
   }
 
   Future<Map<String, String>> _getHeaders() async {
     final token = await storage.read(key: 'token');
-    
+
     print('\n🔐 Obteniendo headers para la petición:');
     print('Token almacenado completo: $token');
-    
+
     if (token == null || token.isEmpty) {
       print('❌ No se encontró token de autenticación');
-      throw Exception('No hay token de autenticación. Por favor inicie sesión nuevamente.');
+      throw Exception(
+        'No hay token de autenticación. Por favor inicie sesión nuevamente.',
+      );
     }
 
     final headers = {
@@ -40,10 +37,10 @@ class ClientService {
       'Accept': 'application/json',
       'Authorization': 'Bearer $token',
     };
-    
+
     print('📤 Headers completos que se enviarán:');
     headers.forEach((key, value) => print('  $key: $value'));
-    
+
     return headers;
   }
 
@@ -56,11 +53,10 @@ class ClientService {
         scheme: baseURL.scheme,
         host: baseURL.host,
         port: baseURL.port,
-        path: '$_basePath/health'
+        path: '$_basePath/health',
       );
       print('🌐 Verificando disponibilidad del servidor en: ${uri.toString()}');
-      final response = await http.get(uri)
-          .timeout(const Duration(seconds: 5));
+      final response = await http.get(uri).timeout(const Duration(seconds: 5));
       print('📡 Respuesta health check: ${response.statusCode}');
       return response.statusCode == 200;
     } catch (e) {
@@ -72,10 +68,12 @@ class ClientService {
   Future<Map<String, dynamic>?> searchClientByCedula(String cedula) async {
     try {
       print('\n🔍 Iniciando búsqueda de cliente por cédula: $cedula');
-      
+
       final headers = await _getHeaders();
-      final uri = (await baseUri).replace(path: '$_basePath/clients/search/cedula/$cedula');
-      
+      final uri = (await baseUri).replace(
+        path: '$_basePath/clients/search/cedula/$cedula',
+      );
+
       print('🌐 URL completa de búsqueda: ${uri.toString()}');
 
       print('\n🔍 Iniciando búsqueda de cliente');
@@ -89,15 +87,16 @@ class ClientService {
       print('   - Path: ${uri.path}');
 
       // Intentar la conexión con un timeout más largo para redes lentas
-      final response = await http.get(
-        uri,
-        headers: headers,
-      ).timeout(
-        const Duration(seconds: 30),
-        onTimeout: () {
-          throw Exception('La conexión está tomando demasiado tiempo. Verifica tu conexión a internet.');
-        },
-      );
+      final response = await http
+          .get(uri, headers: headers)
+          .timeout(
+            const Duration(seconds: 30),
+            onTimeout: () {
+              throw Exception(
+                'La conexión está tomando demasiado tiempo. Verifica tu conexión a internet.',
+              );
+            },
+          );
 
       print('📡 Response status: ${response.statusCode}');
       print('📡 Response body: ${response.body}');
@@ -110,13 +109,13 @@ class ClientService {
       if (response.statusCode == 200) {
         final responseData = json.decode(response.body);
         print('✅ Cliente encontrado: $responseData');
-        
+
         // Si la respuesta contiene un error, retornar null
         if (responseData.containsKey('error')) {
           print('❌ Error del servidor: ${responseData['error']}');
           return null;
         }
-        
+
         // La respuesta ahora contiene directamente los datos del cliente
         return responseData;
       } else if (response.statusCode == 401) {
@@ -133,17 +132,23 @@ class ClientService {
       print('\n❌ Error detallado:');
       print('   Tipo de error: ${e.runtimeType}');
       print('   Mensaje: $e');
-      
+
       if (e.toString().contains('TimeoutException')) {
-        throw Exception('Tiempo de espera agotado. Por favor, inténtelo nuevamente.');
+        throw Exception(
+          'Tiempo de espera agotado. Por favor, inténtelo nuevamente.',
+        );
       } else if (e.toString().contains('SocketException')) {
-        throw Exception('No se puede conectar al servidor. Verifica tu conexión a internet y que el servidor esté disponible.');
+        throw Exception(
+          'No se puede conectar al servidor. Verifica tu conexión a internet y que el servidor esté disponible.',
+        );
       } else if (e.toString().contains('HandshakeException')) {
-        throw Exception('Error de seguridad en la conexión. Verifica la configuración SSL del servidor.');
+        throw Exception(
+          'Error de seguridad en la conexión. Verifica la configuración SSL del servidor.',
+        );
       } else if (e.toString().contains('Certificate')) {
         throw Exception('Error de certificado SSL. La conexión no es segura.');
       }
-      
+
       throw Exception('Error de conexión: $e');
     }
   }
@@ -155,7 +160,7 @@ class ClientService {
     try {
       final headers = await _getHeaders();
       final uri = (await baseUri).replace(path: '${_basePath}/clients/create');
-      
+
       // Asegurar tipos de datos correctos antes de enviar
       final sanitizedData = {
         'cedula': clientData['cedula']?.toString(),
@@ -166,20 +171,26 @@ class ClientService {
         'direccion': clientData['direccion']?.toString(),
         'parroquia': clientData['parroquia']?.toString(),
         'fincaNombre': clientData['fincaNombre']?.toString(),
-        'fincaHectareas': clientData['fincaHectareas'] != null ? 
-            double.tryParse(clientData['fincaHectareas'].toString()) : null,
+        'fincaHectareas': clientData['fincaHectareas'] != null
+            ? double.tryParse(clientData['fincaHectareas'].toString())
+            : null,
         'cultivosPrincipales': clientData['cultivosPrincipales']?.toString(),
-        'geolocalizacionLat': clientData['geolocalizacionLat'] != null ? 
-            double.parse(clientData['geolocalizacionLat'].toString()) : null,
-        'geolocalizacionLng': clientData['geolocalizacionLng'] != null ? 
-            double.parse(clientData['geolocalizacionLng'].toString()) : null,
+        'geolocalizacionLat': clientData['geolocalizacionLat'] != null
+            ? double.parse(clientData['geolocalizacionLat'].toString())
+            : null,
+        'geolocalizacionLng': clientData['geolocalizacionLng'] != null
+            ? double.parse(clientData['geolocalizacionLng'].toString())
+            : null,
         'observaciones': clientData['observaciones']?.toString(),
-        'tecnicoAsignadoId': clientData['tecnicoAsignadoId'] != null ? 
-            int.parse(clientData['tecnicoAsignadoId'].toString()) : null
+        'tecnicoAsignadoId': clientData['tecnicoAsignadoId'] != null
+            ? int.parse(clientData['tecnicoAsignadoId'].toString())
+            : null,
       };
 
       print('📤 Datos sanitizados que se enviarán al servidor:');
-      sanitizedData.forEach((key, value) => print('  $key: $value (${value?.runtimeType})'));
+      sanitizedData.forEach(
+        (key, value) => print('  $key: $value (${value?.runtimeType})'),
+      );
 
       final response = await http.post(
         uri,
@@ -245,10 +256,7 @@ class ClientService {
     try {
       final headers = await _getHeaders();
       final uri = (await baseUri).replace(path: '${_basePath}/clients');
-      final response = await http.get(
-        uri,
-        headers: headers,
-      );
+      final response = await http.get(uri, headers: headers);
 
       if (response.statusCode == 200) {
         final List<dynamic> clientsJson = json.decode(response.body);
@@ -271,10 +279,7 @@ class ClientService {
     try {
       final headers = await _getHeaders();
       final uri = (await baseUri).replace(path: '${_basePath}/clients/$id');
-      final response = await http.get(
-        uri,
-        headers: headers,
-      );
+      final response = await http.get(uri, headers: headers);
 
       if (response.statusCode == 200) {
         return json.decode(response.body);
@@ -300,7 +305,9 @@ class ClientService {
   }) async {
     try {
       final headers = await _getHeaders();
-      final uri = (await baseUri).replace(path: '${_basePath}/clients/update/$id');
+      final uri = (await baseUri).replace(
+        path: '${_basePath}/clients/update/$id',
+      );
       final response = await http.put(
         uri,
         headers: headers,
@@ -329,10 +336,7 @@ class ClientService {
     try {
       final headers = await _getHeaders();
       final uri = (await baseUri).replace(path: '${_basePath}/clients/$id');
-      final response = await http.delete(
-        uri,
-        headers: headers,
-      );
+      final response = await http.delete(uri, headers: headers);
 
       if (response.statusCode == 401) {
         throw Exception('Token expirado. Por favor, inicia sesión nuevamente.');
