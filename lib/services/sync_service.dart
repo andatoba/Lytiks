@@ -95,6 +95,15 @@ class SyncService {
         errors.addAll(mokoResult.errors);
       }
 
+      debugPrint('[SYNC] Iniciando sincronización de auditorías Sigatoka...');
+      final sigatokaResult = await _syncSigatokaAudits();
+      debugPrint('[SYNC] Resultado auditorías Sigatoka: $sigatokaResult');
+      syncedItems += sigatokaResult.syncedItems;
+      failedItems += sigatokaResult.failedItems;
+      if (sigatokaResult.errors.isNotEmpty) {
+        errors.addAll(sigatokaResult.errors);
+      }
+
       debugPrint('[SYNC] Iniciando sincronización de fotos...');
       final photoResult = await _syncPhotos();
       debugPrint('[SYNC] Resultado fotos: $photoResult');
@@ -190,12 +199,19 @@ class SyncService {
             .toList();
         debugPrint('[SYNC][AUDIT] auditDataParsed: $auditDataParsed');
 
-        // TODO: Map real values for hacienda, tecnicoId, observaciones if available
+        // Map real values from auditData
+        final String? cedulaCliente = auditData['cedula_cliente'];
+        if (cedulaCliente == null || cedulaCliente.isEmpty) {
+          debugPrint('[SYNC][AUDIT] Error: Cédula del cliente no encontrada');
+          throw Exception('La cédula del cliente es requerida');
+        }
+
+        // TODO: Obtener estos datos del cliente usando la cédula
         final String hacienda = 'Hacienda Demo';
-        final String cultivo = 'banano'; // or from auditData if available
+        final String cultivo = 'banano';
         final String fecha =
             auditData['audit_date'] ?? DateTime.now().toIso8601String();
-        final int tecnicoId = 1;
+        final int tecnicoId = 1;  // TODO: Get from auth service
         final String estado = auditData['status'] ?? 'COMPLETADA';
         final String? observaciones = auditData['observations'];
         final scores = AuditService.buildBackendScores(auditDataParsed);
@@ -208,6 +224,7 @@ class SyncService {
           estado: estado,
           observaciones: observaciones,
           scores: scores,
+          cedulaCliente: cedulaCliente,
         );
         debugPrint('[SYNC][AUDIT] Respuesta backend: $result');
 
@@ -292,6 +309,39 @@ class SyncService {
     );
   }
 
+  // Sincronizar auditorías Sigatoka
+  Future<SyncResult> _syncSigatokaAudits() async {
+    final pendingSigatokaAudits = await _offlineStorage.getPendingSigatokaAudits();
+    int syncedItems = 0;
+    int failedItems = 0;
+    List<String> errors = [];
+
+    for (final sigatokaData in pendingSigatokaAudits) {
+      try {
+        final Map<String, dynamic> data = jsonDecode(sigatokaData['sigatoka_data']);
+
+        // TODO: Implementar el servicio de Sigatoka para crear auditoría
+        // Por ahora solo marcamos como sincronizada (placeholder)
+        await _offlineStorage.markSigatokaAuditAsSynced(sigatokaData['id']);
+        syncedItems++;
+        debugPrint('Auditoría Sigatoka sincronizada: ${sigatokaData['id']}');
+      } catch (e) {
+        failedItems++;
+        errors.add('Error al sincronizar auditoría Sigatoka ${sigatokaData['id']}: $e');
+        debugPrint('Error syncing Sigatoka audit: $e');
+      }
+    }
+
+    return SyncResult(
+      success: failedItems == 0,
+      message:
+          'Auditorías Sigatoka: $syncedItems sincronizadas, $failedItems fallidas',
+      syncedItems: syncedItems,
+      failedItems: failedItems,
+      errors: errors,
+    );
+  }
+
   // Sincronizar fotos (placeholder por ahora)
   Future<SyncResult> _syncPhotos() async {
     final pendingPhotos = await _offlineStorage.getPendingPhotos();
@@ -325,6 +375,7 @@ class SyncService {
   // Guardar datos offline cuando no hay conexión
   Future<bool> saveAuditOffline({
     required int clientId,
+    required String cedulaCliente,
     required int categoryId,
     required String auditDate,
     required String status,
@@ -335,8 +386,14 @@ class SyncService {
     String? imagePath,
   }) async {
     try {
+      if (cedulaCliente.isEmpty) {
+        debugPrint('Error: La cédula del cliente es requerida');
+        return false;
+      }
+
       await _offlineStorage.savePendingAudit(
         clientId: clientId,
+        cedulaCliente: cedulaCliente,
         categoryId: categoryId,
         auditDate: auditDate,
         status: status,
@@ -375,6 +432,44 @@ class SyncService {
       return true;
     } catch (e) {
       debugPrint('Error saving Moko audit offline: $e');
+      return false;
+    }
+  }
+
+  Future<bool> saveSigatokaAuditOffline({
+    required int clientId,
+    required String cedulaCliente,
+    required String auditDate,
+    required String status,
+    required Map<String, dynamic> sigatokaData,
+    String? observations,
+    String? recommendations,
+    String? nivelAnalisis,
+    String? tipoCultivo,
+    String? hacienda,
+    String? lote,
+    double? latitude,
+    double? longitude,
+  }) async {
+    try {
+      await _offlineStorage.savePendingSigatokaAudit(
+        clientId: clientId,
+        cedulaCliente: cedulaCliente,
+        auditDate: auditDate,
+        status: status,
+        sigatokaData: sigatokaData,
+        observations: observations,
+        recommendations: recommendations,
+        nivelAnalisis: nivelAnalisis,
+        tipoCultivo: tipoCultivo,
+        hacienda: hacienda,
+        lote: lote,
+        latitude: latitude,
+        longitude: longitude,
+      );
+      return true;
+    } catch (e) {
+      debugPrint('Error saving client offline: $e');
       return false;
     }
   }

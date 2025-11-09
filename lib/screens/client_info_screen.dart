@@ -231,48 +231,108 @@ class _ClientInfoScreenState extends State<ClientInfoScreen> {
                         final cedula = _cedulaController.text.trim();
                         if (cedula.isEmpty) {
                           ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text('Ingrese una cédula para buscar.')),
+                            const SnackBar(
+                              content: Text('Ingrese una cédula para buscar.'),
+                              backgroundColor: Colors.orange,
+                            ),
                           );
                           return;
                         }
-                        setState(() { _isLoadingLocation = true; });
-                        final result = await _clientService.searchClientByCedula(cedula);
-                        setState(() { _isLoadingLocation = false; });
-                        if (result['found'] == true && result['client'] != null) {
-                          final client = result['client'];
-                          _clienteId = client['id'];
-                          _nombreController.text = client['nombre'] ?? '';
-                          _apellidosController.text = client['apellidos'] ?? '';
-                          _telefonoController.text = client['telefono'] ?? '';
-                          _emailController.text = client['email'] ?? '';
-                          _direccionController.text = client['direccion'] ?? '';
-                          _parroquiaController.text = client['parroquia'] ?? '';
-                          _fincaNombreController.text = client['fincaNombre'] ?? '';
-                          _fincaHectareasController.text = client['fincaHectareas']?.toString() ?? '';
-                          _cultivosPrincipalesController.text = client['cultivosPrincipales'] ?? '';
-                          _observacionesController.text = client['observaciones'] ?? '';
-                          _tecnicoAsignadoIdController.text = client['tecnicoAsignadoId']?.toString() ?? '';
-                          if (client['geolocalizacionLat'] != null && client['geolocalizacionLng'] != null) {
-                            _currentPosition = Position(
-                              latitude: client['geolocalizacionLat'],
-                              longitude: client['geolocalizacionLng'],
-                              timestamp: DateTime.now(),
-                              accuracy: 0,
-                              altitude: 0,
-                              heading: 0,
-                              speed: 0,
-                              speedAccuracy: 0,
-                              altitudeAccuracy: 0,
-                              headingAccuracy: 0,
+
+                        // Mostrar indicador de carga
+                        showDialog(
+                          context: context,
+                          barrierDismissible: false,
+                          builder: (context) => const AlertDialog(
+                            content: Row(
+                              children: [
+                                CircularProgressIndicator(),
+                                SizedBox(width: 16),
+                                Text('Buscando cliente...'),
+                              ],
+                            ),
+                          ),
+                        );
+
+                        try {
+                          final client = await _clientService.searchClientByCedula(cedula);
+                          
+                          // Cerrar diálogo de carga
+                          Navigator.of(context).pop();
+
+                          if (client != null) {
+                            setState(() {
+                              _clienteId = client['id'];
+                              _nombreController.text = client['nombre'] ?? '';
+                              _apellidosController.text = client['apellidos'] ?? '';
+                              _telefonoController.text = client['telefono'] ?? '';
+                              _emailController.text = client['email'] ?? '';
+                              _direccionController.text = client['direccion'] ?? '';
+                              _parroquiaController.text = client['parroquia'] ?? '';
+                              _fincaNombreController.text = client['nombreFinca'] ?? '';
+                              _fincaHectareasController.text = client['areaCultivo']?.toString() ?? '';
+                              _cultivosPrincipalesController.text = client['tipoCultivo'] ?? '';
+                              _observacionesController.text = client['observaciones'] ?? '';
+                              _tecnicoAsignadoIdController.text = client['tecnicoAsignado']?.toString() ?? '';
+
+                              if (client['geolocalizacionLat'] != null && client['geolocalizacionLng'] != null) {
+                                _currentPosition = Position(
+                                  latitude: client['geolocalizacionLat'],
+                                  longitude: client['geolocalizacionLng'],
+                                  timestamp: DateTime.now(),
+                                  accuracy: 0,
+                                  altitude: 0,
+                                  heading: 0,
+                                  speed: 0,
+                                  speedAccuracy: 0,
+                                  altitudeAccuracy: 0,
+                                  headingAccuracy: 0,
+                                );
+                              }
+                            });
+
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text('Cliente encontrado y cargado.'),
+                                backgroundColor: Colors.green,
+                              ),
+                            );
+                          } else {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text('No se encontró ningún cliente con esta cédula'),
+                                backgroundColor: Colors.orange,
+                              ),
                             );
                           }
-                          setState(() {});
+                        } catch (e) {
+                          // Cerrar diálogo de carga si hay error
+                          Navigator.of(context).pop();
+                          
+                          String errorMessage = 'Error al buscar cliente';
+                          if (e.toString().contains('Failed to fetch') || 
+                              e.toString().contains('Error de conexión')) {
+                            errorMessage = 'No se pudo conectar con el servidor. Por favor:\n'
+                                         '1. Verifique su conexión a internet\n'
+                                         '2. Compruebe que el servidor esté en línea\n'
+                                         '3. Intente nuevamente en unos momentos';
+                          } else {
+                            errorMessage = 'Error al buscar cliente: $e';
+                          }
+                          
                           ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text('Cliente encontrado y cargado.'), backgroundColor: Colors.green),
-                          );
-                        } else {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(content: Text(result['message'] ?? 'Cliente no encontrado.'), backgroundColor: Colors.orange),
+                            SnackBar(
+                              content: Text(errorMessage),
+                              backgroundColor: Colors.red,
+                              duration: const Duration(seconds: 5),
+                              action: SnackBarAction(
+                                label: 'OK',
+                                textColor: Colors.white,
+                                onPressed: () {
+                                  ScaffoldMessenger.of(context).hideCurrentSnackBar();
+                                },
+                              ),
+                            ),
                           );
                         }
                       },

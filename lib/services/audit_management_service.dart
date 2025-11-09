@@ -4,8 +4,13 @@ import 'package:http/http.dart' as http;
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 class AuditManagementService {
-  final storage = const FlutterSecureStorage();
-  static const String baseUrl = 'http://5.161.198.89:8081/api';
+  static const String _host = '5.161.198.89';
+  static const int _port = 8081;
+  static const String _basePath = '/api';
+
+  Future<Uri> get baseUri async {
+    return Uri(scheme: 'http', host: _host, port: _port, path: _basePath);
+  }
 
   // Obtener todas las auditorías (Moko, Sigatoka y regulares)
   Future<List<Map<String, dynamic>>> getAllAudits() async {
@@ -13,8 +18,9 @@ class AuditManagementService {
 
     try {
       // Obtener auditorías Moko
+      final uri = (await baseUri).replace(path: '${_basePath}/moko/all');
       final mokoResponse = await http.get(
-        Uri.parse('$baseUrl/moko/all'),
+        uri,
         headers: {'Content-Type': 'application/json'},
       );
 
@@ -37,8 +43,11 @@ class AuditManagementService {
       }
 
       // Obtener auditorías Sigatoka
+      final sigatokaUri = (await baseUri).replace(
+        path: '${_basePath}/sigatoka/all',
+      );
       final sigatokaResponse = await http.get(
-        Uri.parse('$baseUrl/sigatoka/all'),
+        sigatokaUri,
         headers: {'Content-Type': 'application/json'},
       );
 
@@ -62,8 +71,11 @@ class AuditManagementService {
       }
 
       // Obtener auditorías regulares
+      final regularUri = (await baseUri).replace(
+        path: '${_basePath}/audits/all',
+      );
       final regularResponse = await http.get(
-        Uri.parse('$baseUrl/audits/all'),
+        regularUri,
         headers: {'Content-Type': 'application/json'},
       );
 
@@ -139,14 +151,10 @@ class AuditManagementService {
     Map<String, dynamic> auditData,
   ) async {
     try {
-      // Leer el token JWT almacenado
-      final token = await storage.read(key: 'token');
+      final uri = (await baseUri).replace(path: '${_basePath}/sigatoka/create');
       final response = await http.post(
-        Uri.parse('$baseUrl/sigatoka/create'),
-        headers: {
-          'Content-Type': 'application/json',
-          if (token != null) 'Authorization': 'Bearer $token',
-        },
+        uri,
+        headers: {'Content-Type': 'application/json'},
         body: json.encode(auditData),
       );
 
@@ -166,8 +174,11 @@ class AuditManagementService {
   // Obtener detalles de auditoría Sigatoka
   Future<Map<String, dynamic>?> getSigatokaAuditDetails(int auditId) async {
     try {
+      final uri = (await baseUri).replace(
+        path: '${_basePath}/sigatoka/$auditId',
+      );
       final response = await http.get(
-        Uri.parse('$baseUrl/sigatoka/$auditId'),
+        uri,
         headers: {'Content-Type': 'application/json'},
       );
 
@@ -213,23 +224,24 @@ class AuditManagementService {
     String newStatus,
   ) async {
     try {
-      String endpoint;
+      final base = await baseUri;
+      Uri uri;
       switch (type) {
         case 'Moko':
-          endpoint = '$baseUrl/moko/$auditId/status';
+          uri = base.replace(path: '${_basePath}/moko/$auditId/status');
           break;
         case 'Sigatoka':
-          endpoint = '$baseUrl/sigatoka/$auditId/status';
+          uri = base.replace(path: '${_basePath}/sigatoka/$auditId/status');
           break;
         case 'Regular':
-          endpoint = '$baseUrl/audits/$auditId/status';
+          uri = base.replace(path: '${_basePath}/audits/$auditId/status');
           break;
         default:
           return false;
       }
 
       final response = await http.put(
-        Uri.parse(endpoint),
+        uri,
         headers: {'Content-Type': 'application/json'},
         body: json.encode({'estado': newStatus}),
       );

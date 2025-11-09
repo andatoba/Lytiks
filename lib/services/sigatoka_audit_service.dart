@@ -2,7 +2,18 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 
 class SigatokaAuditService {
-  static const String baseUrl = 'http://5.161.198.89:8081/api';
+  static const String _host = '5.161.198.89';
+  static const int _port = 8081;
+  static const String _basePath = '/api';
+
+  Future<Uri> get baseUri async {
+    return Uri(
+      scheme: 'http',
+      host: _host,
+      port: _port,
+      path: _basePath,
+    );
+  }
 
   // Crear auditoría Sigatoka
   Future<Map<String, dynamic>> createSigatokaAudit({
@@ -18,7 +29,11 @@ class SigatokaAuditService {
     String? estadoGeneral,
     Map<String, Map<String, double?>>? basicParams,
     Map<String, List<double?>>? completeParams,
+<<<<<<< HEAD
     String? photoBase64,
+=======
+    String? cedulaCliente, // Nuevo parámetro para asociar cliente
+>>>>>>> aad94dd96acdb35edf6bb422429a45a453cc4b99
   }) async {
     try {
       // Preparar parámetros para envío
@@ -69,11 +84,16 @@ class SigatokaAuditService {
         'stoverRecomendado': stoverRecomendado,
         'estadoGeneral': estadoGeneral ?? _calculateOverallStatus(parameters),
         'parameters': parameters,
+<<<<<<< HEAD
         if (photoBase64 != null) 'photoBase64': photoBase64,
+=======
+        'cedulaCliente': cedulaCliente, // Incluir cédula del cliente
+>>>>>>> aad94dd96acdb35edf6bb422429a45a453cc4b99
       };
 
+      final uri = (await baseUri).replace(path: '${_basePath}/sigatoka/create');
       final response = await http.post(
-        Uri.parse('$baseUrl/sigatoka/create'),
+        uri,
         headers: {'Content-Type': 'application/json'},
         body: json.encode(auditData),
       );
@@ -98,8 +118,9 @@ class SigatokaAuditService {
   // Obtener todas las auditorías Sigatoka
   Future<List<Map<String, dynamic>>> getAllSigatokaAudits() async {
     try {
+      final uri = (await baseUri).replace(path: '${_basePath}/sigatoka/all');
       final response = await http.get(
-        Uri.parse('$baseUrl/sigatoka/all'),
+        uri,
         headers: {'Content-Type': 'application/json'},
       );
 
@@ -121,8 +142,9 @@ class SigatokaAuditService {
     int tecnicoId,
   ) async {
     try {
+      final uri = (await baseUri).replace(path: '${_basePath}/sigatoka/technician/$tecnicoId');
       final response = await http.get(
-        Uri.parse('$baseUrl/sigatoka/technician/$tecnicoId'),
+        uri,
         headers: {'Content-Type': 'application/json'},
       );
 
@@ -141,8 +163,9 @@ class SigatokaAuditService {
   // Obtener detalles de una auditoría específica con parámetros
   Future<Map<String, dynamic>?> getSigatokaAuditDetails(int auditId) async {
     try {
+      final uri = (await baseUri).replace(path: '${_basePath}/sigatoka/$auditId');
       final response = await http.get(
-        Uri.parse('$baseUrl/sigatoka/$auditId'),
+        uri,
         headers: {'Content-Type': 'application/json'},
       );
 
@@ -163,8 +186,9 @@ class SigatokaAuditService {
     String tipoCultivo,
   ) async {
     try {
+      final uri = (await baseUri).replace(path: '${_basePath}/sigatoka/crop/$tipoCultivo');
       final response = await http.get(
-        Uri.parse('$baseUrl/sigatoka/crop/$tipoCultivo'),
+        uri,
         headers: {'Content-Type': 'application/json'},
       );
 
@@ -183,8 +207,9 @@ class SigatokaAuditService {
   // Actualizar estado de auditoría
   Future<bool> updateSigatokaAuditStatus(int auditId, String newStatus) async {
     try {
+      final uri = (await baseUri).replace(path: '${_basePath}/sigatoka/$auditId/status');
       final response = await http.put(
-        Uri.parse('$baseUrl/sigatoka/$auditId/status'),
+        uri,
         headers: {'Content-Type': 'application/json'},
         body: json.encode({'estado': newStatus}),
       );
@@ -225,7 +250,7 @@ class SigatokaAuditService {
     try {
       final response = await http
           .get(
-            Uri.parse('$baseUrl/sigatoka/all'),
+            (await baseUri).replace(path: '${_basePath}/sigatoka/all'),
             headers: {'Content-Type': 'application/json'},
           )
           .timeout(const Duration(seconds: 5));
@@ -234,6 +259,28 @@ class SigatokaAuditService {
     } catch (e) {
       print('Error de conectividad con servidor Sigatoka: $e');
       return false;
+    }
+  }
+
+  // Buscar cliente por cédula
+  Future<Map<String, dynamic>?> searchClientByCedula(String cedula) async {
+    try {
+      final uri = (await baseUri).replace(path: '${_basePath}/sigatoka/client/$cedula');
+      final response = await http.get(
+        uri,
+        headers: {'Content-Type': 'application/json'},
+      );
+
+      if (response.statusCode == 200) {
+        final result = json.decode(response.body);
+        if (result['success'] == true) {
+          return result['client'];
+        }
+      }
+      return null;
+    } catch (e) {
+      print('Error al buscar cliente: $e');
+      return null;
     }
   }
 }

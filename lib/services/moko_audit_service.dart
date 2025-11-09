@@ -3,12 +3,17 @@ import 'package:http/http.dart' as http;
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 class MokoAuditService {
-  final String _defaultBaseUrl = 'http://5.161.198.89:8081/api';
+  static const String _host = '5.161.198.89';
+  static const int _port = 8081;
+  static const String _basePath = '/api';
   final storage = const FlutterSecureStorage();
 
-  Future<String> get baseUrl async {
+  Future<Uri> get baseUri async {
     final savedUrl = await storage.read(key: 'server_url');
-    return savedUrl ?? _defaultBaseUrl;
+    if (savedUrl != null && savedUrl.isNotEmpty) {
+      return Uri.parse(savedUrl);
+    }
+    return Uri(scheme: 'http', host: _host, port: _port, path: _basePath);
   }
 
   Future<Map<String, String>> _getHeaders() async {
@@ -33,7 +38,7 @@ class MokoAuditService {
   }) async {
     try {
       final headers = await _getHeaders();
-      final url = Uri.parse('${await baseUrl}/moko-audits');
+      final uri = (await baseUri).replace(path: '${_basePath}/moko-audits');
 
       final body = {
         'tecnicoId': tecnicoId,
@@ -50,7 +55,7 @@ class MokoAuditService {
       };
 
       final response = await http.post(
-        url,
+        uri,
         headers: headers,
         body: jsonEncode(body),
       );
@@ -82,13 +87,14 @@ class MokoAuditService {
   Future<Map<String, dynamic>> getMokoAudits({int? clientId}) async {
     try {
       final headers = await _getHeaders();
-      String url = '${await baseUrl}/moko-audits';
+      final baseUri = (await this.baseUri).replace(
+        path: '${_basePath}/moko-audits',
+      );
+      final uri = clientId != null
+          ? baseUri.replace(queryParameters: {'clientId': clientId.toString()})
+          : baseUri;
 
-      if (clientId != null) {
-        url += '?clientId=$clientId';
-      }
-
-      final response = await http.get(Uri.parse(url), headers: headers);
+      final response = await http.get(uri, headers: headers);
 
       if (response.statusCode == 200) {
         final responseData = jsonDecode(response.body);
@@ -117,9 +123,11 @@ class MokoAuditService {
   Future<Map<String, dynamic>> getMokoAudit(int auditId) async {
     try {
       final headers = await _getHeaders();
-      final url = Uri.parse('${await baseUrl}/moko-audits/$auditId');
+      final uri = (await baseUri).replace(
+        path: '${_basePath}/moko-audits/$auditId',
+      );
 
-      final response = await http.get(url, headers: headers);
+      final response = await http.get(uri, headers: headers);
 
       if (response.statusCode == 200) {
         final responseData = jsonDecode(response.body);
@@ -157,7 +165,9 @@ class MokoAuditService {
   }) async {
     try {
       final headers = await _getHeaders();
-      final url = Uri.parse('${await baseUrl}/moko-audits/$auditId');
+      final uri = (await baseUri).replace(
+        path: '${_basePath}/moko-audits/$auditId',
+      );
 
       final body = <String, dynamic>{};
       if (clientId != null) body['clientId'] = clientId;
@@ -169,7 +179,7 @@ class MokoAuditService {
       if (longitude != null) body['longitude'] = longitude;
 
       final response = await http.put(
-        url,
+        uri,
         headers: headers,
         body: jsonEncode(body),
       );
@@ -202,9 +212,11 @@ class MokoAuditService {
   Future<Map<String, dynamic>> deleteMokoAudit(int auditId) async {
     try {
       final headers = await _getHeaders();
-      final url = Uri.parse('${await baseUrl}/moko-audits/$auditId');
+      final uri = (await baseUri).replace(
+        path: '${_basePath}/moko-audits/$auditId',
+      );
 
-      final response = await http.delete(url, headers: headers);
+      final response = await http.delete(uri, headers: headers);
 
       if (response.statusCode == 200 || response.statusCode == 204) {
         return {

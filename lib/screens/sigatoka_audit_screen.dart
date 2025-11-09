@@ -1,8 +1,12 @@
 import '../services/sigatoka_audit_service.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'dart:io';
 import 'package:image_picker/image_picker.dart';
-import 'dart:convert';
+import '../services/sigatoka_audit_service.dart';
+import '../services/sync_service.dart';
+import '../services/offline_storage_service.dart';
+import '../services/client_service.dart';
 
 class SigatokaAuditScreen extends StatefulWidget {
   final Map<String, dynamic>? clientData;
@@ -14,10 +18,17 @@ class SigatokaAuditScreen extends StatefulWidget {
 }
 
 class _SigatokaAuditScreenState extends State<SigatokaAuditScreen> {
-  final SigatokaAuditService _sigatokaAuditService = SigatokaAuditService();
-  String? _sigatokaPhotoBase64;
+  // Cliente seleccionado
+  Map<String, dynamic>? _selectedClient;
+  final TextEditingController _cedulaController = TextEditingController();
+
+  // Servicios
+  final SigatokaAuditService _sigatokaService = SigatokaAuditService();
+  final SyncService _syncService = SyncService();
+  final OfflineStorageService _offlineStorage = OfflineStorageService();
+  final ClientService _clientService = ClientService();
+
   File? _sigatokaPhoto;
-  String? _sigatokaPhotoPath;
   String _selectedCrop = 'Banano';
   bool _showResults = false;
 
@@ -33,6 +44,32 @@ class _SigatokaAuditScreenState extends State<SigatokaAuditScreen> {
   String _recommendations = '';
   double? _realStover;
   double? _recommendedStover;
+
+  @override
+  void initState() {
+    super.initState();
+    _initializeDatabase();
+    if (widget.clientData != null) {
+      _selectedClient = widget.clientData;
+    }
+  }
+
+  Future<void> _initializeDatabase() async {
+    try {
+      await _offlineStorage.initialize();
+      debugPrint(
+        '✅ Base de datos inicializada correctamente en Sigatoka screen',
+      );
+    } catch (e) {
+      debugPrint('❌ Error inicializando base de datos en Sigatoka screen: $e');
+    }
+  }
+
+  @override
+  void dispose() {
+    _cedulaController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -68,6 +105,8 @@ class _SigatokaAuditScreenState extends State<SigatokaAuditScreen> {
       child: Column(
         children: [
           _buildInfoCard(),
+          const SizedBox(height: 16),
+          _buildClientSearchSection(),
           const SizedBox(height: 16),
           _buildConfigurationCard(),
           const SizedBox(height: 16),
@@ -474,11 +513,7 @@ class _SigatokaAuditScreenState extends State<SigatokaAuditScreen> {
       final newPath = '${directory.path}/$uniqueName';
       final newFile = await File(pickedFile.path).copy(newPath);
       setState(() {
-        _sigatokaPhoto = newFile;
-        _sigatokaPhotoPath = newFile.path;
-        // Codificar a base64
-        final bytes = newFile.readAsBytesSync();
-        _sigatokaPhotoBase64 = base64Encode(bytes);
+        _sigatokaPhoto = File(pickedFile.path);
       });
     }
   }
@@ -915,8 +950,124 @@ class _SigatokaAuditScreenState extends State<SigatokaAuditScreen> {
     return recommendations;
   }
 
-  void _saveAudit() {
-    // Usar las variables para evitar warnings
+  Widget _buildClientSearchSection() {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: const Color(0xFF004B63)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.grey.withOpacity(0.1),
+            spreadRadius: 1,
+            blurRadius: 3,
+            offset: const Offset(0, 1),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(
+                Icons.person_search,
+                color: const Color(0xFF004B63),
+                size: 24,
+              ),
+              const SizedBox(width: 8),
+              const Text(
+                'Buscar Cliente',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: Color(0xFF004B63),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              Expanded(
+                child: TextField(
+                  controller: _cedulaController,
+                  keyboardType: TextInputType.number,
+                  decoration: InputDecoration(
+                    labelText: 'Cédula del Cliente',
+                    hintText: 'Ingrese la cédula',
+                    prefixIcon: const Icon(Icons.badge),
+                    border: const OutlineInputBorder(),
+                    suffixIcon: IconButton(
+                      icon: const Icon(Icons.search),
+                      onPressed: _searchClientByCedula,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          if (_selectedClient != null) ...[
+            const SizedBox(height: 16),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.green.shade50,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.green.shade200),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.check_circle, color: Colors.green.shade600),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Cliente: ${_selectedClient!['nombre'] ?? ''} ${_selectedClient!['apellidos'] ?? ''}',
+                          style: const TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 14,
+                          ),
+                        ),
+                        if (_selectedClient!['telefono'] != null &&
+                            _selectedClient!['telefono'].toString().isNotEmpty)
+                          Text(
+                            'Teléfono: ${_selectedClient!['telefono']}',
+                            style: const TextStyle(fontSize: 12),
+                          ),
+                        if (_selectedClient!['direccion'] != null &&
+                            _selectedClient!['direccion'].toString().isNotEmpty)
+                          Text(
+                            'Dirección: ${_selectedClient!['direccion']}',
+                            style: const TextStyle(fontSize: 12),
+                          ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Future<void> _searchClientByCedula() async {
+    final cedula = _cedulaController.text.trim();
+    if (cedula.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Ingrese una cédula para buscar.'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+
     // Mostrar indicador de carga
     showDialog(
       context: context,
@@ -926,48 +1077,237 @@ class _SigatokaAuditScreenState extends State<SigatokaAuditScreen> {
           children: [
             CircularProgressIndicator(),
             SizedBox(width: 16),
-            Text('Guardando auditoría...'),
+            Text('Buscando cliente...'),
           ],
         ),
       ),
     );
 
-    _sigatokaAuditService
-        .createSigatokaAudit(
-          nivelAnalisis: 'Básico',
-          tipoCultivo: _selectedCrop,
-          hacienda: '', // Completa según tu lógica
-          lote: '', // Completa según tu lógica
-          tecnicoId: 1, // Completa según tu lógica
-          observaciones: _observations,
-          recomendaciones: _recommendations,
-          stoverReal: _realStover,
-          stoverRecomendado: _recommendedStover,
-          basicParams: _basicParams,
-          photoBase64: _sigatokaPhotoBase64,
-        )
-        .then((result) {
-          Navigator.of(context).pop(); // Cerrar indicador de carga
-          showDialog(
-            context: context,
-            builder: (context) => AlertDialog(
-              title: Text(
-                result['success'] == true ? 'Auditoría Guardada' : 'Error',
-              ),
-              content: Text(result['message'] ?? 'Error desconocido'),
-              actions: [
-                TextButton(
-                  onPressed: () {
-                    Navigator.of(context).pop();
-                    if (result['success'] == true) {
-                      Navigator.of(context).pop();
-                    }
-                  },
-                  child: const Text('Aceptar'),
-                ),
-              ],
-            ),
-          );
+    try {
+      final client = await _clientService.searchClientByCedula(cedula);
+
+      // Cerrar diálogo de carga
+      Navigator.of(context).pop();
+
+      if (client != null) {
+        setState(() {
+          _selectedClient = client;
         });
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Cliente encontrado y seleccionado.'),
+            backgroundColor: Colors.green,
+            duration: Duration(seconds: 2),
+          ),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('No se encontró ningún cliente con esta cédula'),
+            backgroundColor: Colors.orange,
+            duration: Duration(seconds: 3),
+          ),
+        );
+      }
+    } catch (e) {
+      // Cerrar diálogo de carga si hay error
+      Navigator.of(context).pop();
+
+      String errorMessage = 'Error al buscar cliente';
+      if (e.toString().contains('Failed to fetch') ||
+          e.toString().contains('Error de conexión')) {
+        errorMessage =
+            'No se pudo conectar con el servidor. Por favor:\n'
+            '1. Verifique su conexión a internet\n'
+            '2. Compruebe que el servidor esté en línea\n'
+            '3. Intente nuevamente en unos momentos';
+      } else {
+        errorMessage = 'Error al buscar cliente: $e';
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(errorMessage),
+          backgroundColor: Colors.red,
+          duration: const Duration(seconds: 5),
+          action: SnackBarAction(
+            label: 'OK',
+            textColor: Colors.white,
+            onPressed: () {
+              ScaffoldMessenger.of(context).hideCurrentSnackBar();
+            },
+          ),
+        ),
+      );
+    }
+  }
+
+  void _saveAudit() async {
+    // Verificar que haya un cliente seleccionado
+    if (_selectedClient == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Debe seleccionar un cliente antes de guardar la auditoría.',
+          ),
+          backgroundColor: Colors.orange,
+          duration: Duration(seconds: 3),
+        ),
+      );
+      return;
+    }
+
+    // Validar campos obligatorios
+    if (_selectedCrop.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Debe seleccionar un cultivo'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
+    // Validar que la cédula esté presente
+    if (!_selectedClient!.containsKey('cedula') ||
+        _selectedClient!['cedula'] == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Cliente sin cédula válida'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
+    try {
+      // Mostrar indicador de carga
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => const AlertDialog(
+          content: Row(
+            children: [
+              CircularProgressIndicator(),
+              SizedBox(width: 16),
+              Text('Guardando auditoría Sigatoka...'),
+            ],
+          ),
+        ),
+      );
+
+      // Preparar datos de la auditoría
+      final Map<String, dynamic> sigatokaData = {
+        'nivelAnalisis': 'Básico',
+        'tipoCultivo': _selectedCrop,
+        'hacienda': _selectedClient!['hacienda'] ?? 'Hacienda Principal',
+        'lote': 'Lote 1',
+        'tecnicoId': 1,
+        'observaciones': _observations,
+        'recomendaciones': _recommendations,
+        'stoverReal': _realStover,
+        'stoverRecomendado': _recommendedStover,
+        'estadoGeneral': _calculateOverallStatus(),
+        'basicParams': _basicParams,
+        'cedulaCliente': _selectedClient!['cedula'],
+        'clienteId': _selectedClient!['id'],
+        'fecha': DateTime.now().toIso8601String(),
+      };
+
+      // 1. Guardar en SQLite primero (siempre)
+      final localId = await _offlineStorage.savePendingSigatokaAudit(
+        clientId: _selectedClient!['id'],
+        cedulaCliente: _selectedClient!['cedula'],
+        auditDate: DateTime.now().toIso8601String(),
+        status: 'COMPLETADA',
+        sigatokaData: sigatokaData,
+        observations: _observations,
+        recommendations: _recommendations,
+        nivelAnalisis: 'Básico',
+        tipoCultivo: _selectedCrop,
+        hacienda: _selectedClient!['hacienda'] ?? 'Hacienda Principal',
+        lote: 'Lote 1',
+      );
+
+      // 2. Verificar conexión y sincronizar si es posible
+      final hasConnection = await _syncService.hasInternetConnection();
+
+      String message;
+      if (hasConnection) {
+        try {
+          // Intentar subir inmediatamente
+          final result = await _sigatokaService.createSigatokaAudit(
+            nivelAnalisis: 'Básico',
+            tipoCultivo: _selectedCrop,
+            hacienda: _selectedClient!['hacienda'] ?? 'Hacienda Principal',
+            lote: 'Lote 1',
+            tecnicoId: 1,
+            observaciones: _observations,
+            recomendaciones: _recommendations,
+            stoverReal: _realStover,
+            stoverRecomendado: _recommendedStover,
+            estadoGeneral: _calculateOverallStatus(),
+            basicParams: _basicParams,
+            cedulaCliente: _selectedClient!['cedula'],
+          );
+
+          if (result['success'] == true) {
+            // Marcar como sincronizado en SQLite
+            await _offlineStorage.markSigatokaAuditAsSynced(localId);
+            message =
+                'Auditoría Sigatoka guardada y sincronizada exitosamente.';
+          } else {
+            message =
+                'Auditoría guardada localmente. Se sincronizará cuando haya conexión estable.';
+          }
+        } catch (e) {
+          message =
+              'Auditoría guardada localmente. Error en sincronización: ${e.toString()}';
+        }
+      } else {
+        message =
+            'Auditoría guardada localmente. Sin conexión a internet. Se sincronizará automáticamente cuando haya conexión.';
+      }
+
+      // Cerrar indicador de carga
+      Navigator.of(context).pop();
+
+      // Mostrar resultado
+      showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Auditoría Guardada'),
+          content: Text(message),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.of(context).pop(); // Cerrar diálogo
+                Navigator.of(context).pop(); // Volver a la pantalla anterior
+              },
+              child: const Text('Aceptar'),
+            ),
+          ],
+        ),
+      );
+    } catch (e) {
+      // Cerrar indicador de carga si está abierto
+      Navigator.of(context).pop();
+
+      // Mostrar error
+      showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Error'),
+          content: Text('Error al guardar la auditoría: ${e.toString()}'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Aceptar'),
+            ),
+          ],
+        ),
+      );
+    }
   }
 }

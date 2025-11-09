@@ -29,19 +29,35 @@ public class ClientController {
             Optional<Client> client = clientRepository.findByCedula(cedula);
             
             if (client.isPresent()) {
-                response.put("found", true);
-                response.put("client", client.get());
-                response.put("message", "Cliente encontrado");
+                Client foundClient = client.get();
+                Map<String, Object> clientData = new HashMap<>();
+                clientData.put("id", foundClient.getId());
+                clientData.put("cedula", foundClient.getCedula());
+                clientData.put("nombre", foundClient.getNombre());
+                clientData.put("apellidos", foundClient.getApellidos());
+                clientData.put("telefono", foundClient.getTelefono());
+                clientData.put("email", foundClient.getEmail());
+                clientData.put("direccion", foundClient.getDireccion());
+                clientData.put("parroquia", foundClient.getParroquia());
+                clientData.put("nombreFinca", foundClient.getFincaNombre());
+                clientData.put("fincaHectareas", foundClient.getFincaHectareas());
+                clientData.put("cultivosPrincipales", foundClient.getCultivosPrincipales());
+                clientData.put("geolocalizacionLat", foundClient.getGeolocalizacionLat());
+                clientData.put("geolocalizacionLng", foundClient.getGeolocalizacionLng());
+                clientData.put("observaciones", foundClient.getObservaciones());
+                clientData.put("tecnicoAsignadoId", foundClient.getTecnicoAsignadoId());
+
+                System.out.println("Cliente encontrado: " + clientData);
+                response = clientData; // Enviar directamente los datos del cliente
             } else {
-                response.put("found", false);
-                response.put("message", "Cliente no encontrado");
+                response.put("error", "No se encontró ningún cliente con la cédula: " + cedula);
             }
             
             return ResponseEntity.ok(response);
             
         } catch (Exception e) {
             response.put("found", false);
-            response.put("error", "Error al buscar cliente: " + e.getMessage());
+            response.put("message", "Error al buscar cliente: " + e.getMessage());
             return ResponseEntity.badRequest().body(response);
         }
     }
@@ -52,6 +68,14 @@ public class ClientController {
         Map<String, Object> response = new HashMap<>();
         
     try {
+            // Validación de campos requeridos
+            if (!clientData.containsKey("cedula") || clientData.get("cedula") == null || 
+                ((String)clientData.get("cedula")).trim().isEmpty()) {
+                response.put("success", false);
+                response.put("message", "La cédula es requerida");
+                return ResponseEntity.badRequest().body(response);
+            }
+
             String cedula = (String) clientData.get("cedula");
             
             // Verificar si ya existe un cliente con esa cédula
@@ -63,33 +87,47 @@ public class ClientController {
             
             Client client = new Client();
             client.setCedula(cedula);
-            client.setNombre((String) clientData.get("nombre"));
-            client.setApellidos((String) clientData.get("apellidos"));
-            client.setTelefono((String) clientData.get("telefono"));
-            client.setEmail((String) clientData.get("email"));
-            client.setDireccion((String) clientData.get("direccion"));
-            client.setParroquia((String) clientData.get("parroquia"));
-            // eliminado departamento
-            client.setFincaNombre((String) clientData.get("fincaNombre"));
-            
-            if (clientData.get("fincaHectareas") != null) {
-                client.setFincaHectareas(Double.valueOf(clientData.get("fincaHectareas").toString()));
+
+            // Manejo seguro de campos String
+            try {
+                client.setNombre(clientData.get("nombre") != null ? (String) clientData.get("nombre") : null);
+                client.setApellidos(clientData.get("apellidos") != null ? (String) clientData.get("apellidos") : null);
+                client.setTelefono(clientData.get("telefono") != null ? (String) clientData.get("telefono") : null);
+                client.setEmail(clientData.get("email") != null ? (String) clientData.get("email") : null);
+                client.setDireccion(clientData.get("direccion") != null ? (String) clientData.get("direccion") : null);
+                client.setParroquia(clientData.get("parroquia") != null ? (String) clientData.get("parroquia") : null);
+                client.setFincaNombre(clientData.get("fincaNombre") != null ? (String) clientData.get("fincaNombre") : null);
+                client.setCultivosPrincipales(clientData.get("cultivosPrincipales") != null ? 
+                    (String) clientData.get("cultivosPrincipales") : null);
+                client.setObservaciones(clientData.get("observaciones") != null ? 
+                    (String) clientData.get("observaciones") : null);
+            } catch (ClassCastException e) {
+                response.put("success", false);
+                response.put("message", "Error en el formato de los campos de texto: " + e.getMessage());
+                return ResponseEntity.badRequest().body(response);
             }
             
-            client.setCultivosPrincipales((String) clientData.get("cultivosPrincipales"));
-            
-            if (clientData.get("geolocalizacionLat") != null) {
-                client.setGeolocalizacionLat(Double.valueOf(clientData.get("geolocalizacionLat").toString()));
-            }
-            
-            if (clientData.get("geolocalizacionLng") != null) {
-                client.setGeolocalizacionLng(Double.valueOf(clientData.get("geolocalizacionLng").toString()));
-            }
-            
-            client.setObservaciones((String) clientData.get("observaciones"));
-            
-            if (clientData.get("tecnicoAsignadoId") != null) {
-                client.setTecnicoAsignadoId(Long.valueOf(clientData.get("tecnicoAsignadoId").toString()));
+            // Manejo seguro de campos numéricos
+            try {
+                if (clientData.get("fincaHectareas") != null && !clientData.get("fincaHectareas").toString().isEmpty()) {
+                    client.setFincaHectareas(Double.valueOf(clientData.get("fincaHectareas").toString()));
+                }
+                
+                if (clientData.get("geolocalizacionLat") != null && !clientData.get("geolocalizacionLat").toString().isEmpty()) {
+                    client.setGeolocalizacionLat(Double.valueOf(clientData.get("geolocalizacionLat").toString()));
+                }
+                
+                if (clientData.get("geolocalizacionLng") != null && !clientData.get("geolocalizacionLng").toString().isEmpty()) {
+                    client.setGeolocalizacionLng(Double.valueOf(clientData.get("geolocalizacionLng").toString()));
+                }
+                
+                if (clientData.get("tecnicoAsignadoId") != null && !clientData.get("tecnicoAsignadoId").toString().isEmpty()) {
+                    client.setTecnicoAsignadoId(Long.valueOf(clientData.get("tecnicoAsignadoId").toString()));
+                }
+            } catch (NumberFormatException e) {
+                response.put("success", false);
+                response.put("message", "Error en el formato de los campos numéricos: " + e.getMessage());
+                return ResponseEntity.badRequest().body(response);
             }
             
             Client savedClient = clientRepository.save(client);

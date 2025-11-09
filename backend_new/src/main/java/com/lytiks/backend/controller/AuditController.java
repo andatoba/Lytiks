@@ -3,11 +3,9 @@ package com.lytiks.backend.controller;
 import com.lytiks.backend.entity.Audit;
 import com.lytiks.backend.entity.AuditScore;
 import com.lytiks.backend.entity.AuditPhoto;
-import com.lytiks.backend.entity.MokoAudit;
 import com.lytiks.backend.repository.AuditRepository;
 import com.lytiks.backend.repository.AuditScoreRepository;
 import com.lytiks.backend.repository.AuditPhotoRepository;
-import com.lytiks.backend.repository.MokoAuditRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -29,6 +27,8 @@ import java.util.Base64;
 @RequestMapping("/audits")
 @CrossOrigin(origins = "*")
 public class AuditController {
+    @Autowired
+    private com.lytiks.backend.repository.ClientRepository clientRepository;
 
     @Autowired
     private AuditRepository auditRepository;
@@ -38,9 +38,6 @@ public class AuditController {
     
     @Autowired
     private AuditPhotoRepository auditPhotoRepository;
-    
-    @Autowired
-    private MokoAuditRepository mokoAuditRepository;
 
     // Crear nueva auditoría
     @PostMapping("/create")
@@ -54,6 +51,23 @@ public ResponseEntity<Map<String, Object>> createAudit(@RequestBody Map<String, 
         audit.setTecnicoId(auditData.get("tecnicoId") != null ? Long.valueOf(auditData.get("tecnicoId").toString()) : null);
         audit.setEstado(auditData.get("estado") != null ? auditData.get("estado").toString() : "PENDIENTE");
         audit.setObservaciones((String) auditData.get("observaciones"));
+
+        // Asociar cliente por cédula
+        if (auditData.containsKey("cedulaCliente") && auditData.get("cedulaCliente") != null) {
+            String cedula = auditData.get("cedulaCliente").toString();
+            Optional<com.lytiks.backend.entity.Client> clientOpt = clientRepository.findByCedula(cedula);
+            if (clientOpt.isPresent()) {
+                audit.setClient(clientOpt.get());
+            } else {
+                response.put("success", false);
+                response.put("message", "No se encontró un cliente con la cédula proporcionada");
+                return ResponseEntity.badRequest().body(response);
+            }
+        } else {
+            response.put("success", false);
+            response.put("message", "Debe proporcionar la cédula del cliente");
+            return ResponseEntity.badRequest().body(response);
+        }
 
         Audit savedAudit = auditRepository.save(audit);
 
@@ -202,29 +216,15 @@ public ResponseEntity<Map<String, Object>> createAudit(@RequestBody Map<String, 
             // Contar auditorías completadas
             long completedAudits = auditRepository.findByTecnicoIdAndEstado(tecnicoId, "COMPLETADA").size();
             
-            // Estadísticas de auditorías Moko
-            long totalMokoAudits = mokoAuditRepository.countByTecnicoId(tecnicoId);
-            long todayMokoAudits = mokoAuditRepository.countTodayMokoAuditsByTecnico(tecnicoId);
-            Double avgCumplimientoMoko = mokoAuditRepository.getAverageCumplimientoByTecnico(tecnicoId);
-            if (avgCumplimientoMoko == null) avgCumplimientoMoko = 0.0;
-            
             // Obtener auditorías recientes
             List<Audit> recentAudits = auditRepository.findRecentAuditsByTecnico(tecnicoId)
                     .stream().limit(3).toList();
-            
-            // Obtener auditorías Moko recientes
-            List<MokoAudit> recentMokoAudits = mokoAuditRepository.findRecentMokoAuditsByTecnico(tecnicoId)
-                    .stream().limit(2).toList();
             
             dashboard.put("totalAudits", totalAudits);
             dashboard.put("todayAudits", todayAudits);
             dashboard.put("pendingAudits", pendingAudits);
             dashboard.put("completedAudits", completedAudits);
-            dashboard.put("totalMokoAudits", totalMokoAudits);
-            dashboard.put("todayMokoAudits", todayMokoAudits);
-            dashboard.put("avgCumplimientoMoko", Math.round(avgCumplimientoMoko * 100.0) / 100.0);
             dashboard.put("recentAudits", recentAudits);
-            dashboard.put("recentMokoAudits", recentMokoAudits);
             dashboard.put("welcomeMessage", "Bienvenido, Técnico");
             
             return ResponseEntity.ok(dashboard);

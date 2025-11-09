@@ -4,10 +4,12 @@ import com.lytiks.backend.entity.User;
 import com.lytiks.backend.entity.Client;
 import com.lytiks.backend.entity.Audit;
 import com.lytiks.backend.entity.AuditScore;
+import com.lytiks.backend.entity.Sintoma;
 import com.lytiks.backend.repository.UserRepository;
 import com.lytiks.backend.repository.ClientRepository;
 import com.lytiks.backend.repository.AuditRepository;
 import com.lytiks.backend.repository.AuditScoreRepository;
+import com.lytiks.backend.repository.SintomaRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -30,6 +32,9 @@ public class DataInitializer implements CommandLineRunner {
     private AuditScoreRepository auditScoreRepository;
 
     @Autowired
+    private SintomaRepository sintomaRepository;
+
+    @Autowired
     private PasswordEncoder passwordEncoder;
 
     @Override
@@ -37,6 +42,7 @@ public class DataInitializer implements CommandLineRunner {
         initializeUsers();
         initializeClients();
         initializeAudits();
+        initializeSintomas();
     }
 
     private void initializeUsers() {
@@ -167,6 +173,73 @@ public class DataInitializer implements CommandLineRunner {
             }
         } else {
             System.out.println("ℹ️ Las auditorías ya existen");
+        }
+    }
+
+    private void initializeSintomas() {
+        if (sintomaRepository.count() == 0) {
+            System.out.println("🌱 Inicializando síntomas de Moko...");
+
+            // Síntomas Externos
+            Sintoma sintoma1 = new Sintoma(null, "Externo", "Amarillamiento de hojas bajas", 
+                "Primeras hojas muestran amarillamiento desde el borde hacia el centro.", "Bajo");
+            sintomaRepository.save(sintoma1);
+
+            Sintoma sintoma2 = new Sintoma(null, "Externo", "Marchitez o colapso de hojas", 
+                "Las hojas se doblan en forma de \"paraguas\"; planta pierde turgencia rápidamente.", "Medio");
+            sintomaRepository.save(sintoma2);
+
+            Sintoma sintoma3 = new Sintoma(null, "Externo", "Muerte apical / pseudotallo blando", 
+                "La parte superior del pseudotallo se ablanda, colapsa o presenta exudado.", "Alto");
+            sintomaRepository.save(sintoma3);
+
+            Sintoma sintoma4 = new Sintoma(null, "Externo", "Hojas jóvenes torcidas o con bordes secos", 
+                "Indica bloqueo vascular incipiente; hojas no se abren completamente.", "Medio");
+            sintomaRepository.save(sintoma4);
+
+            // Síntomas en Fruto
+            Sintoma sintoma5 = new Sintoma(null, "Fruto", "Frutos pequeños o deformados", 
+                "Racimos con dedos torcidos, desarrollo irregular o abortados.", "Medio");
+            sintomaRepository.save(sintoma5);
+
+            Sintoma sintoma6 = new Sintoma(null, "Fruto", "Pulpa con manchas marrón-rojizas", 
+                "Al cortar el fruto se observan vetas o anillos marrones, típicos del Moko.", "Alto");
+            sintomaRepository.save(sintoma6);
+
+            Sintoma sintoma7 = new Sintoma(null, "Fruto", "Exudado bacteriano (\"ooze\") en pedúnculo", 
+                "Gotas blancas o amarillentas viscosas en el corte del racimo.", "Alto");
+            sintomaRepository.save(sintoma7);
+
+            Sintoma sintoma8 = new Sintoma(null, "Flor masculina", "Necrosis o ennegrecimiento en el nudo floral", 
+                "Zona de flor masculina muerta o seca, punto frecuente de infección.", "Medio");
+            sintomaRepository.save(sintoma8);
+
+            // Síntomas en Pseudotallo
+            Sintoma sintoma9 = new Sintoma(null, "Pseudotallo", "Amarillamiento de hojas bajas", 
+                "Al cortar el pseudotallo transversalmente se ven anillos concéntricos cafés oscuros.", "Alto");
+            sintomaRepository.save(sintoma9);
+
+            Sintoma sintoma10 = new Sintoma(null, "Pseudotallo", "Puntos café en haces vasculares longitudinales", 
+                "Al cortar verticalmente el pseudotallo se aprecian líneas o puntos oscuros en los haces.", "Alto");
+            sintomaRepository.save(sintoma10);
+
+            Sintoma sintoma11 = new Sintoma(null, "Pseudotallo", "Exudado viscoso al presionar corte", 
+                "Sale líquido blanquecino-amarillo de textura mucilaginosa.", "Alto");
+            sintomaRepository.save(sintoma11);
+
+            // Síntomas en Hoja
+            Sintoma sintoma12 = new Sintoma(null, "Hoja", "Decoloración en pecíolos o base de hojas", 
+                "Cuando se corta la base del pecíolo se observan líneas marrones.", "Medio");
+            sintomaRepository.save(sintoma12);
+
+            // Síntomas en Rizoma
+            Sintoma sintoma13 = new Sintoma(null, "Rizoma", "Oscurecimiento en el corazón del rizoma", 
+                "Corte del cormo muestra anillos o puntos marrones, a veces con olor agrio.", "Alto");
+            sintomaRepository.save(sintoma13);
+
+            System.out.println("✅ 13 síntomas de Moko creados exitosamente");
+        } else {
+            System.out.println("ℹ️ Los síntomas de Moko ya existen");
         }
     }
 }
