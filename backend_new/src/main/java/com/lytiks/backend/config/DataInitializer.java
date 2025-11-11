@@ -5,11 +5,13 @@ import com.lytiks.backend.entity.Client;
 import com.lytiks.backend.entity.Audit;
 import com.lytiks.backend.entity.AuditScore;
 import com.lytiks.backend.entity.Sintoma;
+import com.lytiks.backend.entity.ProductoContencion;
 import com.lytiks.backend.repository.UserRepository;
 import com.lytiks.backend.repository.ClientRepository;
 import com.lytiks.backend.repository.AuditRepository;
 import com.lytiks.backend.repository.AuditScoreRepository;
 import com.lytiks.backend.repository.SintomaRepository;
+import com.lytiks.backend.repository.ProductoRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -35,6 +37,9 @@ public class DataInitializer implements CommandLineRunner {
     private SintomaRepository sintomaRepository;
 
     @Autowired
+    private ProductoRepository productoRepository;
+
+    @Autowired
     private PasswordEncoder passwordEncoder;
 
     @Override
@@ -43,6 +48,45 @@ public class DataInitializer implements CommandLineRunner {
         initializeClients();
         initializeAudits();
         initializeSintomas();
+        initializeProductos();
+    }
+
+    private void initializeProductos() {
+        if (productoRepository.count() == 0) {
+            System.out.println("🌿 Inicializando productos de contención...");
+
+            ProductoContencion p1 = new ProductoContencion(null,
+                    "Cobre Hidróxido 50% WP",
+                    "Polvo mojable - 250 g",
+                    "2 g / L",
+                    "https://example.com/productos/cobre_hidroxido_250g.pdf");
+            productoRepository.save(p1);
+
+            ProductoContencion p2 = new ProductoContencion(null,
+                    "Ciprodinazol 20% SC",
+                    "Concentrado soluble - 1 L",
+                    "10 ml / 10 L",
+                    "https://example.com/productos/ciprodinazol_1l.pdf");
+            productoRepository.save(p2);
+
+            ProductoContencion p3 = new ProductoContencion(null,
+                    "Cloranfenicol 10% WG",
+                    "Gránulos - 500 g",
+                    "5 g / L",
+                    "https://example.com/productos/cloranfenicol_500g.pdf");
+            productoRepository.save(p3);
+
+            ProductoContencion p4 = new ProductoContencion(null,
+                    "Biofungicida Bacillus subtilis",
+                    "Suspensión - 500 ml",
+                    "50 ml / 10 L",
+                    "https://example.com/productos/bacillus_subtilis_500ml.pdf");
+            productoRepository.save(p4);
+
+            System.out.println("✅ 4 productos de contención creados exitosamente");
+        } else {
+            System.out.println("ℹ️ Los productos de contención ya existen");
+        }
     }
 
     private void initializeUsers() {

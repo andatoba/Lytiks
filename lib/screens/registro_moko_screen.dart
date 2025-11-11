@@ -1,11 +1,10 @@
 import 'dart:async';
 import 'dart:io';
-import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:geolocator/geolocator.dart';
-import '../services/client_service.dart';
 import '../services/registro_moko_service.dart';
+import 'contencion_screen.dart';
 
 class RegistroMokoScreen extends StatefulWidget {
   final Map<String, dynamic>? clientData;
@@ -19,7 +18,6 @@ class RegistroMokoScreen extends StatefulWidget {
 class _RegistroMokoScreenState extends State<RegistroMokoScreen> {
   // Servicios
   final RegistroMokoService _registroMokoService = RegistroMokoService();
-  final ClientService _clientService = ClientService();
 
   // Controllers
   final TextEditingController _plantasAfectadasController =
@@ -57,21 +55,33 @@ class _RegistroMokoScreenState extends State<RegistroMokoScreen> {
 
   Future<void> _initializeData() async {
     try {
+      print('REGISTRO_MOKO_SCREEN: Iniciando carga de datos...');
+      
       // Obtener número de foco secuencial
+      print('REGISTRO_MOKO_SCREEN: Obteniendo número de foco...');
       numeroFoco = await _registroMokoService.getNextFocoNumber();
+      print('REGISTRO_MOKO_SCREEN: Número de foco obtenido: $numeroFoco');
 
       // Cargar síntomas desde la base de datos
+      print('REGISTRO_MOKO_SCREEN: Cargando síntomas...');
       sintomas = await _registroMokoService.getSintomas();
+      print('REGISTRO_MOKO_SCREEN: Síntomas cargados: ${sintomas.length} elementos');
+      print('REGISTRO_MOKO_SCREEN: Primer síntoma: ${sintomas.isNotEmpty ? sintomas.first : 'Lista vacía'}');
 
       // Obtener coordenadas GPS del cliente
       if (widget.clientData != null) {
+        print('REGISTRO_MOKO_SCREEN: Obteniendo GPS para cliente: ${widget.clientData!['nombre']}');
         gpsCoordinates = await _getClientGPS();
+        print('REGISTRO_MOKO_SCREEN: GPS obtenido: $gpsCoordinates');
       }
 
+      print('REGISTRO_MOKO_SCREEN: Datos cargados exitosamente, cambiando estado a no loading...');
       setState(() {
         _isLoading = false;
       });
+      print('REGISTRO_MOKO_SCREEN: Estado actualizado, _isLoading = $_isLoading');
     } catch (e) {
+      print('REGISTRO_MOKO_SCREEN: ERROR en _initializeData: $e');
       setState(() {
         _isLoading = false;
       });
@@ -107,6 +117,9 @@ class _RegistroMokoScreenState extends State<RegistroMokoScreen> {
 
   @override
   Widget build(BuildContext context) {
+    print('REGISTRO_MOKO_SCREEN: build() ejecutándose, _isLoading = $_isLoading');
+    print('REGISTRO_MOKO_SCREEN: sintomas.length = ${sintomas.length}');
+    
     return Scaffold(
       backgroundColor: Colors.grey[50],
       appBar: AppBar(
@@ -128,6 +141,7 @@ class _RegistroMokoScreenState extends State<RegistroMokoScreen> {
   }
 
   Widget _buildFormulario() {
+    print('REGISTRO_MOKO_SCREEN: _buildFormulario() ejecutándose');
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16.0),
       child: Column(
@@ -305,7 +319,7 @@ class _RegistroMokoScreenState extends State<RegistroMokoScreen> {
         items: sintomas.map((sintoma) {
           return DropdownMenuItem<Map<String, dynamic>>(
             value: sintoma,
-            child: Text(sintoma['sintoma_observable'] ?? ''),
+            child: Text(sintoma['sintomaObservable'] ?? sintoma['sintoma_observable'] ?? ''),
           );
         }).toList(),
         onChanged: (value) {
@@ -593,8 +607,8 @@ class _RegistroMokoScreenState extends State<RegistroMokoScreen> {
         'observaciones': _observacionesController.text,
       };
 
-      // Guardar en la base de datos
-      await _registroMokoService.guardarRegistro(registroData, fotoTomada);
+  // Guardar en la base de datos
+  await _registroMokoService.guardarRegistro(registroData, fotoTomada);
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -603,7 +617,14 @@ class _RegistroMokoScreenState extends State<RegistroMokoScreen> {
             backgroundColor: Colors.green,
           ),
         );
-        Navigator.pop(context, true); // Retornar true para indicar éxito
+
+        // Navegar a la pantalla de Contención
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => ContencionScreen(clientData: widget.clientData),
+          ),
+        );
       }
     } catch (e) {
       _showError('Error al guardar registro: $e');

@@ -2,14 +2,21 @@ package com.lytiks.backend.controller;
 
 import com.lytiks.backend.entity.RegistroMoko;
 import com.lytiks.backend.entity.Sintoma;
+import com.lytiks.backend.entity.ProductoContencion;
+import com.lytiks.backend.entity.Aplicacion;
+import com.lytiks.backend.entity.SeguimientoAplicacion;
 import com.lytiks.backend.service.RegistroMokoService;
 import com.lytiks.backend.service.SintomaService;
+import com.lytiks.backend.service.SeguimientoAplicacionService;
+import com.lytiks.backend.repository.ProductoContencionRepository;
+import com.lytiks.backend.repository.AplicacionRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.io.IOException;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -24,7 +31,7 @@ import java.util.Optional;
 import java.util.UUID;
 
 @RestController
-@RequestMapping("/api/moko")
+@RequestMapping("/moko")
 @CrossOrigin(origins = "*")
 public class RegistroMokoController {
 
@@ -33,6 +40,15 @@ public class RegistroMokoController {
 
     @Autowired
     private SintomaService sintomaService;
+    
+    @Autowired
+    private ProductoContencionRepository productoRepository;
+    
+    @Autowired
+    private AplicacionRepository aplicacionRepository;
+    
+    @Autowired
+    private SeguimientoAplicacionService seguimientoService;
 
     private static final String UPLOAD_DIR = "photos/moko/";
 
@@ -54,8 +70,14 @@ public class RegistroMokoController {
     public ResponseEntity<List<Sintoma>> getSintomas() {
         try {
             List<Sintoma> sintomas = sintomaService.getAllSintomas();
+            System.out.println("🔍 SINTOMAS - Total encontrados: " + sintomas.size());
+            for (Sintoma sintoma : sintomas) {
+                System.out.println("  ID: " + sintoma.getId() + " - " + sintoma.getSintomaObservable() + " (" + sintoma.getSeveridad() + ")");
+            }
             return ResponseEntity.ok(sintomas);
         } catch (Exception e) {
+            System.err.println("❌ ERROR al obtener síntomas: " + e.getMessage());
+            e.printStackTrace();
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(null);
         }
     }
@@ -74,13 +96,34 @@ public class RegistroMokoController {
             @RequestParam(value = "foto", required = false) MultipartFile foto) {
 
         try {
+            System.out.println("🔥 REGISTRO MOKO - Datos recibidos:");
+            System.out.println("numeroFoco: " + numeroFoco);
+            System.out.println("clienteId: " + clienteId);
+            System.out.println("gpsCoordinates: " + gpsCoordinates);
+            System.out.println("plantasAfectadas: " + plantasAfectadas);
+            System.out.println("fechaDeteccion: " + fechaDeteccion);
+            System.out.println("sintomaId: " + sintomaId);
+            System.out.println("severidad: " + severidad);
+            System.out.println("metodoComprobacion: " + metodoComprobacion);
+            System.out.println("observaciones: " + observaciones);
+            System.out.println("foto: " + (foto != null ? foto.getOriginalFilename() : "null"));
+
             // Crear nuevo registro
             RegistroMoko registro = new RegistroMoko();
             registro.setNumeroFoco(numeroFoco);
             registro.setClienteId(clienteId);
             registro.setGpsCoordinates(gpsCoordinates);
             registro.setPlantasAfectadas(plantasAfectadas);
-            registro.setFechaDeteccion(LocalDateTime.parse(fechaDeteccion));
+            
+            // Parsear fecha con mejor manejo de errores
+            try {
+                registro.setFechaDeteccion(LocalDateTime.parse(fechaDeteccion));
+            } catch (Exception e) {
+                System.err.println("Error parseando fecha: " + fechaDeteccion + " - " + e.getMessage());
+                // Usar fecha actual como fallback
+                registro.setFechaDeteccion(LocalDateTime.now());
+            }
+            
             registro.setSintomaId(sintomaId);
             registro.setSeveridad(severidad);
             registro.setMetodoComprobacion(metodoComprobacion);
@@ -334,5 +377,179 @@ public class RegistroMokoController {
             return fileName.substring(fileName.lastIndexOf(".") + 1);
         }
         return "jpg";
+    }
+
+    // Endpoints para productos de contención - usando ruta diferente para evitar conflictos
+    @GetMapping("/productos-contencion")
+    public ResponseEntity<List<ProductoContencion>> getProductosContencion() {
+        try {
+            List<ProductoContencion> productos = productoRepository.findAll();
+            return ResponseEntity.ok(productos);
+        } catch (Exception e) {
+            System.err.println("Error obteniendo productos: " + e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(null);
+        }
+    }
+
+    @PostMapping("/init-productos")
+    public ResponseEntity<Map<String, Object>> initProductos() {
+        try {
+            // Limpiar productos existentes
+            productoRepository.deleteAll();
+            
+            // Crear productos con las especificaciones correctas
+            ProductoContencion golden = new ProductoContencion();
+            golden.setNombre("Golden Crop");
+            golden.setPresentacion("1L");
+            golden.setDosisSugerida("1L/400L/agua/ha");
+            golden.setUrl("https://example.com/golden-crop");
+            productoRepository.save(golden);
+            
+            ProductoContencion previotik = new ProductoContencion();
+            previotik.setNombre("Previotik Crop");
+            previotik.setPresentacion("6.6kg");
+            previotik.setDosisSugerida("6.6kg/ha (con fertilizante)");
+            previotik.setUrl("https://example.com/previotik-crop");
+            productoRepository.save(previotik);
+            
+            ProductoContencion saferbacter = new ProductoContencion();
+            saferbacter.setNombre("Saferbacter");
+            saferbacter.setPresentacion("250g");
+            saferbacter.setDosisSugerida("250g/400L/agua/ha");
+            saferbacter.setUrl("https://example.com/saferbacter");
+            productoRepository.save(saferbacter);
+            
+            ProductoContencion safersoil = new ProductoContencion();
+            safersoil.setNombre("Safersoil Trichoderma");
+            safersoil.setPresentacion("250g");
+            safersoil.setDosisSugerida("250g/400L/agua/ha");
+            safersoil.setUrl("https://example.com/safersoil-trichoderma");
+            productoRepository.save(safersoil);
+            
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", true);
+            response.put("message", "Productos inicializados correctamente");
+            response.put("total", 4);
+            
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            Map<String, Object> error = new HashMap<>();
+            error.put("success", false);
+            error.put("error", "Error inicializando productos: " + e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(error);
+        }
+    }
+
+    @PostMapping("/aplicaciones-contencion")
+    public ResponseEntity<Map<String, Object>> saveAplicacionContencion(@RequestBody Aplicacion aplicacion) {
+        try {
+            Aplicacion savedAplicacion = aplicacionRepository.save(aplicacion);
+            
+            // Crear seguimiento automático
+            seguimientoService.crearSeguimientoAutomatico(savedAplicacion);
+            
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", true);
+            response.put("message", "Aplicación guardada exitosamente");
+            response.put("id", savedAplicacion.getId());
+            return ResponseEntity.status(HttpStatus.CREATED).body(response);
+        } catch (Exception e) {
+            Map<String, Object> error = new HashMap<>();
+            error.put("success", false);
+            error.put("error", "Error al guardar aplicación: " + e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(error);
+        }
+    }
+
+    // Endpoints para seguimiento de aplicaciones
+    @GetMapping("/seguimiento/{aplicacionId}")
+    public ResponseEntity<Map<String, Object>> getSeguimiento(@PathVariable Long aplicacionId) {
+        try {
+            Map<String, Object> seguimiento = seguimientoService.getResumenSeguimiento(aplicacionId);
+            return ResponseEntity.ok(seguimiento);
+        } catch (Exception e) {
+            Map<String, Object> error = new HashMap<>();
+            error.put("success", false);
+            error.put("error", "Error al obtener seguimiento: " + e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(error);
+        }
+    }
+
+    @PostMapping("/seguimiento/{seguimientoId}/completar")
+    public ResponseEntity<Map<String, Object>> marcarCompletada(
+            @PathVariable Long seguimientoId,
+            @RequestParam(required = false) String observaciones,
+            @RequestParam(value = "foto", required = false) MultipartFile foto) {
+        try {
+            String fotoPath = null;
+            if (foto != null && !foto.isEmpty()) {
+                // Guardar foto de evidencia
+                fotoPath = guardarFotoEvidencia(foto, seguimientoId);
+            }
+
+            SeguimientoAplicacion seguimiento = seguimientoService.marcarCompletada(
+                seguimientoId, 
+                observaciones, 
+                fotoPath
+            );
+
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", true);
+            response.put("message", "Aplicación marcada como completada");
+            response.put("seguimiento", seguimiento);
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            Map<String, Object> error = new HashMap<>();
+            error.put("success", false);
+            error.put("error", "Error al marcar aplicación: " + e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(error);
+        }
+    }
+
+    @PostMapping("/seguimiento/{seguimientoId}/reprogramar")
+    public ResponseEntity<Map<String, Object>> reprogramarAplicacion(
+            @PathVariable Long seguimientoId,
+            @RequestParam String nuevaFecha,
+            @RequestParam String nuevaHora) {
+        try {
+            LocalDateTime fecha = LocalDateTime.parse(nuevaFecha);
+            SeguimientoAplicacion seguimiento = seguimientoService.reprogramarAplicacion(
+                seguimientoId, 
+                fecha, 
+                nuevaHora
+            );
+
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", true);
+            response.put("message", "Aplicación reprogramada exitosamente");
+            response.put("seguimiento", seguimiento);
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            Map<String, Object> error = new HashMap<>();
+            error.put("success", false);
+            error.put("error", "Error al reprogramar aplicación: " + e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(error);
+        }
+    }
+
+    private String guardarFotoEvidencia(MultipartFile foto, Long seguimientoId) throws IOException {
+        // Crear directorio si no existe
+        Path uploadPath = Paths.get("photos/evidencias/");
+        if (!Files.exists(uploadPath)) {
+            Files.createDirectories(uploadPath);
+        }
+
+        // Generar nombre único para la foto
+        String timestamp = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss"));
+        String extension = getFileExtension(foto.getOriginalFilename());
+        String fileName = String.format("evidencia_%d_%s_%s.%s", 
+            seguimientoId, timestamp, UUID.randomUUID().toString().substring(0, 8), extension);
+        
+        Path filePath = uploadPath.resolve(fileName);
+        
+        // Guardar archivo
+        Files.copy(foto.getInputStream(), filePath, StandardCopyOption.REPLACE_EXISTING);
+        
+        return "photos/evidencias/" + fileName;
     }
 }
