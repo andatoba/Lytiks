@@ -38,20 +38,21 @@ class _LoginScreenState extends State<LoginScreen> {
 
         // Navegamos según el rol del usuario
         if (mounted) {
-          final userRole = loginResponse['role']?.toString() ?? '';
+          final userRole = loginResponse['user']['rol']?.toString().toUpperCase() ?? '';
+          print('🔍 Rol del usuario recibido: $userRole');
 
-          if (userRole == 'TECHNICIAN') {
+          if (userRole == 'OPERADOR') {
             Navigator.pushReplacement(
               context,
               MaterialPageRoute(builder: (context) => const HomeScreen()),
             );
           } else {
-            // Solo usuarios técnicos pueden acceder
+            // Solo usuarios operadores pueden acceder
             if (mounted) {
               ScaffoldMessenger.of(context).showSnackBar(
                 const SnackBar(
                   content: Text(
-                    'Solo usuarios técnicos pueden acceder a esta aplicación',
+                    'Solo usuarios operadores pueden acceder a esta aplicación',
                   ),
                   backgroundColor: Colors.red,
                 ),

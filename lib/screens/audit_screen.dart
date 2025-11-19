@@ -11,6 +11,7 @@ class AuditItem {
   String? rating;
   int? calculatedScore;
   String? photoPath;
+  String? observaciones;
   bool isLocked;
 
   AuditItem(this.name, this.maxScore) : isLocked = false;
@@ -701,6 +702,21 @@ class _AuditScreenState extends State<AuditScreen> {
               ),
             ],
           ),
+          const SizedBox(height: 12),
+          TextField(
+            maxLines: 2,
+            decoration: const InputDecoration(
+              labelText: 'Observaciones',
+              hintText: 'Escriba observaciones sobre esta evaluación...',
+              border: OutlineInputBorder(),
+              isDense: true,
+            ),
+            onChanged: (value) {
+              setState(() {
+                item.observaciones = value.isEmpty ? null : value;
+              });
+            },
+          ),
           if (item.calculatedScore != null) ...[
             const SizedBox(height: 8),
             Container(
@@ -839,6 +855,7 @@ class _AuditScreenState extends State<AuditScreen> {
                 'rating': item.rating,
                 'calculatedScore': item.calculatedScore,
                 'photoPath': item.photoPath,
+                'observaciones': item.observaciones,
               },
             )
             .toList();
@@ -890,7 +907,7 @@ Hacienda: $hacienda
 Cultivo: ${cultivo.toUpperCase()}
 Tipo: $tipoAuditoria
 
-Puntuación total: $totalScore/$maxPossibleScore (${percentage.toStringAsFixed(1)}%)
+Puntuación total: ${percentage.toStringAsFixed(1)}%
 Elementos evaluados: $completedItems/$totalItems
 
 Los datos se han guardado localmente y se sincronizarán cuando haya conexión.

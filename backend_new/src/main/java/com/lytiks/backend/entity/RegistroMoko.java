@@ -29,6 +29,15 @@ public class RegistroMoko {
     @Column(name = "sintoma_id")
     private Long sintomaId;
 
+    @Column(name = "sintomas_json", columnDefinition = "TEXT")
+    private String sintomasJson;
+
+    @Column(name = "lote")
+    private String lote;
+
+    @Column(name = "area_hectareas")
+    private Double areaHectareas;
+
     @Column(name = "severidad")
     private String severidad;
 
@@ -104,6 +113,30 @@ public class RegistroMoko {
 
     public void setSintomaId(Long sintomaId) {
         this.sintomaId = sintomaId;
+    }
+
+    public String getSintomasJson() {
+        return sintomasJson;
+    }
+
+    public void setSintomasJson(String sintomasJson) {
+        this.sintomasJson = sintomasJson;
+    }
+
+    public String getLote() {
+        return lote;
+    }
+
+    public void setLote(String lote) {
+        this.lote = lote;
+    }
+
+    public Double getAreaHectareas() {
+        return areaHectareas;
+    }
+
+    public void setAreaHectareas(Double areaHectareas) {
+        this.areaHectareas = areaHectareas;
     }
 
     public String getSeveridad() {

@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import '../utils/aes_encryption.dart';
 
 class AuthService {
   // Obtener perfil real del usuario desde el backend
@@ -58,7 +59,9 @@ class AuthService {
       print('  Port: ${uri.port}');
       print('  Path: ${uri.path}');
 
-      final body = json.encode({'username': username, 'password': password});
+      // Encriptar la contraseña antes de enviarla
+      final encryptedPassword = AESEncryption.encrypt(password);
+      final body = json.encode({'username': username, 'password': encryptedPassword});
       print('Body de la petición: $body');
 
       print('⏳ Iniciando petición HTTP...');

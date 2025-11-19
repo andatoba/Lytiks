@@ -86,10 +86,14 @@ public class RegistroMokoController {
     public ResponseEntity<Map<String, Object>> registrarFoco(
             @RequestParam("numeroFoco") int numeroFoco,
             @RequestParam("clienteId") Long clienteId,
+            @RequestParam(value = "lote", required = false) String lote,
+            @RequestParam(value = "areaHectareas", required = false) Double areaHectareas,
             @RequestParam("gpsCoordinates") String gpsCoordinates,
             @RequestParam("plantasAfectadas") int plantasAfectadas,
             @RequestParam("fechaDeteccion") String fechaDeteccion,
-            @RequestParam("sintomaId") Long sintomaId,
+            @RequestParam(value = "sintomaId", required = false) Long sintomaId,
+            @RequestParam(value = "sintomasIds", required = false) String sintomasIds,
+            @RequestParam(value = "sintomasDetalles", required = false) String sintomasDetalles,
             @RequestParam("severidad") String severidad,
             @RequestParam("metodoComprobacion") String metodoComprobacion,
             @RequestParam("observaciones") String observaciones,
@@ -99,10 +103,14 @@ public class RegistroMokoController {
             System.out.println("🔥 REGISTRO MOKO - Datos recibidos:");
             System.out.println("numeroFoco: " + numeroFoco);
             System.out.println("clienteId: " + clienteId);
+            System.out.println("lote: " + lote);
+            System.out.println("areaHectareas: " + areaHectareas);
             System.out.println("gpsCoordinates: " + gpsCoordinates);
             System.out.println("plantasAfectadas: " + plantasAfectadas);
             System.out.println("fechaDeteccion: " + fechaDeteccion);
-            System.out.println("sintomaId: " + sintomaId);
+            System.out.println("sintomaId (legacy): " + sintomaId);
+            System.out.println("sintomasIds: " + sintomasIds);
+            System.out.println("sintomasDetalles: " + sintomasDetalles);
             System.out.println("severidad: " + severidad);
             System.out.println("metodoComprobacion: " + metodoComprobacion);
             System.out.println("observaciones: " + observaciones);
@@ -112,6 +120,8 @@ public class RegistroMokoController {
             RegistroMoko registro = new RegistroMoko();
             registro.setNumeroFoco(numeroFoco);
             registro.setClienteId(clienteId);
+            registro.setLote(lote);
+            registro.setAreaHectareas(areaHectareas);
             registro.setGpsCoordinates(gpsCoordinates);
             registro.setPlantasAfectadas(plantasAfectadas);
             
@@ -124,7 +134,15 @@ public class RegistroMokoController {
                 registro.setFechaDeteccion(LocalDateTime.now());
             }
             
-            registro.setSintomaId(sintomaId);
+            // Manejar síntomas múltiples o único
+            if (sintomasDetalles != null && !sintomasDetalles.isEmpty()) {
+                registro.setSintomasJson(sintomasDetalles);
+                System.out.println("✅ Guardando síntomas múltiples: " + sintomasDetalles);
+            } else if (sintomaId != null) {
+                registro.setSintomaId(sintomaId);
+                System.out.println("✅ Guardando síntoma único (legacy): " + sintomaId);
+            }
+            
             registro.setSeveridad(severidad);
             registro.setMetodoComprobacion(metodoComprobacion);
             registro.setObservaciones(observaciones);

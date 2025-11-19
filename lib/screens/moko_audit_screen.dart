@@ -1,9 +1,12 @@
-import 'dart:async';
+import 'dart:io';
+import 'package:image_picker/image_picker.dart';
+
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
+import '../services/sync_service.dart';
+import '../services/moko_audit_service.dart';
+import '../services/offline_storage_service.dart';
 import '../services/client_service.dart';
-import 'registro_moko_screen.dart';
-import 'seguimiento_focos_screen.dart';
-import 'lista_focos_screen.dart';
 
 class MokoAuditScreen extends StatefulWidget {
   final Map<String, dynamic>? clientData;
@@ -68,11 +71,11 @@ class _MokoAuditScreenState extends State<MokoAuditScreen> {
                 return;
               }
 
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) =>
-                      RegistroMokoScreen(clientData: _selectedClient),
+              // TODO: Implementar RegistroMokoScreen
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Función en desarrollo: Registro de focos'),
+                  backgroundColor: Colors.orange,
                 ),
               );
             },
@@ -85,10 +88,11 @@ class _MokoAuditScreenState extends State<MokoAuditScreen> {
             icon: Icons.visibility,
             color: const Color(0xFFED8936), // Naranja para seguimiento
             onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => const SeguimientoFocosScreen(),
+              // TODO: Implementar SeguimientoFocosScreen
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Función en desarrollo: Seguimiento de focos'),
+                  backgroundColor: Colors.orange,
                 ),
               );
             },
@@ -101,10 +105,11 @@ class _MokoAuditScreenState extends State<MokoAuditScreen> {
             icon: Icons.format_list_bulleted,
             color: const Color(0xFF38A169), // Verde para consulta
             onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => const ListaFocosScreen(),
+              // TODO: Implementar ListaFocosScreen
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Función en desarrollo: Lista de focos'),
+                  backgroundColor: Colors.orange,
                 ),
               );
             },
@@ -401,7 +406,6 @@ class _MokoAuditScreenState extends State<MokoAuditScreen> {
             Text('Buscando cliente...'),
           ],
         ),
-        
       ),
     );
 

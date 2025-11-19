@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:geolocator/geolocator.dart';
 import '../services/registro_moko_service.dart';
+import '../services/offline_storage_service.dart';
 import 'contencion_screen.dart';
 
 class RegistroMokoScreen extends StatefulWidget {
@@ -18,8 +19,11 @@ class RegistroMokoScreen extends StatefulWidget {
 class _RegistroMokoScreenState extends State<RegistroMokoScreen> {
   // Servicios
   final RegistroMokoService _registroMokoService = RegistroMokoService();
+  final OfflineStorageService _offlineStorage = OfflineStorageService();
 
   // Controllers
+  final TextEditingController _loteController = TextEditingController();
+  final TextEditingController _areaController = TextEditingController();
   final TextEditingController _plantasAfectadasController =
       TextEditingController();
   final TextEditingController _observacionesController =
@@ -29,7 +33,7 @@ class _RegistroMokoScreenState extends State<RegistroMokoScreen> {
   int? numeroFoco;
   String? gpsCoordinates;
   DateTime fechaDeteccion = DateTime.now();
-  Map<String, dynamic>? sintomaSeleccionado;
+  List<Map<String, dynamic>> sintomasSeleccionados = [];
   String? severidadAutomatica;
   File? fotoTomada;
   String? metodoComprobacion;
@@ -149,6 +153,8 @@ class _RegistroMokoScreenState extends State<RegistroMokoScreen> {
         children: [
           _buildHeader(),
           const SizedBox(height: 24),
+          _buildLoteArea(),
+          const SizedBox(height: 16),
           _buildNumeroFoco(),
           const SizedBox(height: 16),
           _buildGPS(),
@@ -307,34 +313,45 @@ class _RegistroMokoScreenState extends State<RegistroMokoScreen> {
 
   Widget _buildSintomasObservados() {
     return _buildCard(
-      title: 'Síntomas Observados',
+      title: 'Síntomas Observados (Selección Múltiple)',
       icon: Icons.visibility,
-      child: DropdownButtonFormField<Map<String, dynamic>>(
-        value: sintomaSeleccionado,
-        decoration: const InputDecoration(
-          hintText: 'Seleccione un síntoma',
-          border: OutlineInputBorder(),
-          prefixIcon: Icon(Icons.medical_services),
-        ),
-        items: sintomas.map((sintoma) {
-          return DropdownMenuItem<Map<String, dynamic>>(
-            value: sintoma,
-            child: Text(sintoma['sintomaObservable'] ?? sintoma['sintoma_observable'] ?? ''),
-          );
-        }).toList(),
-        onChanged: (value) {
-          setState(() {
-            sintomaSeleccionado = value;
-            severidadAutomatica = value?['severidad'];
-          });
-        },
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (sintomas.isEmpty)
+            const Padding(
+              padding: EdgeInsets.all(8.0),
+              child: Text('No hay síntomas disponibles'),
+            )
+          else
+            ...sintomas.map((sintoma) {
+              final nombre = sintoma['sintomaObservable'] ?? sintoma['sintoma_observable'] ?? '';
+              final isSelected = sintomasSeleccionados.any((s) => s['id'] == sintoma['id']);
+              
+              return CheckboxListTile(
+                title: Text(nombre),
+                value: isSelected,
+                onChanged: (bool? value) {
+                  setState(() {
+                    if (value == true) {
+                      sintomasSeleccionados.add(sintoma);
+                    } else {
+                      sintomasSeleccionados.removeWhere((s) => s['id'] == sintoma['id']);
+                    }
+                    _calcularSeveridadGlobal();
+                  });
+                },
+                activeColor: const Color(0xFFE53E3E),
+              );
+            }).toList(),
+        ],
       ),
     );
   }
 
   Widget _buildSeveridad() {
     return _buildCard(
-      title: 'Severidad',
+      title: 'Severidad Global',
       icon: Icons.warning,
       child: Container(
         padding: const EdgeInsets.all(16),
@@ -343,18 +360,30 @@ class _RegistroMokoScreenState extends State<RegistroMokoScreen> {
           borderRadius: BorderRadius.circular(8),
           border: Border.all(color: _getSeveridadColor()),
         ),
-        child: Row(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Icon(_getSeveridadIcon(), color: _getSeveridadColor()),
-            const SizedBox(width: 8),
-            Text(
-              severidadAutomatica ?? 'Seleccione un síntoma primero',
-              style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.bold,
-                color: _getSeveridadColor(),
-              ),
+            Row(
+              children: [
+                Icon(_getSeveridadIcon(), color: _getSeveridadColor()),
+                const SizedBox(width: 8),
+                Text(
+                  severidadAutomatica ?? 'Seleccione síntomas primero',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: _getSeveridadColor(),
+                  ),
+                ),
+              ],
             ),
+            if (sintomasSeleccionados.isNotEmpty) ...[
+              const SizedBox(height: 8),
+              Text(
+                'Síntomas seleccionados: ${sintomasSeleccionados.length}',
+                style: const TextStyle(fontSize: 12, color: Colors.grey),
+              ),
+            ],
           ],
         ),
       ),
@@ -542,6 +571,40 @@ class _RegistroMokoScreenState extends State<RegistroMokoScreen> {
     );
   }
 
+  void _calcularSeveridadGlobal() {
+    if (sintomasSeleccionados.isEmpty) {
+      severidadAutomatica = null;
+      return;
+    }
+
+    bool tieneAlta = false;
+    bool tieneMedia = false;
+    bool tieneBaja = false;
+
+    for (var sintoma in sintomasSeleccionados) {
+      final severidad = (sintoma['severidad'] ?? '').toString().toLowerCase();
+      
+      if (severidad.contains('alto') || severidad.contains('alta')) {
+        tieneAlta = true;
+      } else if (severidad.contains('medio') || severidad.contains('media')) {
+        tieneMedia = true;
+      } else if (severidad.contains('bajo') || severidad.contains('baja')) {
+        tieneBaja = true;
+      }
+    }
+
+    // Regla: Alta > Media > Baja
+    if (tieneAlta) {
+      severidadAutomatica = 'Alto';
+    } else if (tieneMedia) {
+      severidadAutomatica = 'Medio';
+    } else if (tieneBaja) {
+      severidadAutomatica = 'Bajo';
+    } else {
+      severidadAutomatica = 'Desconocido';
+    }
+  }
+
   Color _getSeveridadColor() {
     switch (severidadAutomatica?.toLowerCase()) {
       case 'bajo':
@@ -598,17 +661,56 @@ class _RegistroMokoScreenState extends State<RegistroMokoScreen> {
       Map<String, dynamic> registroData = {
         'numeroFoco': numeroFoco,
         'clienteId': widget.clientData?['id'],
+        'lote': _loteController.text,
+        'areaHectareas': double.tryParse(_areaController.text) ?? 0.0,
         'gpsCoordinates': gpsCoordinates,
         'plantasAfectadas': int.tryParse(_plantasAfectadasController.text) ?? 0,
         'fechaDeteccion': fechaDeteccion.toIso8601String(),
-        'sintomaId': sintomaSeleccionado?['id'],
+        'sintomasIds': sintomasSeleccionados.map((s) => s['id']).toList(),
+        'sintomasDetalles': sintomasSeleccionados.map((s) => {
+          'id': s['id'],
+          'nombre': s['sintomaObservable'] ?? s['sintoma_observable'],
+          'severidad': s['severidad'],
+        }).toList(),
         'severidad': severidadAutomatica,
         'metodoComprobacion': metodoComprobacion,
         'observaciones': _observacionesController.text,
       };
 
-  // Guardar en la base de datos
-  await _registroMokoService.guardarRegistro(registroData, fotoTomada);
+      // Intentar guardar en el servidor primero
+      try {
+        await _registroMokoService.guardarRegistro(registroData, fotoTomada);
+        
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Registro guardado exitosamente en el servidor'),
+              backgroundColor: Colors.green,
+            ),
+          );
+        }
+      } catch (e) {
+        // Si falla el servidor, guardar offline
+        print('⚠️ Error al guardar en servidor, guardando offline: $e');
+        
+        await _offlineStorage.savePendingMokoAudit(
+          clientId: widget.clientData?['id'] ?? 0,
+          auditDate: DateTime.now().toIso8601String(),
+          status: 'PENDIENTE',
+          mokoData: [registroData],
+          observations: _observacionesController.text,
+        );
+        
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Registro guardado offline. Se sincronizará cuando haya conexión'),
+              backgroundColor: Colors.orange,
+              duration: Duration(seconds: 4),
+            ),
+          );
+        }
+      }
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -636,6 +738,10 @@ class _RegistroMokoScreenState extends State<RegistroMokoScreen> {
   }
 
   bool _validarFormulario() {
+    if (sintomasSeleccionados.isEmpty) {
+      _showError('Debe seleccionar al menos un síntoma');
+      return false;
+    }
     if (widget.clientData == null) {
       _showError('Debe seleccionar un cliente primero');
       return false;
@@ -643,11 +749,6 @@ class _RegistroMokoScreenState extends State<RegistroMokoScreen> {
 
     if (_plantasAfectadasController.text.isEmpty) {
       _showError('Debe ingresar el número de plantas afectadas');
-      return false;
-    }
-
-    if (sintomaSeleccionado == null) {
-      _showError('Debe seleccionar un síntoma');
       return false;
     }
 
@@ -667,8 +768,46 @@ class _RegistroMokoScreenState extends State<RegistroMokoScreen> {
     }
   }
 
+  Widget _buildLoteArea() {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Lote y Área',
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _loteController,
+              decoration: const InputDecoration(
+                labelText: 'Lote',
+                hintText: 'Ej: Lote A',
+                border: OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _areaController,
+              keyboardType: TextInputType.number,
+              decoration: const InputDecoration(
+                labelText: 'Área (hectáreas)',
+                hintText: 'Ej: 6.5',
+                border: OutlineInputBorder(),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   void dispose() {
+    _loteController.dispose();
+    _areaController.dispose();
     _plantasAfectadasController.dispose();
     _observacionesController.dispose();
     super.dispose();

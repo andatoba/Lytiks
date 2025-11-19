@@ -17,7 +17,6 @@ class SigatokaAuditService {
 
   // Crear auditoría Sigatoka
   Future<Map<String, dynamic>> createSigatokaAudit({
-    required String nivelAnalisis,
     required String tipoCultivo,
     required String hacienda,
     required String lote,
@@ -29,13 +28,15 @@ class SigatokaAuditService {
     String? estadoGeneral,
     Map<String, Map<String, double?>>? basicParams,
     Map<String, List<double?>>? completeParams,
+    String? photoBase64,
     String? cedulaCliente, // Nuevo parámetro para asociar cliente
   }) async {
     try {
       // Preparar parámetros para envío
       List<Map<String, dynamic>> parameters = [];
+      String nivelAnalisis = 'Básico'; // Por defecto
 
-      if (nivelAnalisis == 'Básico' && basicParams != null) {
+      if (basicParams != null) {
         // Procesar parámetros básicos (solo semanas 0 y 10)
         basicParams.forEach((paramName, weeks) {
           if (weeks['week0'] != null) {
@@ -53,7 +54,8 @@ class SigatokaAuditService {
             });
           }
         });
-      } else if (nivelAnalisis == 'Completo' && completeParams != null) {
+      } else if (completeParams != null) {
+        nivelAnalisis = 'Completo';
         // Procesar parámetros completos (todas las semanas)
         completeParams.forEach((paramName, weekValues) {
           for (int week = 0; week < weekValues.length; week++) {
@@ -80,7 +82,8 @@ class SigatokaAuditService {
         'stoverRecomendado': stoverRecomendado,
         'estadoGeneral': estadoGeneral ?? _calculateOverallStatus(parameters),
         'parameters': parameters,
-        'cedulaCliente': cedulaCliente, // Incluir cédula del cliente
+        if (photoBase64 != null) 'photoBase64': photoBase64,
+        if (cedulaCliente != null) 'cedulaCliente': cedulaCliente,
       };
 
       final uri = (await baseUri).replace(path: '${_basePath}/sigatoka/create');
@@ -173,6 +176,46 @@ class SigatokaAuditService {
     }
   }
 
+  // Obtener auditorías por tipo de cultivo
+  Future<List<Map<String, dynamic>>> getSigatokaAuditsByCrop(
+    String tipoCultivo,
+  ) async {
+    try {
+      final uri = (await baseUri).replace(path: '${_basePath}/sigatoka/crop/$tipoCultivo');
+      final response = await http.get(
+        uri,
+        headers: {'Content-Type': 'application/json'},
+      );
+
+      if (response.statusCode == 200) {
+        final List<dynamic> data = json.decode(response.body);
+        return data.map((audit) => audit as Map<String, dynamic>).toList();
+      } else {
+        return [];
+      }
+    } catch (e) {
+      print('Error al obtener auditorías por cultivo: $e');
+      return [];
+    }
+  }
+
+  // Actualizar estado de auditoría
+  Future<bool> updateSigatokaAuditStatus(int auditId, String newStatus) async {
+    try {
+      final uri = (await baseUri).replace(path: '${_basePath}/sigatoka/$auditId/status');
+      final response = await http.put(
+        uri,
+        headers: {'Content-Type': 'application/json'},
+        body: json.encode({'estado': newStatus}),
+      );
+
+      return response.statusCode == 200;
+    } catch (e) {
+      print('Error al actualizar estado: $e');
+      return false;
+    }
+  }
+
   // Calcular estado general basado en parámetros
   String _calculateOverallStatus(List<Map<String, dynamic>> parameters) {
     if (parameters.isEmpty) return 'Sin evaluar';
@@ -211,6 +254,28 @@ class SigatokaAuditService {
     } catch (e) {
       print('Error de conectividad con servidor Sigatoka: $e');
       return false;
+    }
+  }
+
+  // Buscar cliente por cédula
+  Future<Map<String, dynamic>?> searchClientByCedula(String cedula) async {
+    try {
+      final uri = (await baseUri).replace(path: '${_basePath}/sigatoka/client/$cedula');
+      final response = await http.get(
+        uri,
+        headers: {'Content-Type': 'application/json'},
+      );
+
+      if (response.statusCode == 200) {
+        final result = json.decode(response.body);
+        if (result['success'] == true) {
+          return result['client'];
+        }
+      }
+      return null;
+    } catch (e) {
+      print('Error al buscar cliente: $e');
+      return null;
     }
   }
 }

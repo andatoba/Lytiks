@@ -18,8 +18,6 @@ class GuardarAplicacionScreen extends StatefulWidget {
 
 class _GuardarAplicacionScreenState extends State<GuardarAplicacionScreen> {
   final RegistroMokoService _service = RegistroMokoService();
-  final TextEditingController _loteController = TextEditingController();
-  final TextEditingController _areaController = TextEditingController();
   final TextEditingController _dosisController = TextEditingController();
   
   DateTime _fechaInicio = DateTime.now();
@@ -52,8 +50,6 @@ class _GuardarAplicacionScreenState extends State<GuardarAplicacionScreen> {
             _buildProductoInfo(),
             const SizedBox(height: 16),
             _buildPlanInfo(),
-            const SizedBox(height: 16),
-            _buildLoteArea(),
             const SizedBox(height: 16),
             _buildDosisYMezcla(),
             const SizedBox(height: 16),
@@ -105,41 +101,7 @@ class _GuardarAplicacionScreenState extends State<GuardarAplicacionScreen> {
     );
   }
 
-  Widget _buildLoteArea() {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              'Lote y Área',
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: _loteController,
-              decoration: const InputDecoration(
-                labelText: 'Lote',
-                hintText: 'Ej: Lote A',
-                border: OutlineInputBorder(),
-              ),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: _areaController,
-              keyboardType: TextInputType.number,
-              decoration: const InputDecoration(
-                labelText: 'Área (hectáreas)',
-                hintText: 'Ej: 6.5',
-                border: OutlineInputBorder(),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
+
 
   Widget _buildDosisYMezcla() {
     return Card(
@@ -343,8 +305,6 @@ class _GuardarAplicacionScreenState extends State<GuardarAplicacionScreen> {
         'productoId': widget.producto['id'],
         'productoNombre': widget.producto['nombre'],
         'plan': 'Moko',
-        'lote': _loteController.text,
-        'areaHectareas': double.tryParse(_areaController.text) ?? 0.0,
         'dosis': _dosisController.text,
         'fechaInicio': _fechaInicio.toIso8601String(),
         'frecuenciaDias': _frecuenciaDias,
@@ -381,14 +341,6 @@ class _GuardarAplicacionScreenState extends State<GuardarAplicacionScreen> {
   }
 
   bool _validarFormulario() {
-    if (_loteController.text.isEmpty) {
-      _showError('Debe ingresar el lote');
-      return false;
-    }
-    if (_areaController.text.isEmpty) {
-      _showError('Debe ingresar el área');
-      return false;
-    }
     if (_dosisController.text.isEmpty) {
       _showError('Debe ingresar la dosis');
       return false;
@@ -404,8 +356,6 @@ class _GuardarAplicacionScreenState extends State<GuardarAplicacionScreen> {
 
   @override
   void dispose() {
-    _loteController.dispose();
-    _areaController.dispose();
     _dosisController.dispose();
     super.dispose();
   }

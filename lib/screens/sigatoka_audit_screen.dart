@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'dart:io';
 import 'package:image_picker/image_picker.dart';
-import '../services/sigatoka_audit_service.dart';
 import '../services/sync_service.dart';
 import '../services/offline_storage_service.dart';
 import '../services/client_service.dart';
@@ -511,7 +510,7 @@ class _SigatokaAuditScreenState extends State<SigatokaAuditScreen> {
       final uniqueName =
           'sigatoka_${DateTime.now().millisecondsSinceEpoch}_${pickedFile.name}';
       final newPath = '${directory.path}/$uniqueName';
-      final newFile = await File(pickedFile.path).copy(newPath);
+      await File(pickedFile.path).copy(newPath);
       setState(() {
         _sigatokaPhoto = File(pickedFile.path);
       });
@@ -1238,7 +1237,6 @@ class _SigatokaAuditScreenState extends State<SigatokaAuditScreen> {
         try {
           // Intentar subir inmediatamente
           final result = await _sigatokaService.createSigatokaAudit(
-            nivelAnalisis: 'Básico',
             tipoCultivo: _selectedCrop,
             hacienda: _selectedClient!['hacienda'] ?? 'Hacienda Principal',
             lote: 'Lote 1',

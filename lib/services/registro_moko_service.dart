@@ -169,11 +169,22 @@ class RegistroMokoService {
       // Agregar campos del formulario
       request.fields['numeroFoco'] = registroData['numeroFoco'].toString();
       request.fields['clienteId'] = registroData['clienteId'].toString();
+      request.fields['lote'] = registroData['lote'] ?? '';
+      request.fields['areaHectareas'] = registroData['areaHectareas'].toString();
       request.fields['gpsCoordinates'] = registroData['gpsCoordinates'] ?? '';
       request.fields['plantasAfectadas'] = registroData['plantasAfectadas']
           .toString();
       request.fields['fechaDeteccion'] = registroData['fechaDeteccion'];
-      request.fields['sintomaId'] = registroData['sintomaId'].toString();
+      
+      // Enviar síntomas múltiples como JSON
+      if (registroData.containsKey('sintomasIds')) {
+        request.fields['sintomasIds'] = json.encode(registroData['sintomasIds']);
+        request.fields['sintomasDetalles'] = json.encode(registroData['sintomasDetalles']);
+      } else if (registroData.containsKey('sintomaId')) {
+        // Backward compatibility
+        request.fields['sintomaId'] = registroData['sintomaId'].toString();
+      }
+      
       request.fields['severidad'] = registroData['severidad'] ?? '';
       request.fields['metodoComprobacion'] =
           registroData['metodoComprobacion'] ?? '';
