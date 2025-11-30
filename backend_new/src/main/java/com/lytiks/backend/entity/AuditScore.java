@@ -1,9 +1,12 @@
 package com.lytiks.backend.entity;
 
 import jakarta.persistence.*;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.fasterxml.jackson.annotation.JsonBackReference;
 
 @Entity
 @Table(name = "audit_scores")
+@JsonIgnoreProperties({"hibernateLazyInitializer", "handler"})
 public class AuditScore {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -11,6 +14,7 @@ public class AuditScore {
     
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "audit_id", nullable = false)
+    @JsonBackReference
     private Audit audit;
     
     @Column(name = "categoria", nullable = false)

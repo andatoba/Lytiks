@@ -131,10 +131,35 @@ public class SigatokaController {
 
     // Obtener todas las auditorías Sigatoka
     @GetMapping("/all")
-    public ResponseEntity<List<SigatokaAudit>> getAllSigatokaAudits() {
+    public ResponseEntity<List<Map<String, Object>>> getAllSigatokaAudits() {
         try {
             List<SigatokaAudit> audits = sigatokaAuditRepository.findAll();
-            return ResponseEntity.ok(audits);
+            List<Map<String, Object>> auditsEnriquecidos = new java.util.ArrayList<>();
+            for (SigatokaAudit audit : audits) {
+                Map<String, Object> auditMap = new java.util.HashMap<>();
+                auditMap.put("id", audit.getId());
+                auditMap.put("type", "Sigatoka");
+                auditMap.put("fecha", audit.getFecha());
+                auditMap.put("cedulaCliente", audit.getCedulaCliente());
+                auditMap.put("hacienda", audit.getHacienda());
+                auditMap.put("lote", audit.getLote());
+                auditMap.put("estado", audit.getEstado());
+                auditMap.put("tecnicoId", audit.getTecnicoId());
+                auditMap.put("observaciones", audit.getObservaciones());
+                auditMap.put("nivelAnalisis", audit.getNivelAnalisis());
+                auditMap.put("tipoCultivo", audit.getTipoCultivo());
+                auditMap.put("estadoGeneral", audit.getEstadoGeneral());
+                // Enriquecer con nombre del cliente
+                if (audit.getClienteId() != null) {
+                    clientRepository.findById(audit.getClienteId()).ifPresent(cliente -> {
+                        auditMap.put("nombreCliente", cliente.getNombreCompleto());
+                    });
+                } else {
+                    auditMap.put("nombreCliente", "Cliente Desconocido");
+                }
+                auditsEnriquecidos.add(auditMap);
+            }
+            return ResponseEntity.ok(auditsEnriquecidos);
         } catch (Exception e) {
             return ResponseEntity.badRequest().build();
         }
@@ -256,7 +281,7 @@ public class SigatokaController {
                 return ResponseEntity.ok(response);
             } else {
                 response.put("success", false);
-                response.put("message", "Cliente no encontrado");
+                response.put("message", "No se encontró ningún cliente registrado con esa cédula.");
                 return ResponseEntity.status(404).body(response);
             }
         } catch (Exception e) {

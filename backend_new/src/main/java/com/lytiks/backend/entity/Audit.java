@@ -1,14 +1,18 @@
 package com.lytiks.backend.entity;
 
 import jakarta.persistence.*;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.fasterxml.jackson.annotation.JsonManagedReference;
 import java.time.LocalDateTime;
 import java.util.List;
 
 @Entity
 @Table(name = "audits")
+@JsonIgnoreProperties({"hibernateLazyInitializer", "handler"})
 public class Audit {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "client_id")
+    @JsonManagedReference
     private Client client;
 
     @Id
@@ -37,9 +41,11 @@ public class Audit {
     private String observaciones;
     
     @OneToMany(mappedBy = "audit", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
+    @JsonManagedReference
     private List<AuditScore> scores;
     
     @OneToMany(mappedBy = "audit", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
+    @JsonManagedReference
     private List<AuditPhoto> photos;
     
     // Constructors
@@ -140,4 +146,15 @@ public class Audit {
     public void setClient(Client client) {
         this.client = client;
     }
+
+        @Transient
+        private String cedulaCliente;
+
+        public String getCedulaCliente() {
+            return cedulaCliente;
+        }
+
+        public void setCedulaCliente(String cedulaCliente) {
+            this.cedulaCliente = cedulaCliente;
+        }
 }

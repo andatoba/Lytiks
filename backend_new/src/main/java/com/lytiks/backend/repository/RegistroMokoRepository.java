@@ -14,6 +14,8 @@ public interface RegistroMokoRepository extends JpaRepository<RegistroMoko, Long
     Integer getNextFocoNumber();
     
     List<RegistroMoko> findByClienteIdOrderByFechaCreacionDesc(Long clienteId);
+    @Query(value = "SELECT r.* FROM registro_moko r JOIN clients c ON r.cliente_id = c.id WHERE c.cedula = :cedula ORDER BY r.fecha_creacion DESC", nativeQuery = true)
+    List<RegistroMoko> findByCedulaCliente(String cedula);
     
     List<RegistroMoko> findByOrderByFechaCreacionDesc();
     

@@ -1,6 +1,6 @@
 package com.lytiks.backend.controller;
 
-import com.lytiks.backend.entity.ProductoContencion;
+import com.lytiks.backend.entity.Producto;
 import com.lytiks.backend.repository.ProductoRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
@@ -18,9 +18,9 @@ public class ProductoController {
     private ProductoRepository productoRepository;
 
     @GetMapping("/productos")
-    public ResponseEntity<List<ProductoContencion>> getProductos() {
+    public ResponseEntity<List<Producto>> getProductos() {
         try {
-            List<ProductoContencion> productos = productoRepository.findAll();
+            List<Producto> productos = productoRepository.findAll();
             return ResponseEntity.ok(productos);
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(null);

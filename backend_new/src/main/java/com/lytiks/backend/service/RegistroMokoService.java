@@ -33,6 +33,10 @@ public class RegistroMokoService {
     public List<RegistroMoko> getRegistrosByClienteId(Long clienteId) {
         return registroMokoRepository.findByClienteIdOrderByFechaCreacionDesc(clienteId);
     }
+
+    public List<RegistroMoko> getRegistrosByCedula(String cedula) {
+        return registroMokoRepository.findByCedulaCliente(cedula);
+    }
     
     public boolean deleteRegistro(Long id) {
         Optional<RegistroMoko> registro = registroMokoRepository.findById(id);

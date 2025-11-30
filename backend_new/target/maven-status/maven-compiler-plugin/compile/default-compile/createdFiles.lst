@@ -1,3 +1,4 @@
+com\lytiks\backend\entity\Producto.class
 com\lytiks\backend\config\SecurityConfig.class
 com\lytiks\backend\repository\ProductoContencionRepository.class
 com\lytiks\backend\entity\AuditPhoto.class
@@ -22,6 +23,7 @@ com\lytiks\backend\util\AESEncryption.class
 com\lytiks\backend\controller\AplicacionController.class
 com\lytiks\backend\entity\SigatokaPhoto.class
 com\lytiks\backend\repository\UserRepository.class
+com\lytiks\backend\service\SigatokaAuditService.class
 com\lytiks\backend\repository\AuditRepository.class
 com\lytiks\backend\config\DataInitializer.class
 com\lytiks\backend\entity\ProductoContencion.class
@@ -41,6 +43,7 @@ com\lytiks\backend\controller\SigatokaController.class
 com\lytiks\backend\repository\IsUsuarioRepository.class
 com\lytiks\backend\entity\SeguimientoAplicacion.class
 com\lytiks\backend\entity\AuditScore.class
+com\lytiks\backend\controller\AuditoriaConsultaController.class
 com\lytiks\backend\controller\RegistroMokoController.class
 com\lytiks\backend\repository\SigatokaAuditRepository.class
 com\lytiks\backend\repository\SeguimientoAplicacionRepository.class
@@ -49,3 +52,4 @@ com\lytiks\backend\controller\SintomaController.class
 com\lytiks\backend\controller\ProductoController.class
 com\lytiks\backend\repository\SigatokaParameterRepository.class
 com\lytiks\backend\entity\SeguimientoMoko.class
+com\lytiks\backend\service\AuditService.class

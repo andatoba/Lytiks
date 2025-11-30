@@ -522,7 +522,7 @@ class InicioTab extends StatelessWidget {
                     Navigator.push(
                       context,
                       MaterialPageRoute(
-                        builder: (context) => const AuditScreen(),
+                        builder: (context) => AuditScreen(),
                       ),
                     ).then((_) => onUpdateCount());
                   },

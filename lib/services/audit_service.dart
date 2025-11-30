@@ -4,6 +4,30 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter/foundation.dart';
 
 class AuditService {
+    // Obtener todas las auditorías (normales, moko, sigatoka) creadas por un usuario
+    Future<Map<String, dynamic>> getAllAuditsByUser(int userId) async {
+      try {
+        final headers = await _getHeaders();
+        final uri = (await baseUri).replace(path: '$_basePath/audits/user/$userId');
+        final response = await http.get(
+          uri,
+          headers: headers,
+        );
+
+        if (response.statusCode == 200) {
+          return json.decode(response.body);
+        } else if (response.statusCode == 401) {
+          throw Exception('Token expirado. Por favor, inicia sesión nuevamente.');
+        } else {
+          throw Exception('Error al obtener auditorías del usuario: ${response.body}');
+        }
+      } catch (e) {
+        if (e.toString().contains('SocketException')) {
+          throw Exception('No se puede conectar al servidor.');
+        }
+        rethrow;
+      }
+    }
   static const String _host = '5.161.198.89';
   static const int _port = 8081;
   static const String _basePath = '/api';

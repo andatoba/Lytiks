@@ -4,6 +4,33 @@ import 'package:http/http.dart' as http;
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 class AuditManagementService {
+      // Consultar auditorías por número de cédula
+      Future<List<Map<String, dynamic>>> getAuditsByCedula(String cedula) async {
+        final uri = await baseUri.then((base) => base.replace(path: '$_basePath/auditorias/por-cedula/$cedula'));
+        final response = await http.get(
+          uri,
+          headers: {'Content-Type': 'application/json'},
+        );
+        if (response.statusCode == 200) {
+          final List<dynamic> auditsJson = json.decode(response.body);
+          return auditsJson.cast<Map<String, dynamic>>();
+        } else {
+          throw Exception('Error al obtener auditorías por cédula: ${response.body}');
+        }
+      }
+    // Buscar auditorías por tecnicoId
+    Future<Map<String, dynamic>> getAuditsByTechnicoId(int tecnicoId) async {
+      final uri = (await baseUri).replace(path: '$_basePath/audits/technician/$tecnicoId');
+      final response = await http.get(
+        uri,
+        headers: {'Content-Type': 'application/json'},
+      );
+      if (response.statusCode == 200) {
+        return json.decode(response.body);
+      } else {
+        throw Exception('Error al consultar auditorías por técnico: ${response.body}');
+      }
+    }
   static const String _host = '5.161.198.89';
   static const int _port = 8081;
   static const String _basePath = '/api';
@@ -17,8 +44,8 @@ class AuditManagementService {
     List<Map<String, dynamic>> allAudits = [];
 
     try {
-      // Obtener auditorías Moko
-      final uri = (await baseUri).replace(path: '${_basePath}/moko/all');
+        // Obtener auditorías Moko
+        final uri = (await baseUri).replace(path: '${_basePath}/moko/registros');
       final mokoResponse = await http.get(
         uri,
         headers: {'Content-Type': 'application/json'},
@@ -31,7 +58,8 @@ class AuditManagementService {
             'id': audit['id'],
             'type': 'Moko',
             'fecha': audit['fecha'],
-            'hacienda': audit['hacienda'] ?? 'N/A',
+            'cedulaCliente': audit['cedulaCliente'] ?? audit['cedula'] ?? '',
+            'nombreCliente': audit['nombreCliente'] ?? 'Cliente Desconocido',
             'lote': audit['lote'] ?? 'N/A',
             'estado': audit['estado'] ?? 'PENDIENTE',
             'tecnicoId': audit['tecnicoId'],
@@ -58,7 +86,8 @@ class AuditManagementService {
             'id': audit['id'],
             'type': 'Sigatoka',
             'fecha': audit['fecha'],
-            'hacienda': audit['hacienda'] ?? 'N/A',
+            'cedulaCliente': audit['cedulaCliente'] ?? audit['cedula'] ?? '',
+            'nombreCliente': audit['nombreCliente'] ?? 'Cliente Desconocido',
             'lote': audit['lote'] ?? 'N/A',
             'estado': audit['estado'] ?? 'PENDIENTE',
             'tecnicoId': audit['tecnicoId'],
@@ -85,8 +114,9 @@ class AuditManagementService {
           allAudits.add({
             'id': audit['id'],
             'type': 'Regular',
-            'date': audit['fecha'],
-            'clientName': audit['hacienda'] ?? 'N/A',
+            'fecha': audit['fecha'],
+            'cedulaCliente': audit['cedulaCliente'] ?? audit['cedula'] ?? '',
+            'nombreCliente': audit['nombreCliente'] ?? 'Cliente Desconocido',
             'cultivo': audit['cultivo'] ?? 'N/A',
             'status': audit['estado'] ?? 'PENDIENTE',
             'tecnicoId': audit['tecnicoId'],

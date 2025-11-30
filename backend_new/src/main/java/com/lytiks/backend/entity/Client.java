@@ -1,11 +1,18 @@
 package com.lytiks.backend.entity;
 
 import jakarta.persistence.*;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.fasterxml.jackson.annotation.JsonBackReference;
 import java.time.LocalDateTime;
+import java.util.List;
 
 @Entity
 @Table(name = "clients")
+@JsonIgnoreProperties({"hibernateLazyInitializer", "handler"})
 public class Client {
+        @OneToMany(mappedBy = "client", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
+        @JsonBackReference
+        private List<Audit> audits;
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;

@@ -16,8 +16,9 @@ public class ProductoContencion {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(name = "nombre")
-    private String nombre;
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "id_producto")
+    private Producto producto;
 
     @Column(name = "presentacion")
     private String presentacion;

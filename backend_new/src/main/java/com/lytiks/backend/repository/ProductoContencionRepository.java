@@ -11,15 +11,7 @@ import java.util.Optional;
 @Repository
 public interface ProductoContencionRepository extends JpaRepository<ProductoContencion, Long> {
 
-    // Buscar por nombre
-    Optional<ProductoContencion> findByNombre(String nombre);
-
-    // Buscar por nombre que contenga texto (case insensitive)
-    @Query("SELECT p FROM ProductoContencion p WHERE LOWER(p.nombre) LIKE LOWER(CONCAT('%', :nombre, '%'))")
-    List<ProductoContencion> findByNombreContainingIgnoreCase(String nombre);
-
-    // Obtener productos ordenados por nombre
-    List<ProductoContencion> findAllByOrderByNombreAsc();
+    // Métodos personalizados pueden ir aquí, por ejemplo búsquedas por campos de Producto
 
     // Contar total de productos
     @Query("SELECT COUNT(p) FROM ProductoContencion p")

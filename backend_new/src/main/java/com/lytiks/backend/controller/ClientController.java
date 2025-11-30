@@ -50,7 +50,14 @@ public class ClientController {
                 System.out.println("Cliente encontrado: " + clientData);
                 response = clientData; // Enviar directamente los datos del cliente
             } else {
-                response.put("error", "No se encontró ningún cliente con la cédula: " + cedula);
+                // Buscar hacienda por cédula si existe
+                Optional<Client> hacienda = clientRepository.findByCedula(cedula);
+                String nombreFinca = hacienda.isPresent() ? hacienda.get().getFincaNombre() : "";
+                if (nombreFinca != null && !nombreFinca.isEmpty()) {
+                    response.put("error", "No se encontró ningún cliente registrado, pero la hacienda asociada es: " + nombreFinca);
+                } else {
+                    response.put("error", "No se encontró ningún cliente ni hacienda registrada con la cédula: " + cedula);
+                }
             }
             
             return ResponseEntity.ok(response);
@@ -241,7 +248,7 @@ public class ClientController {
                 return ResponseEntity.ok(response);
             } else {
                 response.put("success", false);
-                response.put("message", "Cliente no encontrado");
+                response.put("message", "No se encontró ningún cliente registrado con ese ID.");
                 return ResponseEntity.notFound().build();
             }
             
@@ -293,7 +300,7 @@ public class ClientController {
                 return ResponseEntity.ok(response);
             } else {
                 response.put("success", false);
-                response.put("message", "Cliente no encontrado");
+                response.put("message", "No se encontró ningún cliente registrado con esa cédula.");
                 return ResponseEntity.notFound().build();
             }
         } catch (Exception e) {

@@ -1,14 +1,18 @@
 package com.lytiks.backend.controller;
 
 import com.lytiks.backend.entity.RegistroMoko;
+import com.lytiks.backend.entity.Client;
+import com.lytiks.backend.repository.ClientRepository;
 import com.lytiks.backend.entity.Sintoma;
 import com.lytiks.backend.entity.ProductoContencion;
+import com.lytiks.backend.entity.Producto;
 import com.lytiks.backend.entity.Aplicacion;
 import com.lytiks.backend.entity.SeguimientoAplicacion;
 import com.lytiks.backend.service.RegistroMokoService;
 import com.lytiks.backend.service.SintomaService;
 import com.lytiks.backend.service.SeguimientoAplicacionService;
 import com.lytiks.backend.repository.ProductoContencionRepository;
+import com.lytiks.backend.repository.ProductoRepository;
 import com.lytiks.backend.repository.AplicacionRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
@@ -39,10 +43,16 @@ public class RegistroMokoController {
     private RegistroMokoService registroMokoService;
 
     @Autowired
+    private ClientRepository clientRepository;
+
+    @Autowired
     private SintomaService sintomaService;
     
     @Autowired
-    private ProductoContencionRepository productoRepository;
+    private ProductoContencionRepository productoContencionRepository;
+
+    @Autowired
+    private ProductoRepository productoRepository;
     
     @Autowired
     private AplicacionRepository aplicacionRepository;
@@ -174,10 +184,41 @@ public class RegistroMokoController {
     }
 
     @GetMapping("/registros")
-    public ResponseEntity<List<RegistroMoko>> getRegistros() {
+    public ResponseEntity<List<Map<String, Object>>> getRegistros() {
         try {
             List<RegistroMoko> registros = registroMokoService.getAllRegistros();
-            return ResponseEntity.ok(registros);
+            List<Map<String, Object>> registrosEnriquecidos = new java.util.ArrayList<>();
+            for (RegistroMoko registro : registros) {
+                Map<String, Object> regMap = new java.util.HashMap<>();
+                regMap.put("id", registro.getId());
+                regMap.put("numeroFoco", registro.getNumeroFoco());
+                regMap.put("clienteId", registro.getClienteId());
+                regMap.put("gpsCoordinates", registro.getGpsCoordinates());
+                regMap.put("plantasAfectadas", registro.getPlantasAfectadas());
+                regMap.put("fechaDeteccion", registro.getFechaDeteccion());
+                regMap.put("sintomaId", registro.getSintomaId());
+                regMap.put("sintomasJson", registro.getSintomasJson());
+                regMap.put("lote", registro.getLote());
+                regMap.put("areaHectareas", registro.getAreaHectareas());
+                regMap.put("severidad", registro.getSeveridad());
+                regMap.put("metodoComprobacion", registro.getMetodoComprobacion());
+                regMap.put("observaciones", registro.getObservaciones());
+                regMap.put("fotoPath", registro.getFotoPath());
+                regMap.put("fechaCreacion", registro.getFechaCreacion());
+                regMap.put("cedulaCliente", registro.getCedulaCliente());
+                // Enriquecer con datos del cliente
+                if (registro.getClienteId() != null) {
+                    clientRepository.findById(registro.getClienteId()).ifPresent(cliente -> {
+                        regMap.put("nombreCliente", cliente.getNombreCompleto());
+                        regMap.put("hacienda", cliente.getFincaNombre());
+                    });
+                } else {
+                    regMap.put("nombreCliente", "N/A");
+                    regMap.put("hacienda", "N/A");
+                }
+                registrosEnriquecidos.add(regMap);
+            }
+            return ResponseEntity.ok(registrosEnriquecidos);
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(null);
         }
@@ -401,7 +442,7 @@ public class RegistroMokoController {
     @GetMapping("/productos-contencion")
     public ResponseEntity<List<ProductoContencion>> getProductosContencion() {
         try {
-            List<ProductoContencion> productos = productoRepository.findAll();
+            List<ProductoContencion> productos = productoContencionRepository.findAll();
             return ResponseEntity.ok(productos);
         } catch (Exception e) {
             System.err.println("Error obteniendo productos: " + e.getMessage());
@@ -413,42 +454,71 @@ public class RegistroMokoController {
     public ResponseEntity<Map<String, Object>> initProductos() {
         try {
             // Limpiar productos existentes
+            productoContencionRepository.deleteAll();
             productoRepository.deleteAll();
-            
+
             // Crear productos con las especificaciones correctas
+            Producto goldenProducto = new Producto();
+            goldenProducto.setNombre("Golden Crop");
+            goldenProducto.setDetalle("Producto para contención");
+            goldenProducto.setCantidad(1);
+            goldenProducto.setPesoKg(1.0);
+            productoRepository.save(goldenProducto);
+
             ProductoContencion golden = new ProductoContencion();
-            golden.setNombre("Golden Crop");
+            golden.setProducto(goldenProducto);
             golden.setPresentacion("1L");
             golden.setDosisSugerida("1L/400L/agua/ha");
             golden.setUrl("https://example.com/golden-crop");
-            productoRepository.save(golden);
-            
+            productoContencionRepository.save(golden);
+
+            Producto previotikProducto = new Producto();
+            previotikProducto.setNombre("Previotik Crop");
+            previotikProducto.setDetalle("Producto para contención");
+            previotikProducto.setCantidad(1);
+            previotikProducto.setPesoKg(6.6);
+            productoRepository.save(previotikProducto);
+
             ProductoContencion previotik = new ProductoContencion();
-            previotik.setNombre("Previotik Crop");
+            previotik.setProducto(previotikProducto);
             previotik.setPresentacion("6.6kg");
             previotik.setDosisSugerida("6.6kg/ha (con fertilizante)");
             previotik.setUrl("https://example.com/previotik-crop");
-            productoRepository.save(previotik);
-            
+            productoContencionRepository.save(previotik);
+
+            Producto saferbacterProducto = new Producto();
+            saferbacterProducto.setNombre("Saferbacter");
+            saferbacterProducto.setDetalle("Producto para contención");
+            saferbacterProducto.setCantidad(1);
+            saferbacterProducto.setPesoKg(0.25);
+            productoRepository.save(saferbacterProducto);
+
             ProductoContencion saferbacter = new ProductoContencion();
-            saferbacter.setNombre("Saferbacter");
+            saferbacter.setProducto(saferbacterProducto);
             saferbacter.setPresentacion("250g");
             saferbacter.setDosisSugerida("250g/400L/agua/ha");
             saferbacter.setUrl("https://example.com/saferbacter");
-            productoRepository.save(saferbacter);
-            
+            productoContencionRepository.save(saferbacter);
+
+            Producto safersoilProducto = new Producto();
+            safersoilProducto.setNombre("Safersoil Trichoderma");
+            safersoilProducto.setDetalle("Producto para contención");
+            safersoilProducto.setCantidad(1);
+            safersoilProducto.setPesoKg(0.25);
+            productoRepository.save(safersoilProducto);
+
             ProductoContencion safersoil = new ProductoContencion();
-            safersoil.setNombre("Safersoil Trichoderma");
+            safersoil.setProducto(safersoilProducto);
             safersoil.setPresentacion("250g");
             safersoil.setDosisSugerida("250g/400L/agua/ha");
             safersoil.setUrl("https://example.com/safersoil-trichoderma");
-            productoRepository.save(safersoil);
-            
+            productoContencionRepository.save(safersoil);
+
             Map<String, Object> response = new HashMap<>();
             response.put("success", true);
             response.put("message", "Productos inicializados correctamente");
             response.put("total", 4);
-            
+
             return ResponseEntity.ok(response);
         } catch (Exception e) {
             Map<String, Object> error = new HashMap<>();

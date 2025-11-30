@@ -6,12 +6,14 @@ import com.lytiks.backend.entity.Audit;
 import com.lytiks.backend.entity.AuditScore;
 import com.lytiks.backend.entity.Sintoma;
 import com.lytiks.backend.entity.ProductoContencion;
+import com.lytiks.backend.entity.Producto;
 import com.lytiks.backend.repository.UserRepository;
 import com.lytiks.backend.repository.ClientRepository;
 import com.lytiks.backend.repository.AuditRepository;
 import com.lytiks.backend.repository.AuditScoreRepository;
 import com.lytiks.backend.repository.SintomaRepository;
 import com.lytiks.backend.repository.ProductoRepository;
+import com.lytiks.backend.repository.ProductoContencionRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -40,6 +42,9 @@ public class DataInitializer implements CommandLineRunner {
     private ProductoRepository productoRepository;
 
     @Autowired
+    private ProductoContencionRepository productoContencionRepository;
+
+    @Autowired
     private PasswordEncoder passwordEncoder;
 
     @Override
@@ -52,36 +57,56 @@ public class DataInitializer implements CommandLineRunner {
     }
 
     private void initializeProductos() {
-        if (productoRepository.count() == 0) {
+        if (productoContencionRepository.count() == 0) {
             System.out.println("🌿 Inicializando productos de contención...");
 
-            ProductoContencion p1 = new ProductoContencion(null,
-                    "Cobre Hidróxido 50% WP",
-                    "Polvo mojable - 250 g",
-                    "2 g / L",
-                    "https://example.com/productos/cobre_hidroxido_250g.pdf");
+            Producto p1 = new Producto();
+            p1.setNombre("Cobre Hidróxido 50% WP");
+            p1.setCantidad(1);
+            p1.setPesoKg(0.25);
             productoRepository.save(p1);
+            ProductoContencion pc1 = new ProductoContencion();
+            pc1.setProducto(p1);
+            pc1.setPresentacion("Polvo mojable - 250 g");
+            pc1.setDosisSugerida("2 g / L");
+            pc1.setUrl("https://example.com/productos/cobre_hidroxido_250g.pdf");
+            productoContencionRepository.save(pc1);
 
-            ProductoContencion p2 = new ProductoContencion(null,
-                    "Ciprodinazol 20% SC",
-                    "Concentrado soluble - 1 L",
-                    "10 ml / 10 L",
-                    "https://example.com/productos/ciprodinazol_1l.pdf");
+            Producto p2 = new Producto();
+            p2.setNombre("Ciprodinazol 20% SC");
+            p2.setCantidad(1);
+            p2.setPesoKg(1.0);
             productoRepository.save(p2);
+            ProductoContencion pc2 = new ProductoContencion();
+            pc2.setProducto(p2);
+            pc2.setPresentacion("Concentrado soluble - 1 L");
+            pc2.setDosisSugerida("10 ml / 10 L");
+            pc2.setUrl("https://example.com/productos/ciprodinazol_1l.pdf");
+            productoContencionRepository.save(pc2);
 
-            ProductoContencion p3 = new ProductoContencion(null,
-                    "Cloranfenicol 10% WG",
-                    "Gránulos - 500 g",
-                    "5 g / L",
-                    "https://example.com/productos/cloranfenicol_500g.pdf");
+            Producto p3 = new Producto();
+            p3.setNombre("Cloranfenicol 10% WG");
+            p3.setCantidad(1);
+            p3.setPesoKg(0.5);
             productoRepository.save(p3);
+            ProductoContencion pc3 = new ProductoContencion();
+            pc3.setProducto(p3);
+            pc3.setPresentacion("Gránulos - 500 g");
+            pc3.setDosisSugerida("5 g / L");
+            pc3.setUrl("https://example.com/productos/cloranfenicol_500g.pdf");
+            productoContencionRepository.save(pc3);
 
-            ProductoContencion p4 = new ProductoContencion(null,
-                    "Biofungicida Bacillus subtilis",
-                    "Suspensión - 500 ml",
-                    "50 ml / 10 L",
-                    "https://example.com/productos/bacillus_subtilis_500ml.pdf");
+            Producto p4 = new Producto();
+            p4.setNombre("Biofungicida Bacillus subtilis");
+            p4.setCantidad(1);
+            p4.setPesoKg(0.5);
             productoRepository.save(p4);
+            ProductoContencion pc4 = new ProductoContencion();
+            pc4.setProducto(p4);
+            pc4.setPresentacion("Suspensión - 500 ml");
+            pc4.setDosisSugerida("50 ml / 10 L");
+            pc4.setUrl("https://example.com/productos/bacillus_subtilis_500ml.pdf");
+            productoContencionRepository.save(pc4);
 
             System.out.println("✅ 4 productos de contención creados exitosamente");
         } else {

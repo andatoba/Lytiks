@@ -757,7 +757,7 @@ class _AuditScreenState extends State<AuditScreen> {
     );
   }
 
-  dart_async.Future<void> _takePhoto(AuditItem item) async {
+  Future<void> _takePhoto(AuditItem item) async {
     try {
       final XFile? photo = await _picker.pickImage(
         source: ImageSource.camera,
@@ -778,7 +778,7 @@ class _AuditScreenState extends State<AuditScreen> {
     }
   }
 
-  dart_async.Future<void> _saveAuditResults() async {
+  Future<void> _saveAuditResults() async {
     // Verificar que haya un cliente seleccionado
     if (_selectedClient == null) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -818,34 +818,14 @@ class _AuditScreenState extends State<AuditScreen> {
       if (completedItems < totalItems) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(
-              'Debe completar todas las evaluaciones ($completedItems/$totalItems)',
-            ),
+            content: Text('Debe completar todas las evaluaciones ($completedItems/$totalItems)'),
           ),
         );
         return;
       }
     }
 
-    try {
-      // Mostrar indicador de carga
-      showDialog(
-        context: context,
-        barrierDismissible: false,
-        builder: (context) => const AlertDialog(
-          content: Row(
-            children: [
-              CircularProgressIndicator(),
-              SizedBox(width: 16),
-              Text('Guardando auditoría...'),
-            ],
-          ),
-        ),
-      );
-
-      // Crear los datos de la auditoría
-      final auditData = <String, dynamic>{};
-
+      Map<String, dynamic> auditData = {};
       for (final section in _auditSections.entries) {
         auditData[section.key] = section.value
             .map(
@@ -882,13 +862,13 @@ class _AuditScreenState extends State<AuditScreen> {
         status: 'COMPLETADA',
         auditData: [auditData], // Convertir el mapa en una lista
         observations:
-            'Auditoría ${_isBasicMode ? 'básica' : 'completa'} de $_selectedCrop',
+        'Auditoría ${_isBasicMode ? 'básica' : 'completa'} de $_selectedCrop',
       );
 
-      // Construir mensaje de éxito
+      // Calcular puntuación solo sobre los ítems completados
       final int totalScore = _calculateTotalScore();
-      final int maxPossibleScore = _calculateMaxPossibleScore();
-      final double percentage = (totalScore / maxPossibleScore) * 100;
+      final int completedMaxScore = _calculateCompletedMaxScore();
+      final double percentage = completedMaxScore > 0 ? (totalScore / completedMaxScore) * 100 : 0;
 
       final String hacienda = _selectedClient!['hacienda'] ?? 'No especificada';
       final String cultivo = _selectedCrop;
@@ -897,21 +877,23 @@ class _AuditScreenState extends State<AuditScreen> {
           '${_selectedClient!['nombre']} ${_selectedClient!['apellidos']}';
       final String cedulaCliente = _selectedClient!['cedula'] as String;
 
-      final String mensaje =
+        final String mensaje =
           '''
-Auditoría guardada exitosamente:
+    Auditoría guardada exitosamente:
 
-Cliente: $clienteNombre
-Cédula: $cedulaCliente
-Hacienda: $hacienda
-Cultivo: ${cultivo.toUpperCase()}
-Tipo: $tipoAuditoria
+    Cliente: $clienteNombre
+    Cédula: $cedulaCliente
+    Hacienda: $hacienda
+    Cultivo: ${cultivo.toUpperCase()}
+    Tipo: $tipoAuditoria
 
-Puntuación total: ${percentage.toStringAsFixed(1)}%
-Elementos evaluados: $completedItems/$totalItems
+    ───────────────────────────────
+    PUNTUACIÓN FINAL: ${percentage.toStringAsFixed(1)}%
+    ───────────────────────────────
+    Elementos evaluados: $completedItems/$totalItems
 
-Los datos se han guardado localmente y se sincronizarán cuando haya conexión.
-''';
+    Los datos se han guardado localmente y se sincronizarán cuando haya conexión.
+    ''';
 
       // Cerrar diálogo de carga
       Navigator.of(context).pop();
@@ -935,26 +917,6 @@ Los datos se han guardado localmente y se sincronizarán cuando haya conexión.
           );
         },
       );
-    } catch (e) {
-      // Cerrar diálogo de carga
-      Navigator.of(context).pop();
-
-      showDialog(
-        context: context,
-        builder: (BuildContext context) {
-          return AlertDialog(
-            title: const Text('Error'),
-            content: Text('Error al guardar la auditoría: ${e.toString()}'),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.of(context).pop(),
-                child: const Text('Aceptar'),
-              ),
-            ],
-          );
-        },
-      );
-    }
   }
 
   int _calculateTotalScore() {
@@ -962,7 +924,9 @@ Los datos se han guardado localmente y se sincronizarán cuando haya conexión.
     for (var section in _auditSections.values) {
       for (var item in section) {
         if (item.calculatedScore != null) {
-          totalScore += item.calculatedScore!;
+          totalScore += item.calculatedScore is int
+              ? item.calculatedScore as int
+              : (item.calculatedScore as double).round();
         }
       }
     }
@@ -973,9 +937,24 @@ Los datos se han guardado localmente y se sincronizarán cuando haya conexión.
     int maxPossibleScore = 0;
     for (var section in _auditSections.values) {
       for (var item in section) {
-        maxPossibleScore += item.maxScore;
+        maxPossibleScore += item.maxScore is int
+            ? item.maxScore as int
+            : (item.maxScore as double).round();
       }
     }
     return maxPossibleScore;
+  }
+
+  // Nuevo método: suma solo los maxScore de los ítems completados
+  int _calculateCompletedMaxScore() {
+    int completedMaxScore = 0;
+    for (var section in _auditSections.values) {
+      for (var item in section) {
+        if (item.rating != null) {
+          completedMaxScore += item.maxScore;
+        }
+      }
+    }
+    return completedMaxScore;
   }
 }

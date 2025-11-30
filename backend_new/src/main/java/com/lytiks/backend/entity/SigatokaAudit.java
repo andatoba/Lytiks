@@ -1,11 +1,14 @@
 package com.lytiks.backend.entity;
 
 import jakarta.persistence.*;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.fasterxml.jackson.annotation.JsonManagedReference;
 import java.time.LocalDateTime;
 import java.util.List;
 
 @Entity
 @Table(name = "sigatoka_audits")
+@JsonIgnoreProperties({"hibernateLazyInitializer", "handler"})
 public class SigatokaAudit {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -54,10 +57,23 @@ public class SigatokaAudit {
     private String estadoGeneral; // OPTIMO, MODERADO, CRITICO
     
     @OneToMany(mappedBy = "sigatokaAudit", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
+    @JsonManagedReference
     private List<SigatokaParameter> parameters;
     
     @OneToMany(mappedBy = "sigatokaAudit", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
+    @JsonManagedReference
     private List<SigatokaPhoto> photos;
+
+        @Transient
+        private String cedulaCliente;
+
+        public String getCedulaCliente() {
+            return cedulaCliente;
+        }
+
+        public void setCedulaCliente(String cedulaCliente) {
+            this.cedulaCliente = cedulaCliente;
+        }
     
     // Constructors
     public SigatokaAudit() {}

@@ -1,10 +1,12 @@
 package com.lytiks.backend.entity;
 
 import jakarta.persistence.*;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import java.time.LocalDateTime;
 
 @Entity
 @Table(name = "registro_moko")
+@JsonIgnoreProperties({"hibernateLazyInitializer", "handler"})
 public class RegistroMoko {
 
     @Id
@@ -52,6 +54,9 @@ public class RegistroMoko {
 
     @Column(name = "fecha_creacion", nullable = false)
     private LocalDateTime fechaCreacion;
+
+    @Transient
+    private String cedulaCliente;
 
     // Constructores
     public RegistroMoko() {
@@ -177,5 +182,13 @@ public class RegistroMoko {
 
     public void setFechaCreacion(LocalDateTime fechaCreacion) {
         this.fechaCreacion = fechaCreacion;
+    }
+
+    public String getCedulaCliente() {
+        return cedulaCliente;
+    }
+
+    public void setCedulaCliente(String cedulaCliente) {
+        this.cedulaCliente = cedulaCliente;
     }
 }

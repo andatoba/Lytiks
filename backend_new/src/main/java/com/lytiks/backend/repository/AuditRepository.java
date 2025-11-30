@@ -11,6 +11,8 @@ import java.util.List;
 
 @Repository
 public interface AuditRepository extends JpaRepository<Audit, Long> {
+        @Query("SELECT a FROM Audit a JOIN Client c ON a.client.id = c.id WHERE c.cedula = :cedula ORDER BY a.fecha DESC")
+        List<Audit> findByCedulaCliente(String cedula);
     
     // Buscar auditorías por técnico
     List<Audit> findByTecnicoId(Long tecnicoId);

@@ -11,6 +11,8 @@ import java.util.List;
 
 @Repository
 public interface SigatokaAuditRepository extends JpaRepository<SigatokaAudit, Long> {
+        @Query("SELECT sa FROM SigatokaAudit sa JOIN Client c ON sa.clienteId = c.id WHERE c.cedula = :cedula ORDER BY sa.fecha DESC")
+        List<SigatokaAudit> findByCedulaCliente(String cedula);
     
     List<SigatokaAudit> findByTecnicoId(Long tecnicoId);
     

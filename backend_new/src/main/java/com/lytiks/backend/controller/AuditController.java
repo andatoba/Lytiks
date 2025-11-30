@@ -15,6 +15,7 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 import java.util.HashMap;
+import java.util.ArrayList;
 import java.util.Map;
 import java.util.UUID;
 import java.nio.file.Files;
@@ -134,11 +135,37 @@ public ResponseEntity<Map<String, Object>> createAudit(@RequestBody Map<String, 
     }
 }
 
-    // Obtener auditorías por técnico
+    // Obtener todas las auditorías (normales, moko, sigatoka) creadas por un técnico
     @GetMapping("/technician/{tecnicoId}")
-    public ResponseEntity<List<Audit>> getAuditsByTechnician(@PathVariable Long tecnicoId) {
+    public ResponseEntity<Map<String, Object>> getAllAuditsByTechnician(@PathVariable Long tecnicoId) {
+        Map<String, Object> result = new HashMap<>();
+        // Auditorías normales
         List<Audit> audits = auditRepository.findByTecnicoId(tecnicoId);
-        return ResponseEntity.ok(audits);
+        result.put("audits", audits);
+
+        // Auditorías Moko
+        try {
+            Class<?> mokoRepoClass = Class.forName("com.lytiks.backend.repository.MokoAuditRepository");
+            Object mokoRepo = mokoRepoClass.getDeclaredConstructor().newInstance();
+            var mokoMethod = mokoRepoClass.getMethod("findByTecnicoId", Long.class);
+            List<?> mokoAudits = (List<?>) mokoMethod.invoke(mokoRepo, tecnicoId);
+            result.put("mokoAudits", mokoAudits);
+        } catch (Exception e) {
+            result.put("mokoAudits", new ArrayList<>());
+        }
+
+        // Auditorías Sigatoka
+        try {
+            Class<?> sigatokaRepoClass = Class.forName("com.lytiks.backend.repository.SigatokaAuditRepository");
+            Object sigatokaRepo = sigatokaRepoClass.getDeclaredConstructor().newInstance();
+            var sigatokaMethod = sigatokaRepoClass.getMethod("findByTecnicoId", Long.class);
+            List<?> sigatokaAudits = (List<?>) sigatokaMethod.invoke(sigatokaRepo, tecnicoId);
+            result.put("sigatokaAudits", sigatokaAudits);
+        } catch (Exception e) {
+            result.put("sigatokaAudits", new ArrayList<>());
+        }
+
+        return ResponseEntity.ok(result);
     }
 
     // Obtener auditoría por ID
@@ -150,9 +177,29 @@ public ResponseEntity<Map<String, Object>> createAudit(@RequestBody Map<String, 
 
     // Obtener todas las auditorías
     @GetMapping("/all")
-    public ResponseEntity<List<Audit>> getAllAudits() {
+    public ResponseEntity<List<Map<String, Object>>> getAllAudits() {
         List<Audit> audits = auditRepository.findAll();
-        return ResponseEntity.ok(audits);
+        List<Map<String, Object>> auditsEnriquecidos = new java.util.ArrayList<>();
+        for (Audit audit : audits) {
+            Map<String, Object> auditMap = new java.util.HashMap<>();
+            auditMap.put("id", audit.getId());
+            auditMap.put("type", "Regular");
+            auditMap.put("fecha", audit.getFecha());
+            auditMap.put("cedulaCliente", audit.getCedulaCliente());
+            auditMap.put("hacienda", audit.getHacienda());
+            auditMap.put("cultivo", audit.getCultivo());
+            auditMap.put("estado", audit.getEstado());
+            auditMap.put("tecnicoId", audit.getTecnicoId());
+            auditMap.put("observaciones", audit.getObservaciones());
+            // Enriquecer con nombre del cliente
+            if (audit.getClient() != null) {
+                auditMap.put("nombreCliente", audit.getClient().getNombreCompleto());
+            } else {
+                auditMap.put("nombreCliente", "Cliente Desconocido");
+            }
+            auditsEnriquecidos.add(auditMap);
+        }
+        return ResponseEntity.ok(auditsEnriquecidos);
     }
 
     // Obtener puntuaciones de una auditoría
