@@ -14,7 +14,7 @@ import java.util.Map;
 import java.util.Optional;
 
 @RestController
-@RequestMapping("/api/seguimiento-moko")
+@RequestMapping("/seguimiento-moko")
 @CrossOrigin(origins = "*")
 public class SeguimientoMokoController {
 

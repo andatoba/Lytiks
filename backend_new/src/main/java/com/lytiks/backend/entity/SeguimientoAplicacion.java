@@ -55,4 +55,5 @@ public class SeguimientoAplicacion {
 
     @Column(name = "fecha_actualizacion")
     private LocalDateTime fechaActualizacion;
+
 }

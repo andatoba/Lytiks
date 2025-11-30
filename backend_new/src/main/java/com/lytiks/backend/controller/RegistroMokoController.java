@@ -620,6 +620,38 @@ public class RegistroMokoController {
         }
     }
 
+    @PostMapping("/api/seguimiento-moko/registrar")
+    public ResponseEntity<Map<String, Object>> registrarSeguimiento(@RequestBody Map<String, Object> body) {
+        try {
+            SeguimientoAplicacion seguimiento = new SeguimientoAplicacion();
+            if (body.containsKey("aplicacionId")) seguimiento.setAplicacionId(Long.valueOf(body.get("aplicacionId").toString()));
+            if (body.containsKey("numeroAplicacion")) seguimiento.setNumeroAplicacion(Integer.valueOf(body.get("numeroAplicacion").toString()));
+            if (body.containsKey("fechaProgramada")) seguimiento.setFechaProgramada(java.time.LocalDateTime.parse(body.get("fechaProgramada").toString()));
+            if (body.containsKey("estado")) seguimiento.setEstado(body.get("estado").toString());
+            if (body.containsKey("dosisAplicada")) seguimiento.setDosisAplicada(body.get("dosisAplicada").toString());
+            if (body.containsKey("lote")) seguimiento.setLote(body.get("lote").toString());
+            if (body.containsKey("observaciones")) seguimiento.setObservaciones(body.get("observaciones").toString());
+            seguimiento.setFechaCreacion(java.time.LocalDateTime.now());
+
+            SeguimientoAplicacion saved = seguimientoService.saveSeguimiento(seguimiento);
+
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", true);
+            response.put("message", "Seguimiento guardado correctamente");
+            response.put("id", saved.getId());
+            return ResponseEntity.status(HttpStatus.CREATED).body(response);
+        } catch (Exception e) {
+            Map<String, Object> error = new HashMap<>();
+            error.put("success", false);
+            error.put("error", "Error al guardar seguimiento: " + e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(error);
+        }
+    }
+
+
+
+
+
     private String guardarFotoEvidencia(MultipartFile foto, Long seguimientoId) throws IOException {
         // Crear directorio si no existe
         Path uploadPath = Paths.get("photos/evidencias/");

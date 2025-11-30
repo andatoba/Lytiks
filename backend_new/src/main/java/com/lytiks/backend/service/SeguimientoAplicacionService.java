@@ -119,4 +119,9 @@ public class SeguimientoAplicacionService {
     public List<SeguimientoAplicacion> getAplicacionesByFechaRange(LocalDateTime fechaInicio, LocalDateTime fechaFin) {
         return seguimientoRepository.findByFechaProgramadaBetween(fechaInicio, fechaFin);
     }
+
+    // Guardar seguimiento desde el endpoint personalizado
+    public SeguimientoAplicacion saveSeguimiento(SeguimientoAplicacion seguimiento) {
+        return seguimientoRepository.save(seguimiento);
+    }
 }
