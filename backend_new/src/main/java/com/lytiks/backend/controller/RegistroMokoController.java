@@ -35,7 +35,7 @@ import java.util.Optional;
 import java.util.UUID;
 
 @RestController
-@RequestMapping("/moko")
+@RequestMapping("moko")
 @CrossOrigin(origins = "*")
 public class RegistroMokoController {
 
@@ -438,12 +438,28 @@ public class RegistroMokoController {
         return "jpg";
     }
 
-    // Endpoints para productos de contención - usando ruta diferente para evitar conflictos
+    // Endpoint para productos de contención, ahora usando la entidad Producto
     @GetMapping("/productos-contencion")
-    public ResponseEntity<List<ProductoContencion>> getProductosContencion() {
+    public ResponseEntity<List<Map<String, Object>>> getProductosContencion() {
         try {
-            List<ProductoContencion> productos = productoContencionRepository.findAll();
-            return ResponseEntity.ok(productos);
+            List<ProductoContencion> productosContencion = productoContencionRepository.findAll();
+            List<Map<String, Object>> resultado = new java.util.ArrayList<>();
+            for (ProductoContencion pc : productosContencion) {
+                Map<String, Object> obj = new HashMap<>();
+                Producto prod = pc.getProducto();
+                if (prod != null) {
+                    obj.put("idProducto", prod.getIdProducto());
+                    obj.put("nombre", prod.getNombre());
+                    obj.put("detalle", prod.getDetalle());
+                    obj.put("cantidad", prod.getCantidad());
+                    obj.put("pesoKg", prod.getPesoKg());
+                }
+                obj.put("presentacion", pc.getPresentacion());
+                obj.put("dosisSugerida", pc.getDosisSugerida());
+                obj.put("url", pc.getUrl());
+                resultado.add(obj);
+            }
+            return ResponseEntity.ok(resultado);
         } catch (Exception e) {
             System.err.println("Error obteniendo productos: " + e.getMessage());
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(null);
