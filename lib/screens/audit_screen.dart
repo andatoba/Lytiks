@@ -908,8 +908,14 @@ class _AuditScreenState extends State<AuditScreen> {
             actions: [
               TextButton(
                 onPressed: () {
-                  Navigator.of(context).pop(); // Cerrar diálogo
-                  Navigator.of(context).pop(); // Volver a la pantalla anterior
+                  Navigator.of(context).pop(); // Cerrar el diálogo
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Guardado con éxito'),
+                      backgroundColor: Colors.green,
+                      duration: Duration(seconds: 2),
+                    ),
+                  );
                 },
                 child: const Text('Aceptar'),
               ),
