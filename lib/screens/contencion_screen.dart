@@ -15,6 +15,8 @@ class _ContencionScreenState extends State<ContencionScreen> {
   final RegistroMokoService _service = RegistroMokoService();
   bool _isLoading = true;
   List<Map<String, dynamic>> _productos = [];
+  // IDs de productos ya configurados
+  List<int> productosConfigurados = [];
   String _error = '';
 
   @override
@@ -68,6 +70,8 @@ class _ContencionScreenState extends State<ContencionScreen> {
                         itemCount: _productos.length,
                         itemBuilder: (context, index) {
                           final p = _productos[index];
+                          final int? productoId = p['id'] is int ? p['id'] : int.tryParse(p['id']?.toString() ?? '');
+                          final bool yaConfigurado = productoId != null && productosConfigurados.contains(productoId);
                           return Card(
                             margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                             elevation: 4,
@@ -128,34 +132,59 @@ class _ContencionScreenState extends State<ContencionScreen> {
                                   const SizedBox(height: 12),
                                   SizedBox(
                                     width: double.infinity,
-                                    child: ElevatedButton(
-                                      onPressed: () {
-                                        Navigator.push(
-                                          context,
-                                          MaterialPageRoute(
-                                            builder: (_) => GuardarAplicacionScreen(
-                                              clientData: widget.clientData,
-                                              producto: p,
+                                    child: yaConfigurado
+                                        ? Container(
+                                            padding: const EdgeInsets.symmetric(vertical: 14),
+                                            decoration: BoxDecoration(
+                                              color: Colors.green,
+                                              borderRadius: BorderRadius.circular(8),
+                                            ),
+                                            child: const Center(
+                                              child: Text(
+                                                'Ya configurado',
+                                                style: TextStyle(
+                                                  color: Colors.white,
+                                                  fontSize: 16,
+                                                  fontWeight: FontWeight.bold,
+                                                ),
+                                              ),
+                                            ),
+                                          )
+                                        : ElevatedButton(
+                                            onPressed: () async {
+                                              // Navegar y esperar resultado
+                                              final resultado = await Navigator.push(
+                                                context,
+                                                MaterialPageRoute(
+                                                  builder: (_) => GuardarAplicacionScreen(
+                                                    clientData: widget.clientData,
+                                                    producto: p,
+                                                  ),
+                                                ),
+                                              );
+                                              // Si se configuró, agregar a la lista
+                                              if (resultado == true && productoId != null) {
+                                                setState(() {
+                                                  productosConfigurados.add(productoId);
+                                                });
+                                              }
+                                            },
+                                            style: ElevatedButton.styleFrom(
+                                              backgroundColor: const Color(0xFFE53E3E),
+                                              foregroundColor: Colors.white,
+                                              padding: const EdgeInsets.symmetric(vertical: 12),
+                                              shape: RoundedRectangleBorder(
+                                                borderRadius: BorderRadius.circular(8),
+                                              ),
+                                            ),
+                                            child: const Text(
+                                              'Configurar Aplicación',
+                                              style: TextStyle(
+                                                fontSize: 16,
+                                                fontWeight: FontWeight.w600,
+                                              ),
                                             ),
                                           ),
-                                        );
-                                      },
-                                      style: ElevatedButton.styleFrom(
-                                        backgroundColor: const Color(0xFFE53E3E),
-                                        foregroundColor: Colors.white,
-                                        padding: const EdgeInsets.symmetric(vertical: 12),
-                                        shape: RoundedRectangleBorder(
-                                          borderRadius: BorderRadius.circular(8),
-                                        ),
-                                      ),
-                                      child: const Text(
-                                        'Configurar Aplicación',
-                                        style: TextStyle(
-                                          fontSize: 16,
-                                          fontWeight: FontWeight.w600,
-                                        ),
-                                      ),
-                                    ),
                                   ),
                                 ],
                               ),

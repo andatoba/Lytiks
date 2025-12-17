@@ -252,16 +252,7 @@ class _GuardarAplicacionScreenState extends State<GuardarAplicacionScreen> {
                   ),
           ),
         ),
-        const SizedBox(height: 12),
-        SizedBox(
-          width: double.infinity,
-          child: OutlinedButton(
-            onPressed: () {
-              // TODO: Agregar otra aplicación
-            },
-            child: const Text('Agregar otra aplicación'),
-          ),
-        ),
+        // ...eliminado botón 'Agregar otra aplicación'...
         const SizedBox(height: 12),
         SizedBox(
           width: double.infinity,

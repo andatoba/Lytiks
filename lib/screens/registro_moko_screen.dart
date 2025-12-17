@@ -313,7 +313,7 @@ class _RegistroMokoScreenState extends State<RegistroMokoScreen> {
 
   Widget _buildSintomasObservados() {
     return _buildCard(
-      title: 'Síntomas Observados (Selección Múltiple)',
+      title: 'Síntomas Observados',
       icon: Icons.visibility,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
