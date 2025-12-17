@@ -1,0 +1,42 @@
+2025/12/09-20:17:52.476 2fc4 Reusing MANIFEST C:\Users\WELLIN~1\AppData\Local\Temp\flutter_tools.fd09da37\flutter_tools_chrome_device.b72cc254\Default\EdgeCoupons/coupons_data.db/MANIFEST-000001
+2025/12/09-20:17:52.478 2fc4 Recovering log #50
+2025/12/09-20:17:52.491 2fc4 Reusing old log C:\Users\WELLIN~1\AppData\Local\Temp\flutter_tools.fd09da37\flutter_tools_chrome_device.b72cc254\Default\EdgeCoupons/coupons_data.db/000050.log 
+2025/12/09-20:17:52.493 2fc4 Delete type=0 #4
+2025/12/09-20:17:52.493 2fc4 Delete type=2 #7
+2025/12/09-20:17:52.493 2fc4 Delete type=0 #7
+2025/12/09-20:17:52.493 2fc4 Delete type=2 #8
+2025/12/09-20:17:52.494 2fc4 Delete type=0 #8
+2025/12/09-20:17:52.494 2fc4 Delete type=2 #9
+2025/12/09-20:17:52.494 2fc4 Delete type=0 #11
+2025/12/09-20:17:52.498 2fc4 Delete type=2 #12
+2025/12/09-20:17:52.499 2fc4 Delete type=0 #14
+2025/12/09-20:17:52.502 2fc4 Delete type=2 #16
+2025/12/09-20:17:52.505 2fc4 Delete type=0 #18
+2025/12/09-20:17:52.506 2fc4 Delete type=2 #19
+2025/12/09-20:17:52.506 2fc4 Delete type=0 #21
+2025/12/09-20:17:52.507 2fc4 Delete type=2 #22
+2025/12/09-20:17:52.509 2fc4 Delete type=0 #24
+2025/12/09-20:17:52.509 2fc4 Delete type=2 #25
+2025/12/09-20:17:52.509 2fc4 Delete type=0 #27
+2025/12/09-20:17:52.509 2fc4 Delete type=2 #29
+2025/12/09-20:17:52.510 2fc4 Delete type=0 #31
+2025/12/09-20:17:52.510 2fc4 Delete type=2 #32
+2025/12/09-20:17:52.510 2fc4 Delete type=0 #34
+2025/12/09-20:17:52.510 2fc4 Delete type=2 #35
+2025/12/09-20:17:52.511 2fc4 Delete type=0 #37
+2025/12/09-20:17:52.511 2fc4 Delete type=2 #38
+2025/12/09-20:17:52.527 2fc4 Delete type=0 #40
+2025/12/09-20:17:52.527 2fc4 Delete type=0 #44
+2025/12/09-20:17:52.528 2fc4 Delete type=0 #47
+2025/12/09-20:17:53.373 4240 Level-0 table #54: started
+2025/12/09-20:17:53.377 4240 Level-0 table #54: 672728 bytes OK
+2025/12/09-20:17:53.381 4240 Delete type=0 #50
+2025/12/09-20:17:53.382 2618 Compacting 4@0 + 1@1 files
+2025/12/09-20:17:53.389 2618 Generated table #55@0: 3 keys, 672728 bytes
+2025/12/09-20:17:53.389 2618 Compacted 4@0 + 1@1 files => 672728 bytes
+2025/12/09-20:17:53.389 2618 compacted to: files[ 0 1 1 0 0 0 0 ]
+2025/12/09-20:17:53.390 2618 Delete type=2 #42
+2025/12/09-20:17:53.390 2618 Delete type=2 #45
+2025/12/09-20:17:53.391 2618 Delete type=2 #48
+2025/12/09-20:17:53.391 2618 Delete type=2 #51
+2025/12/09-20:17:53.391 2618 Delete type=2 #54
