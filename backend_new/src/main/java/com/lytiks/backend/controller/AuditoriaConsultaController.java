@@ -24,11 +24,14 @@ public class AuditoriaConsultaController {
     @Autowired
     private ClientRepository clientRepository;
 
-    @Autowired
-    private com.lytiks.backend.service.SigatokaAuditService sigatokaAuditService;
+    // @Autowired
+    // private com.lytiks.backend.service.SigatokaAuditService sigatokaAuditService;
 
     @Autowired
     private com.lytiks.backend.service.AuditService auditService;
+
+    @Autowired
+    private com.lytiks.backend.service.SigatokaEvaluacionService sigatokaEvaluacionService;
 
     @GetMapping("/por-cedula/{cedula}")
     public ResponseEntity<List<Object>> consultarAuditoriasPorCedula(@PathVariable String cedula) {
@@ -70,31 +73,26 @@ public class AuditoriaConsultaController {
             resumenAuditorias.add(resumen);
         }
 
-        // Auditorías Sigatoka
-        List<com.lytiks.backend.entity.SigatokaAudit> sigatokaAudits = sigatokaAuditService.getAuditoriasByCedula(cedula);
-        for (com.lytiks.backend.entity.SigatokaAudit sigatoka : sigatokaAudits) {
+        // Auditorías Sigatoka - NUEVO SISTEMA
+        List<com.lytiks.backend.entity.SigatokaEvaluacion> sigatokaEvaluaciones = 
+            sigatokaEvaluacionService.listarEvaluacionesPorCliente(cedula);
+        for (com.lytiks.backend.entity.SigatokaEvaluacion evaluacion : sigatokaEvaluaciones) {
             Map<String, Object> resumen = new HashMap<>();
-            resumen.put("id", sigatoka.getId());
+            resumen.put("id", evaluacion.getId());
             resumen.put("tipo", "Sigatoka");
-            resumen.put("tipoAuditoria", sigatoka.getTipoAuditoria());
-            resumen.put("fecha", sigatoka.getFecha());
-            resumen.put("nivelAnalisis", sigatoka.getNivelAnalisis());
-            resumen.put("tipoCultivo", sigatoka.getTipoCultivo());
-            resumen.put("tecnicoId", sigatoka.getTecnicoId());
-            resumen.put("clienteId", sigatoka.getClienteId());
-            resumen.put("hacienda", sigatoka.getHacienda());
-            resumen.put("lote", sigatoka.getLote());
-            resumen.put("estado", sigatoka.getEstado());
-            resumen.put("observaciones", sigatoka.getObservaciones());
-            resumen.put("recomendaciones", sigatoka.getRecomendaciones());
-            resumen.put("stoverReal", sigatoka.getStoverReal());
-            resumen.put("stoverRecomendado", sigatoka.getStoverRecomendado());
-            resumen.put("estadoGeneral", sigatoka.getEstadoGeneral());
-            // Buscar nombre del cliente por clienteId si existe
-            String nombreCliente = "Cliente Desconocido";
+            resumen.put("fecha", evaluacion.getFecha());
+            resumen.put("hacienda", evaluacion.getHacienda());
+            resumen.put("evaluador", evaluacion.getEvaluador());
+            resumen.put("semanaEpidemiologica", evaluacion.getSemanaEpidemiologica());
+            resumen.put("periodo", evaluacion.getPeriodo());
+            resumen.put("clienteId", evaluacion.getClienteId());
+            resumen.put("createdAt", evaluacion.getCreatedAt());
+            resumen.put("updatedAt", evaluacion.getUpdatedAt());
+            
+            // Buscar nombre del cliente por clienteId
             final String[] nombreHaciendaS = {null};
-            if (sigatoka.getClienteId() != null) {
-                clientRepository.findById(sigatoka.getClienteId()).ifPresent(c -> {
+            if (evaluacion.getClienteId() != null) {
+                clientRepository.findById(evaluacion.getClienteId()).ifPresent(c -> {
                     resumen.put("cliente", c.getNombre() + (c.getApellidos() != null ? " " + c.getApellidos() : ""));
                     resumen.put("haciendaCliente", c.getFincaNombre());
                     nombreHaciendaS[0] = c.getFincaNombre();

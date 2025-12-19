@@ -318,11 +318,13 @@ public class ClientController {
         try {
             long totalClients = clientRepository.count();
             long activeClients = clientRepository.countByEstado("ACTIVO");
+            Double totalHectareas = clientRepository.sumTotalHectareas();
             List<Client> recentClients = clientRepository.findRecentClients()
                     .stream().limit(5).toList();
             
             stats.put("totalClients", totalClients);
             stats.put("activeClients", activeClients);
+            stats.put("totalHectareas", totalHectareas != null ? totalHectareas : 0.0);
             stats.put("recentClients", recentClients);
             
             return ResponseEntity.ok(stats);

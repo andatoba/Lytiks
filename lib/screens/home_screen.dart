@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'dart:convert';
+import 'package:http/http.dart' as http;
 import '../services/sync_service.dart';
 import 'audit_screen.dart';
 import 'moko_audit_screen.dart';
@@ -19,6 +21,13 @@ class _HomeScreenState extends State<HomeScreen> {
   int _pendingCount = 0;
   final SyncService _syncService = SyncService();
   bool _isSyncing = false;
+  
+  // Estadísticas del backend
+  int _totalClients = 0;
+  int _activeClients = 0;
+  int _todayAudits = 0;
+  double _totalHectareas = 0.0;
+  bool _isLoadingStats = true;
 
   final List<String> _titles = ['Inicio', 'Perfil'];
 
@@ -26,6 +35,7 @@ class _HomeScreenState extends State<HomeScreen> {
   void initState() {
     super.initState();
     _updatePendingCount();
+    _loadStats();
   }
 
   Future<void> _updatePendingCount() async {
@@ -34,6 +44,44 @@ class _HomeScreenState extends State<HomeScreen> {
       setState(() {
         _pendingCount = count;
       });
+    }
+  }
+
+  Future<void> _loadStats() async {
+    try {
+      // Cargar estadísticas de clientes
+      final clientsResponse = await http.get(
+        Uri.parse('http://5.161.198.89:8081/api/clients/stats'),
+        headers: {'Content-Type': 'application/json'},
+      );
+      
+      // Cargar estadísticas de auditorías
+      final auditsResponse = await http.get(
+        Uri.parse('http://5.161.198.89:8081/api/audits/stats'),
+        headers: {'Content-Type': 'application/json'},
+      );
+      
+      if (clientsResponse.statusCode == 200 && auditsResponse.statusCode == 200) {
+        final clientsData = jsonDecode(clientsResponse.body);
+        final auditsData = jsonDecode(auditsResponse.body);
+        
+        if (mounted) {
+          setState(() {
+            _totalClients = clientsData['totalClients'] ?? 0;
+            _activeClients = clientsData['activeClients'] ?? 0;
+            _totalHectareas = (clientsData['totalHectareas'] ?? 0.0).toDouble();
+            _todayAudits = auditsData['todayAudits'] ?? 0;
+            _isLoadingStats = false;
+          });
+        }
+      }
+    } catch (e) {
+      print('Error al cargar estadísticas: $e');
+      if (mounted) {
+        setState(() {
+          _isLoadingStats = false;
+        });
+      }
     }
   }
 
@@ -99,7 +147,14 @@ class _HomeScreenState extends State<HomeScreen> {
       body: IndexedStack(
         index: _selectedIndex,
         children: [
-          InicioTab(onSyncData: _syncData, onUpdateCount: _updatePendingCount),
+          InicioTab(
+            onSyncData: _syncData,
+            onUpdateCount: _updatePendingCount,
+            activeClients: _activeClients,
+            todayAudits: _todayAudits,
+            totalHectareas: _totalHectareas,
+            isLoadingStats: _isLoadingStats,
+          ),
           const ProfileScreen(),
         ],
       ),
@@ -360,11 +415,19 @@ class _HomeScreenState extends State<HomeScreen> {
 class InicioTab extends StatelessWidget {
   final VoidCallback onSyncData;
   final VoidCallback onUpdateCount;
+  final int activeClients;
+  final int todayAudits;
+  final double totalHectareas;
+  final bool isLoadingStats;
 
   const InicioTab({
     super.key,
     required this.onSyncData,
     required this.onUpdateCount,
+    required this.activeClients,
+    required this.todayAudits,
+    required this.totalHectareas,
+    required this.isLoadingStats,
   });
 
   @override
@@ -463,19 +526,19 @@ class InicioTab extends StatelessWidget {
             childAspectRatio: 1.3,
             children: [
               _buildStatCard(
-                '12',
+                isLoadingStats ? '...' : '$activeClients',
                 'Fincas Activas',
                 Icons.agriculture,
                 const Color(0xFF4CAF50),
               ),
               _buildStatCard(
-                '8',
+                isLoadingStats ? '...' : '$todayAudits',
                 'Auditorías Hoy',
                 Icons.assignment_turned_in,
                 const Color(0xFF2196F3),
               ),
               _buildStatCard(
-                '850 Ha',
+                isLoadingStats ? '...' : '${totalHectareas.toStringAsFixed(0)} Ha',
                 'Hectáreas',
                 Icons.landscape,
                 const Color(0xFF00BCD4),

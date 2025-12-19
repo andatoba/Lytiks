@@ -47,6 +47,10 @@ public interface ClientRepository extends JpaRepository<Client, Long> {
     // Contar clientes activos
     long countByEstado(String estado);
     
+    // Sumar todas las hectáreas de los clientes
+    @Query("SELECT COALESCE(SUM(c.fincaHectareas), 0) FROM Client c WHERE c.fincaHectareas IS NOT NULL")
+    Double sumTotalHectareas();
+    
     // Obtener clientes recientes (últimos registrados)
     @Query("SELECT c FROM Client c ORDER BY c.fechaRegistro DESC")
     List<Client> findRecentClients();

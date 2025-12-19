@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'screens/login_screen.dart';
 
 void main() {
@@ -13,6 +14,16 @@ class LytiksApp extends StatelessWidget {
     return MaterialApp(
       title: 'Lytiks',
       debugShowCheckedModeBanner: false,
+      localizationsDelegates: const [
+        GlobalMaterialLocalizations.delegate,
+        GlobalWidgetsLocalizations.delegate,
+        GlobalCupertinoLocalizations.delegate,
+      ],
+      supportedLocales: const [
+        Locale('es', 'ES'),
+        Locale('en', 'US'),
+      ],
+      locale: const Locale('es', 'ES'),
       theme: ThemeData(
         primarySwatch: Colors.teal,
         primaryColor: const Color(0xFF004B63), // Nuevo color azul oscuro

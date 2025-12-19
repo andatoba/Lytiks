@@ -45,6 +45,10 @@ public interface AuditRepository extends JpaRepository<Audit, Long> {
     @Query("SELECT COUNT(a) FROM Audit a WHERE a.tecnicoId = :tecnicoId AND DATE(a.fecha) = CURRENT_DATE")
     long countTodayAuditsByTecnico(@Param("tecnicoId") Long tecnicoId);
     
+    // Contar TODAS las auditorías de hoy (sin filtro de técnico)
+    @Query("SELECT COUNT(a) FROM Audit a WHERE DATE(a.fecha) = CURRENT_DATE")
+    long countTodayAudits();
+    
     // Obtener auditorías recientes por técnico
     @Query("SELECT a FROM Audit a WHERE a.tecnicoId = :tecnicoId ORDER BY a.fecha DESC")
     List<Audit> findRecentAuditsByTecnico(@Param("tecnicoId") Long tecnicoId);

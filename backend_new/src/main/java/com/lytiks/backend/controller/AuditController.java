@@ -283,6 +283,36 @@ public ResponseEntity<Map<String, Object>> createAudit(@RequestBody Map<String, 
         }
     }
 
+    // Obtener estadísticas generales de auditorías
+    @GetMapping("/stats")
+    public ResponseEntity<Map<String, Object>> getAuditsStats() {
+        Map<String, Object> stats = new HashMap<>();
+        
+        try {
+            // Contar todas las auditorías
+            long totalAudits = auditRepository.count();
+            
+            // Contar auditorías de hoy
+            long todayAudits = auditRepository.countTodayAudits();
+            
+            // Contar auditorías por estado
+            long pendingAudits = auditRepository.countByEstado("PENDIENTE");
+            long completedAudits = auditRepository.countByEstado("COMPLETADA");
+            
+            stats.put("totalAudits", totalAudits);
+            stats.put("todayAudits", todayAudits);
+            stats.put("pendingAudits", pendingAudits);
+            stats.put("completedAudits", completedAudits);
+            
+            return ResponseEntity.ok(stats);
+            
+        } catch (Exception e) {
+            Map<String, Object> errorResponse = new HashMap<>();
+            errorResponse.put("error", "Error al obtener estadísticas: " + e.getMessage());
+            return ResponseEntity.badRequest().body(errorResponse);
+        }
+    }
+
     // Eliminar auditoría
     @DeleteMapping("/{id}")
     public ResponseEntity<Map<String, Object>> deleteAudit(@PathVariable Long id) {
