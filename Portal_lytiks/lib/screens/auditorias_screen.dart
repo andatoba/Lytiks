@@ -39,9 +39,9 @@ class _AuditoriasScreenState extends State<AuditoriasScreen> with SingleTickerPr
         headers: {'Content-Type': 'application/json'},
       );
       
-      // Cargar auditorías Sigatoka
+      // Cargar auditorías Sigatoka - NUEVO ENDPOINT
       final sigatokaResponse = await http.get(
-        Uri.parse('$baseUrl/sigatoka/all'),
+        Uri.parse('$baseUrl/sigatoka/evaluaciones'),
         headers: {'Content-Type': 'application/json'},
       );
       
@@ -184,32 +184,39 @@ class _AuditoriasScreenState extends State<AuditoriasScreen> with SingleTickerPr
         child: _auditoriasSigatoka.isEmpty
             ? const Padding(
                 padding: EdgeInsets.all(32.0),
-                child: Center(child: Text('No hay auditorías Sigatoka registradas')),
+                child: Center(child: Text('No hay evaluaciones Sigatoka registradas')),
               )
             : DataTable(
                 columns: const [
                   DataColumn(label: Text('ID')),
-                  DataColumn(label: Text('Cliente')),
+                  DataColumn(label: Text('Hacienda')),
                   DataColumn(label: Text('Fecha')),
-                  DataColumn(label: Text('Lote')),
-                  DataColumn(label: Text('Severidad')),
-                  DataColumn(label: Text('Cumplimiento')),
+                  DataColumn(label: Text('Evaluador')),
+                  DataColumn(label: Text('Semana')),
+                  DataColumn(label: Text('Estado')),
                 ],
-                rows: _auditoriasSigatoka.map((auditoria) {
+                rows: _auditoriasSigatoka.map((evaluacion) {
+                  // Determinar si tiene datos calculados
+                  final tieneCalculo = evaluacion['resumen'] != null || 
+                                      evaluacion['indicadores'] != null ||
+                                      evaluacion['estadoEvolutivo'] != null;
+                  
                   return DataRow(
                     cells: [
-                      DataCell(Text('${auditoria['id'] ?? ''}')),
-                      DataCell(Text(auditoria['nombreCliente'] ?? 'N/A')),
-                      DataCell(Text(auditoria['fecha'] ?? '')),
-                      DataCell(Text(auditoria['lote'] ?? 'N/A')),
-                      DataCell(Text('${auditoria['severidad'] ?? 0}%')),
+                      DataCell(Text('${evaluacion['id'] ?? ''}')),
+                      DataCell(Text(evaluacion['hacienda'] ?? 'N/A')),
+                      DataCell(Text(evaluacion['fecha']?.toString().split('T')[0] ?? '')),
+                      DataCell(Text(evaluacion['evaluador'] ?? 'N/A')),
+                      DataCell(Text('${evaluacion['semanaEpidemiologica'] ?? '-'}')),
                       DataCell(
                         Chip(
                           label: Text(
-                            '${auditoria['cumplimientoGeneral'] ?? 0}%',
+                            tieneCalculo ? 'Calculado' : 'Pendiente',
                             style: const TextStyle(fontSize: 12),
                           ),
-                          backgroundColor: Colors.green.shade100,
+                          backgroundColor: tieneCalculo 
+                            ? Colors.green.shade100 
+                            : Colors.orange.shade100,
                         ),
                       ),
                     ],

@@ -78,7 +78,12 @@ class _UsuariosScreenState extends State<UsuariosScreen> {
                 ),
                 ElevatedButton.icon(
                   onPressed: () {
-                    // TODO: Implementar agregar usuario
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Función en desarrollo: Crear Usuario'),
+                        backgroundColor: Colors.orange,
+                      ),
+                    );
                   },
                   icon: const Icon(Icons.add),
                   label: const Text('Nuevo Usuario'),
@@ -136,14 +141,24 @@ class _UsuariosScreenState extends State<UsuariosScreen> {
                                         IconButton(
                                           icon: const Icon(Icons.edit, size: 20),
                                           onPressed: () {
-                                            // TODO: Editar usuario
+                                            ScaffoldMessenger.of(context).showSnackBar(
+                                              const SnackBar(
+                                                content: Text('Función en desarrollo: Editar Usuario'),
+                                                backgroundColor: Colors.orange,
+                                              ),
+                                            );
                                           },
                                         ),
                                         IconButton(
                                           icon: const Icon(Icons.delete, size: 20),
                                           color: Colors.red,
                                           onPressed: () {
-                                            // TODO: Eliminar usuario
+                                            ScaffoldMessenger.of(context).showSnackBar(
+                                              const SnackBar(
+                                                content: Text('Función en desarrollo: Eliminar Usuario'),
+                                                backgroundColor: Colors.orange,
+                                              ),
+                                            );
                                           },
                                         ),
                                       ],

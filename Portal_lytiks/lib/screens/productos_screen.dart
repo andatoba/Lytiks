@@ -78,7 +78,12 @@ class _ProductosScreenState extends State<ProductosScreen> {
                 ),
                 ElevatedButton.icon(
                   onPressed: () {
-                    // TODO: Implementar agregar producto
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Función en desarrollo: Crear Producto'),
+                        backgroundColor: Colors.orange,
+                      ),
+                    );
                   },
                   icon: const Icon(Icons.add),
                   label: const Text('Nuevo Producto'),
@@ -161,7 +166,12 @@ class _ProductosScreenState extends State<ProductosScreen> {
                                       Expanded(
                                         child: TextButton.icon(
                                           onPressed: () {
-                                            // TODO: Ver detalles
+                                            ScaffoldMessenger.of(context).showSnackBar(
+                                              const SnackBar(
+                                                content: Text('Función en desarrollo: Ver Detalles'),
+                                                backgroundColor: Colors.orange,
+                                              ),
+                                            );
                                           },
                                           icon: const Icon(Icons.visibility, size: 16),
                                           label: const Text('Ver'),
@@ -170,7 +180,12 @@ class _ProductosScreenState extends State<ProductosScreen> {
                                       IconButton(
                                         icon: const Icon(Icons.edit, size: 20),
                                         onPressed: () {
-                                          // TODO: Editar
+                                          ScaffoldMessenger.of(context).showSnackBar(
+                                            const SnackBar(
+                                              content: Text('Función en desarrollo: Editar Producto'),
+                                              backgroundColor: Colors.orange,
+                                            ),
+                                          );
                                         },
                                       ),
                                     ],

@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'dart:convert';
 import 'package:http/http.dart' as http;
 
 class ReportesScreen extends StatefulWidget {
@@ -85,11 +84,10 @@ class _ReportesScreenState extends State<ReportesScreen> {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
-              content: Text('Reporte generado exitosamente'),
-              backgroundColor: Colors.green,
+              content: Text('Función en desarrollo: Descarga de reportes en PDF/Excel'),
+              backgroundColor: Colors.orange,
             ),
           );
-          // TODO: Implementar descarga del reporte en formato PDF o Excel
         }
       }
     } catch (e) {
