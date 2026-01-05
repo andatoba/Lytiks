@@ -16,6 +16,35 @@ class DashboardScreen extends StatefulWidget {
 
 class _DashboardScreenState extends State<DashboardScreen> {
   int _selectedIndex = 0;
+  String _userRole = '';
+  String _userName = '';
+  
+  @override
+  void initState() {
+    super.initState();
+    _loadUserData();
+  }
+  
+  void _loadUserData() {
+    if (widget.userData != null) {
+      final user = widget.userData!['user'];
+      _userRole = user?['rol']?.toString().toUpperCase() ?? '';
+      _userName = '${user?['nombres'] ?? ''} ${user?['apellidos'] ?? ''}'.trim();
+      
+      // Validar que sea ADMIN
+      if (_userRole != 'ADMIN') {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          Navigator.of(context).pushReplacementNamed('/login');
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Acceso denegado. Solo administradores pueden acceder.'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        });
+      }
+    }
+  }
   
   final List<Widget> _screens = [
     const DashboardHomeScreen(),
@@ -73,16 +102,45 @@ class _DashboardScreenState extends State<DashboardScreen> {
               });
             },
             extended: MediaQuery.of(context).size.width > 1200,
-            leading: Padding(
-              padding: const EdgeInsets.all(16.0),
-              child: Image.asset(
-                'assets/images/logo1.png',
-                width: 48,
-                height: 48,
-                errorBuilder: (context, error, stackTrace) {
-                  return const Icon(Icons.agriculture, size: 48, color: Color(0xFF2563EB));
-                },
-              ),
+            leading: Column(
+              children: [
+                Padding(
+                  padding: const EdgeInsets.all(16.0),
+                  child: Image.asset(
+                    'assets/images/logo1.png',
+                    width: 48,
+                    height: 48,
+                    errorBuilder: (context, error, stackTrace) {
+                      return const Icon(Icons.agriculture, size: 48, color: Color(0xFF2563EB));
+                    },
+                  ),
+                ),
+                if (_userName.isNotEmpty) ...[
+                  const SizedBox(height: 8),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 8.0),
+                    child: Text(
+                      _userName,
+                      style: const TextStyle(
+                        color: Colors.white70,
+                        fontSize: 10,
+                      ),
+                      textAlign: TextAlign.center,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  const Chip(
+                    label: Text(
+                      'ADMIN',
+                      style: TextStyle(fontSize: 10, color: Colors.white),
+                    ),
+                    backgroundColor: Color(0xFF2563EB),
+                    padding: EdgeInsets.symmetric(horizontal: 4),
+                    materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  ),
+                ],
+              ],
             ),
             trailing: Expanded(
               child: Align(

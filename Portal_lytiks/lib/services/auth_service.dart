@@ -32,6 +32,18 @@ class AuthService {
 
       if (response.statusCode == 200) {
         final data = jsonDecode(utf8.decode(response.bodyBytes));
+        
+        // Validar que el usuario tenga rol ADMIN
+        final userRole = data['user']?['rol']?.toString().toUpperCase() ?? '';
+        print('Rol del usuario: $userRole');
+        
+        if (userRole != 'ADMIN') {
+          return {
+            'success': false,
+            'message': 'Acceso denegado. Solo usuarios con rol ADMIN pueden acceder al portal.',
+          };
+        }
+        
         return {
           'success': true,
           'data': data,
