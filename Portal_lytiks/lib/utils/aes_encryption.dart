@@ -12,7 +12,9 @@ class AESEncryption {
       final iv = encrypt.IV.fromUtf8(_ivString);
       
       final encrypter = encrypt.Encrypter(
+       
         encrypt.AES(key, mode: encrypt.AESMode.cbc, padding: 'PKCS7')
+        //encrypt.AES(key, mode: encrypt.AESMode.cbc)
       );
       
       final encrypted = encrypter.encrypt(plainText, iv: iv);

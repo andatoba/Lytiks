@@ -97791,7 +97791,7 @@ else{g=J.bG(g,"rol")
 g=g==null?null:J.eC(g).toUpperCase()
 f=g}j=f==null?"":f
 A.n4("Rol del usuario: "+A.o(j))
-if(!J.f(j,"ADMIN")){h=A.as(["success",!1,"message","Acceso denegado. Solo usuarios con rol ADMIN pueden acceder al portal."],h,t.z)
+if(!J.f(j,"ADMINISTRADOR")){h=A.as(["success",!1,"message","Acceso denegado. Solo usuarios con rol ADMINISTRADOR pueden acceder al portal."],h,t.z)
 q=h
 s=1
 break}h=A.as(["success",!0,"data",k,"message","Inicio de sesi\xf3n exitoso"],h,t.z)
