@@ -52,7 +52,7 @@ class _UsuariosScreenState extends State<UsuariosScreen> {
     }).toList();
   }
 
-  void _showUsuarioDialog({Map<String, dynamic>? usuario}) {
+  void _showUsuarioDialog({Map<String, dynamic>? usuario, bool enforceAppAccess = false}) {
     final isEditing = usuario != null;
     final usuarioController = TextEditingController(text: usuario?['usuario'] ?? '');
     final nombresController = TextEditingController(text: usuario?['nombres'] ?? '');
@@ -62,14 +62,34 @@ class _UsuariosScreenState extends State<UsuariosScreen> {
     final cedulaController = TextEditingController(text: usuario?['cedula'] ?? '');
     final passwordController = TextEditingController();
     
-    int? selectedRolId = usuario?['id_roles'];
-    bool accesoAppMovil = usuario?['acceso_app_movil'] ?? false;
+    int? parseRoleId(dynamic value) {
+      if (value is int) return value;
+      return int.tryParse(value?.toString() ?? '');
+    }
+
+    int? selectedRolId = parseRoleId(usuario?['id_roles']) ??
+        parseRoleId(usuario?['id_rol']) ??
+        parseRoleId(usuario?['rol_id']);
+    final mustHaveAppAccess = enforceAppAccess && !isEditing;
+    bool accesoAppMovil = usuario?['acceso_app_movil'] ?? mustHaveAppAccess;
+
+    int? getRoleId(Map<String, dynamic> rol) {
+      final dynamic id = rol['id'] ?? rol['id_rol'] ?? rol['id_roles'] ?? rol['rol_id'];
+      return parseRoleId(id);
+    }
+
+    String getRoleName(Map<String, dynamic> rol) {
+      final dynamic name = rol['nombre'] ?? rol['rol'] ?? rol['descripcion'] ?? rol['name'];
+      return name?.toString() ?? '';
+    }
 
     showDialog(
       context: context,
       builder: (context) => StatefulBuilder(
         builder: (context, setDialogState) => AlertDialog(
-          title: Text(isEditing ? 'Editar Usuario' : 'Nuevo Usuario'),
+          title: Text(
+            isEditing ? 'Editar Usuario' : (mustHaveAppAccess ? 'Nuevo Usuario App' : 'Nuevo Usuario'),
+          ),
           content: SingleChildScrollView(
             child: SizedBox(
               width: 500,
@@ -135,29 +155,41 @@ class _UsuariosScreenState extends State<UsuariosScreen> {
                   ),
                   const SizedBox(height: 16),
                   DropdownButtonFormField<int>(
-                    value: selectedRolId,
+                    value: _roles.any((rol) => getRoleId(rol) == selectedRolId) ? selectedRolId : null,
                     decoration: const InputDecoration(
                       labelText: 'Rol',
                       border: OutlineInputBorder(),
                     ),
-                    items: _roles.map((rol) {
-                      return DropdownMenuItem<int>(
-                        value: rol['id'],
-                        child: Text(rol['nombre'] ?? ''),
-                      );
-                    }).toList(),
+                    hint: Text(_roles.isEmpty ? 'No hay roles disponibles' : 'Selecciona un rol'),
+                    items: _roles
+                        .map((rol) {
+                          final roleId = getRoleId(rol);
+                          if (roleId == null) return null;
+                          return DropdownMenuItem<int>(
+                            value: roleId,
+                            child: Text(getRoleName(rol)),
+                          );
+                        })
+                        .whereType<DropdownMenuItem<int>>()
+                        .toList(),
                     onChanged: (value) {
                       setDialogState(() => selectedRolId = value);
                     },
                   ),
                   const SizedBox(height: 16),
                   CheckboxListTile(
-                    title: const Text('Acceso a App Móvil'),
-                    subtitle: const Text('Permitir inicio de sesión desde la aplicación móvil'),
+                    title: Text(mustHaveAppAccess ? 'Acceso a App Móvil *' : 'Acceso a App Móvil'),
+                    subtitle: Text(
+                      mustHaveAppAccess
+                          ? 'Este usuario tendrá acceso a la aplicación móvil'
+                          : 'Permitir inicio de sesión desde la aplicación móvil',
+                    ),
                     value: accesoAppMovil,
-                    onChanged: (value) {
-                      setDialogState(() => accesoAppMovil = value ?? false);
-                    },
+                    onChanged: mustHaveAppAccess
+                        ? null
+                        : (value) {
+                            setDialogState(() => accesoAppMovil = value ?? false);
+                          },
                   ),
                 ],
               ),
@@ -185,6 +217,27 @@ class _UsuariosScreenState extends State<UsuariosScreen> {
                   return;
                 }
 
+                if (_roles.isEmpty) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('No hay roles disponibles'), backgroundColor: Colors.orange),
+                  );
+                  return;
+                }
+
+                if (selectedRolId == null) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Selecciona un rol'), backgroundColor: Colors.orange),
+                  );
+                  return;
+                }
+
+                if (mustHaveAppAccess && !accesoAppMovil) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('El acceso a la app es obligatorio'), backgroundColor: Colors.orange),
+                  );
+                  return;
+                }
+
                 try {
                   final userData = {
                     'usuario': usuarioController.text,
@@ -194,7 +247,7 @@ class _UsuariosScreenState extends State<UsuariosScreen> {
                     'telefono_cel': telefonoController.text,
                     'cedula': cedulaController.text,
                     'id_roles': selectedRolId,
-                    'acceso_app_movil': accesoAppMovil,
+                    'acceso_app_movil': mustHaveAppAccess ? true : accesoAppMovil,
                     'usuario_actual': 'ADMIN',
                   };
 
@@ -372,15 +425,31 @@ class _UsuariosScreenState extends State<UsuariosScreen> {
                         ),
                       ],
                     ),
-                    ElevatedButton.icon(
-                      onPressed: () => _showUsuarioDialog(),
-                      icon: const Icon(Icons.add),
-                      label: const Text('Nuevo Usuario'),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF2563EB),
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-                      ),
+                    Wrap(
+                      spacing: 12,
+                      runSpacing: 8,
+                      children: [
+                        OutlinedButton.icon(
+                          onPressed: () => _showUsuarioDialog(enforceAppAccess: true),
+                          icon: const Icon(Icons.phone_android_outlined),
+                          label: const Text('Nuevo Usuario App'),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: const Color(0xFF2563EB),
+                            side: const BorderSide(color: Color(0xFF2563EB)),
+                            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+                          ),
+                        ),
+                        ElevatedButton.icon(
+                          onPressed: () => _showUsuarioDialog(),
+                          icon: const Icon(Icons.add),
+                          label: const Text('Nuevo Usuario'),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF2563EB),
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+                          ),
+                        ),
+                      ],
                     ),
                   ],
                 ),
