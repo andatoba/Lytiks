@@ -1,0 +1,46 @@
+services:
+  backend:
+    build: .
+    container_name: lytiks-new-backend
+    ports:
+      - "8081:8080"
+    depends_on:
+      mysql:
+        condition: service_healthy
+    environment:
+      #- SPRING_DATASOURCE_URL=jdbc:mysql://mysql:3306/lytiks_db?useSSL=false&serverTimezone=UTC&createDatabaseIfNotExist=true
+      - SPRING_DATASOURCE_URL=jdbc:mysql://lytiks-new-mysql:3306/lytiks_db?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC&createDatabaseIfNotExist=true
+
+      - SPRING_DATASOURCE_USERNAME=lytiks_user
+      - SPRING_DATASOURCE_PASSWORD=lytiks_pass
+    networks:
+      - lytiks-network
+    volumes:
+      - ./photos:/app/photos
+
+  mysql:
+    image: mysql:8.0
+    container_name: lytiks-new-mysql
+    environment:
+      - MYSQL_ROOT_PASSWORD=root_password
+      - MYSQL_DATABASE=lytiks_db
+      - MYSQL_USER=lytiks_user
+      - MYSQL_PASSWORD=lytiks_pass
+    ports:
+      - "3307:3306"
+    volumes:
+      - mysql-data-new:/var/lib/mysql
+    networks:
+      - lytiks-network
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      timeout: 20s
+      retries: 10
+
+networks:
+  lytiks-network:
+    driver: bridge
+
+volumes:
+  mysql-data-new:
+    driver: local
