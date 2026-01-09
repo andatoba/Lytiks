@@ -1,0 +1,30 @@
+# Build outputs
+
+.dart_tool/
+
+# IDE
+.idea/
+.vscode/
+*.iml
+*.iws
+
+# Misc
+.DS_Store
+.packages
+.pub-cache/
+.pub/
+
+# Test
+test/
+coverage/
+
+# Git
+.git/
+.gitignore
+
+# Documentation
+*.md
+!README_DOCKER.md
+
+# Images (se copian desde assets/)
+images/

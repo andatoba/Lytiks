@@ -21,6 +21,7 @@ class _ResumenSigatokaScreenState extends State<ResumenSigatokaScreen> {
 
   // Variables calculadas
   late int totalMuestras;
+  late int totalPlantasMuestreadas;
   late int totalHojas3era, totalHojas4ta, totalHojas5ta;
   late int totalLesiones3era, totalLesiones4ta, totalLesiones5ta;
   late int totalPlantas3erEstadio3era, totalPlantas3erEstadio4ta, totalPlantas3erEstadio5ta;
@@ -41,11 +42,20 @@ class _ResumenSigatokaScreenState extends State<ResumenSigatokaScreen> {
     _calcularResumen();
   }
 
+  int _asInt(dynamic value, {int defaultValue = 0}) {
+    if (value == null) return defaultValue;
+    if (value is int) return value;
+    if (value is double) return value.toInt();
+    if (value is String) return int.tryParse(value) ?? defaultValue;
+    return defaultValue;
+  }
+
   void _calcularResumen() {
     // Usar las muestras de la sesión actual
     List<Map<String, dynamic>> todasLasMuestras = widget.muestrasSesion;
 
     totalMuestras = todasLasMuestras.length;
+    totalPlantasMuestreadas = 0;
     totalHojas3era = 0;
     totalHojas4ta = 0;
     totalHojas5ta = 0;
@@ -67,6 +77,8 @@ class _ResumenSigatokaScreenState extends State<ResumenSigatokaScreen> {
     int contadorStover = 0;
 
     for (var muestra in todasLasMuestras) {
+      totalPlantasMuestreadas += _asInt(muestra['plantasMuestreadas'], defaultValue: 0);
+
       totalHojas3era += (muestra['totalHojas3era'] ?? 0) as int;
       totalHojas4ta += (muestra['totalHojas4ta'] ?? 0) as int;
       totalHojas5ta += (muestra['totalHojas5ta'] ?? 0) as int;
@@ -154,25 +166,37 @@ class _ResumenSigatokaScreenState extends State<ResumenSigatokaScreen> {
     promedioHvlq5_10w = contadorStover > 0 ? sumaHvlq5_10w / contadorStover : 0;
     promedioTh10w = contadorStover > 0 ? sumaTh10w / contadorStover : 0;
 
-    promedioLesiones3era = totalMuestras > 0 ? totalLesiones3era / totalMuestras : 0;
-    promedioLesiones4ta = totalMuestras > 0 ? totalLesiones4ta / totalMuestras : 0;
-    promedioLesiones5ta = totalMuestras > 0 ? totalLesiones5ta / totalMuestras : 0;
+    promedioLesiones3era = totalPlantasMuestreadas > 0 ? totalLesiones3era / totalPlantasMuestreadas : 0;
+    promedioLesiones4ta = totalPlantasMuestreadas > 0 ? totalLesiones4ta / totalPlantasMuestreadas : 0;
+    promedioLesiones5ta = totalPlantasMuestreadas > 0 ? totalLesiones5ta / totalPlantasMuestreadas : 0;
 
-    porcentaje3erEstadio3era = totalMuestras > 0 ? (totalPlantas3erEstadio3era / totalMuestras) * 100 : 0;
-    porcentaje3erEstadio4ta = totalMuestras > 0 ? (totalPlantas3erEstadio4ta / totalMuestras) * 100 : 0;
-    porcentaje3erEstadio5ta = totalMuestras > 0 ? (totalPlantas3erEstadio5ta / totalMuestras) * 100 : 0;
+    porcentaje3erEstadio3era = totalPlantasConLesiones3era > 0
+        ? (totalPlantas3erEstadio3era / totalPlantasConLesiones3era) * 100
+        : 0;
+    porcentaje3erEstadio4ta = totalPlantasConLesiones4ta > 0
+        ? (totalPlantas3erEstadio4ta / totalPlantasConLesiones4ta) * 100
+        : 0;
+    porcentaje3erEstadio5ta = totalPlantasConLesiones5ta > 0
+        ? (totalPlantas3erEstadio5ta / totalPlantasConLesiones5ta) * 100
+        : 0;
 
-    porcentajePlantasLesiones3era = totalMuestras > 0 ? (totalPlantasConLesiones3era / totalMuestras) * 100 : 0;
-    porcentajePlantasLesiones4ta = totalMuestras > 0 ? (totalPlantasConLesiones4ta / totalMuestras) * 100 : 0;
-    porcentajePlantasLesiones5ta = totalMuestras > 0 ? (totalPlantasConLesiones5ta / totalMuestras) * 100 : 0;
+    porcentajePlantasLesiones3era = totalPlantasMuestreadas > 0
+        ? (totalPlantasConLesiones3era / totalPlantasMuestreadas) * 100
+        : 0;
+    porcentajePlantasLesiones4ta = totalPlantasMuestreadas > 0
+        ? (totalPlantasConLesiones4ta / totalPlantasMuestreadas) * 100
+        : 0;
+    porcentajePlantasLesiones5ta = totalPlantasMuestreadas > 0
+        ? (totalPlantasConLesiones5ta / totalPlantasMuestreadas) * 100
+        : 0;
 
-    promedioHojasFuncionales3era = totalMuestras > 0 ? totalHojas3era / totalMuestras : 0;
-    promedioHojasFuncionales4ta = totalMuestras > 0 ? totalHojas4ta / totalMuestras : 0;
-    promedioHojasFuncionales5ta = totalMuestras > 0 ? totalHojas5ta / totalMuestras : 0;
+    promedioHojasFuncionales3era = totalPlantasMuestreadas > 0 ? totalHojas3era / totalPlantasMuestreadas : 0;
+    promedioHojasFuncionales4ta = totalPlantasMuestreadas > 0 ? totalHojas4ta / totalPlantasMuestreadas : 0;
+    promedioHojasFuncionales5ta = totalPlantasMuestreadas > 0 ? totalHojas5ta / totalPlantasMuestreadas : 0;
 
-    promedioLetras3era = totalMuestras > 0 ? totalLetras3era / totalMuestras : 0;
-    promedioLetras4ta = totalMuestras > 0 ? totalLetras4ta / totalMuestras : 0;
-    promedioLetras5ta = totalMuestras > 0 ? totalLetras5ta / totalMuestras : 0;
+    promedioLetras3era = totalPlantasMuestreadas > 0 ? totalLetras3era / totalPlantasMuestreadas : 0;
+    promedioLetras4ta = totalPlantasMuestreadas > 0 ? totalLetras4ta / totalPlantasMuestreadas : 0;
+    promedioLetras5ta = totalPlantasMuestreadas > 0 ? totalLetras5ta / totalPlantasMuestreadas : 0;
 
     // Calcular Estado Evolutivo
     ee3era = promedioLesiones3era * 120 * promedioLetras3era;
@@ -403,9 +427,9 @@ class _ResumenSigatokaScreenState extends State<ResumenSigatokaScreen> {
                 ),
               ),
               Divider(height: 1, color: Colors.grey[300]),
-              _buildTablaFila('a) Total Plantas Muestreadas', totalMuestras.toString(), totalMuestras.toString(), totalMuestras.toString(), Colors.brown[50]!),
+              _buildTablaFila('a) Total Plantas Muestreadas', totalPlantasMuestreadas.toString(), totalPlantasMuestreadas.toString(), totalPlantasMuestreadas.toString(), Colors.brown[50]!),
               Divider(height: 1, color: Colors.grey[300]),
-              _buildTablaFila('b) Total Plantas con Lesiones', totalMuestras.toString(), totalMuestras.toString(), totalMuestras.toString(), Colors.white),
+              _buildTablaFila('b) Total Plantas con Lesiones', totalPlantasConLesiones3era.toString(), totalPlantasConLesiones4ta.toString(), totalPlantasConLesiones5ta.toString(), Colors.white),
               Divider(height: 1, color: Colors.grey[300]),
               _buildTablaFila('c) Total Lesiones', totalLesiones3era.toString(), totalLesiones4ta.toString(), totalLesiones5ta.toString(), Colors.brown[50]!),
               Divider(height: 1, color: Colors.grey[300]),
@@ -564,7 +588,7 @@ class _ResumenSigatokaScreenState extends State<ResumenSigatokaScreen> {
               TableRow(
                 decoration: BoxDecoration(color: Colors.white),
                 children: [
-                  Padding(padding: const EdgeInsets.all(10.0), child: Text('6° Semana', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500))),
+                  Padding(padding: const EdgeInsets.all(10.0), child: Text('0° Semana', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500))),
                   Padding(padding: const EdgeInsets.all(10.0), child: Text('6,0', textAlign: TextAlign.center, style: TextStyle(fontSize: 13))),
                   Padding(padding: const EdgeInsets.all(10.0), child: Text('1,0', textAlign: TextAlign.center, style: TextStyle(fontSize: 13))),
                   Padding(padding: const EdgeInsets.all(10.0), child: Text('12,5', textAlign: TextAlign.center, style: TextStyle(fontSize: 13))),
@@ -635,7 +659,7 @@ class _ResumenSigatokaScreenState extends State<ResumenSigatokaScreen> {
               TableRow(
                 decoration: BoxDecoration(color: Colors.white),
                 children: [
-                  Padding(padding: const EdgeInsets.all(10.0), child: Text('6° Semana', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500))),
+                  Padding(padding: const EdgeInsets.all(10.0), child: Text('0° Semana', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500))),
                   Padding(padding: const EdgeInsets.all(10.0), child: Text(promedioHvle0w.toStringAsFixed(1), textAlign: TextAlign.center, style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold))),
                   Padding(padding: const EdgeInsets.all(10.0), child: Text(promedioHvlq0w.toStringAsFixed(1), textAlign: TextAlign.center, style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold))),
                   Padding(padding: const EdgeInsets.all(10.0), child: Text(promedioHvlq5_0w.toStringAsFixed(1), textAlign: TextAlign.center, style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold))),

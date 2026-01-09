@@ -1,0 +1,1 @@
+ C:\\Users\\WELLINGTON\\Desktop\\Lytiks\\Portal_lytiks\\build\\web\\manifest.json:  C:\\Users\\WELLINGTON\\Desktop\\Lytiks\\Portal_lytiks\\web\\index.html C:\\Users\\WELLINGTON\\Desktop\\Lytiks\\Portal_lytiks\\web\\manifest.json

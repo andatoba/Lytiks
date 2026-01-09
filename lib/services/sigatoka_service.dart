@@ -33,6 +33,3 @@ class SigatokaService {
     return jsonDecode(response.body);
   }
 }
-
-
-
