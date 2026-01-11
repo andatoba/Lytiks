@@ -65,7 +65,6 @@ class _SigatokaAuditScreenState extends State<SigatokaAuditScreen> {
   // 2. Controladores para agregar muestras
   final TextEditingController muestraNumController = TextEditingController();
   final TextEditingController loteCodigoController = TextEditingController();
-  final TextEditingController plantasMuestreadasController = TextEditingController();
   final TextEditingController grado3eraController = TextEditingController();
   final TextEditingController grado4taController = TextEditingController();
   final TextEditingController grado5taController = TextEditingController();
@@ -135,7 +134,6 @@ class _SigatokaAuditScreenState extends State<SigatokaAuditScreen> {
           totalHojas3era: muestra['totalHojas3era'],
           totalHojas4ta: muestra['totalHojas4ta'],
           totalHojas5ta: muestra['totalHojas5ta'],
-          plantasMuestreadas: muestra['plantasMuestreadas'] ?? 0,
           plantasConLesiones: 0,
           totalLesiones: 0,
           plantas3erEstadio: 0,
@@ -313,11 +311,10 @@ class _SigatokaAuditScreenState extends State<SigatokaAuditScreen> {
 
     // Validar campos requeridos
     if (muestraNumController.text.isEmpty ||
-        loteCodigoController.text.isEmpty ||
-        plantasMuestreadasController.text.isEmpty) {
+        loteCodigoController.text.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Debe completar Muestra #, Lote # y Plantas Muestreadas'),
+          content: Text('Debe completar Muestra # y Lote #'),
           backgroundColor: Colors.orange,
         ),
       );
@@ -328,7 +325,6 @@ class _SigatokaAuditScreenState extends State<SigatokaAuditScreen> {
     final muestraData = {
       'numeroMuestra': int.tryParse(muestraNumController.text) ?? 1,
       'lote': loteCodigoController.text,
-      'plantasMuestreadas': int.tryParse(plantasMuestreadasController.text) ?? 0,
       'hoja3era': grado3eraController.text.isEmpty ? null : grado3eraController.text,
       'hoja4ta': grado4taController.text.isEmpty ? null : grado4taController.text,
       'hoja5ta': grado5taController.text.isEmpty ? null : grado5taController.text,
@@ -361,7 +357,6 @@ class _SigatokaAuditScreenState extends State<SigatokaAuditScreen> {
     int nextMuestra = (int.tryParse(muestraNumController.text) ?? 0) + 1;
     muestraNumController.text = nextMuestra.toString();
     // NO limpiar lote para facilitar ingreso múltiple
-    plantasMuestreadasController.clear();
     grado3eraController.clear();
     grado4taController.clear();
     grado5taController.clear();
@@ -388,7 +383,6 @@ class _SigatokaAuditScreenState extends State<SigatokaAuditScreen> {
     evaluadorController.dispose();
     muestraNumController.dispose();
     loteCodigoController.dispose();
-    plantasMuestreadasController.dispose();
     grado3eraController.dispose();
     grado4taController.dispose();
     grado5taController.dispose();
@@ -935,25 +929,6 @@ class _SigatokaAuditScreenState extends State<SigatokaAuditScreen> {
                       hintText: 'A1',
                       border: OutlineInputBorder(),
                       prefixIcon: Icon(Icons.location_on),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 16),
-
-            // Plantas muestreadas
-            Row(
-              children: [
-                Expanded(
-                  child: TextField(
-                    controller: plantasMuestreadasController,
-                    keyboardType: TextInputType.number,
-                    decoration: const InputDecoration(
-                      labelText: '🌱 Plantas muestreadas *',
-                      hintText: '10',
-                      border: OutlineInputBorder(),
-                      prefixIcon: Icon(Icons.eco),
                     ),
                   ),
                 ),

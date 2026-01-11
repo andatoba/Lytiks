@@ -16,6 +16,7 @@ com\lytiks\backend\service\SeguimientoMokoService.class
 com\lytiks\backend\service\SigatokaCalculationServiceCompleto.class
 com\lytiks\backend\controller\SigatokaEvaluacionController.class
 com\lytiks\backend\repository\AuditScoreRepository.class
+com\lytiks\backend\config\SwaggerConfig.class
 com\lytiks\backend\entity\IsUsuario.class
 com\lytiks\backend\repository\SeguimientoMokoRepository.class
 com\lytiks\backend\repository\SintomaRepository.class

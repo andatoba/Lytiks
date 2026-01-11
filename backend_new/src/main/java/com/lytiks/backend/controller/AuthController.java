@@ -5,6 +5,13 @@ import com.lytiks.backend.entity.IsRol;
 import com.lytiks.backend.repository.IsUsuarioRepository;
 import com.lytiks.backend.repository.IsRolRepository;
 import com.lytiks.backend.util.AESEncryption;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.ExampleObject;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -16,6 +23,7 @@ import java.util.Optional;
 @RestController
 @RequestMapping("/auth")
 @CrossOrigin(origins = "*")
+@Tag(name = "Autenticación", description = "Endpoints para autenticación y gestión de usuarios")
 public class AuthController {
 
     @Autowired
@@ -25,8 +33,20 @@ public class AuthController {
     private IsRolRepository isRolRepository;
 
     // Endpoint para obtener perfil de usuario por username
+    @Operation(
+        summary = "Obtener perfil de usuario",
+        description = "Obtiene el perfil completo de un usuario incluyendo su rol"
+    )
+    @ApiResponses(value = {
+        @ApiResponse(responseCode = "200", description = "Perfil obtenido exitosamente"),
+        @ApiResponse(responseCode = "404", description = "Usuario no encontrado"),
+        @ApiResponse(responseCode = "500", description = "Error interno del servidor")
+    })
     @GetMapping("/profile/{username}")
-    public ResponseEntity<?> getProfile(@PathVariable String username) {
+    public ResponseEntity<?> getProfile(
+        @Parameter(description = "Nombre de usuario", required = true)
+        @PathVariable String username
+    ) {
         try {
             Optional<IsUsuario> userOpt = isUsuarioRepository.findActiveUserByUsuario(username);
             if (userOpt.isEmpty()) {
@@ -56,8 +76,39 @@ public class AuthController {
     }
     
     // Endpoint de login con encriptación AES
+    @Operation(
+        summary = "Iniciar sesión",
+        description = "Autentica un usuario con sus credenciales y devuelve un token de acceso"
+    )
+    @ApiResponses(value = {
+        @ApiResponse(
+            responseCode = "200", 
+            description = "Login exitoso",
+            content = @Content(
+                mediaType = "application/json",
+                examples = @ExampleObject(
+                    value = "{\"token\": \"token_1_1234567890\", \"user\": {\"id\": 1, \"usuario\": \"admin\", \"nombres\": \"Juan\", \"apellidos\": \"Pérez\", \"correo\": \"admin@lytiks.com\", \"rol\": \"ADMIN\"}}"
+                )
+            )
+        ),
+        @ApiResponse(responseCode = "401", description = "Credenciales inválidas"),
+        @ApiResponse(responseCode = "400", description = "Credenciales incompletas"),
+        @ApiResponse(responseCode = "500", description = "Error interno del servidor")
+    })
     @PostMapping("/login")
-    public ResponseEntity<?> login(@RequestBody Map<String, String> credentials) {
+    public ResponseEntity<?> login(
+        @io.swagger.v3.oas.annotations.parameters.RequestBody(
+            description = "Credenciales del usuario (contraseña encriptada con AES)",
+            required = true,
+            content = @Content(
+                mediaType = "application/json",
+                examples = @ExampleObject(
+                    value = "{\"username\": \"admin\", \"password\": \"encryptedPasswordHere\"}"
+                )
+            )
+        )
+        @RequestBody Map<String, String> credentials
+    ) {
         IsUsuario user = null;
         String username = null;
         
@@ -121,6 +172,11 @@ public class AuthController {
         }
     }
     
+    @Operation(
+        summary = "Endpoint de prueba",
+        description = "Verifica que el servicio de autenticación está funcionando"
+    )
+    @ApiResponse(responseCode = "200", description = "Servicio funcionando correctamente")
     @GetMapping("/test")
     public ResponseEntity<String> test() {
         return ResponseEntity.ok("Auth endpoint funcionando correctamente con is_usuarios!");
