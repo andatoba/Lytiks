@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../services/auth_service.dart';
+import '../services/location_tracking_service.dart';
 import 'home_screen.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -16,6 +18,8 @@ class _LoginScreenState extends State<LoginScreen> {
   bool _obscurePassword = true;
   bool _isLoading = false;
   final _authService = AuthService();
+  final _locationTrackingService = LocationTrackingService();
+  final _storage = const FlutterSecureStorage();
 
   @override
   void dispose() {
@@ -39,9 +43,24 @@ class _LoginScreenState extends State<LoginScreen> {
         // Navegamos según el rol del usuario
         if (mounted) {
           final userRole = loginResponse['user']['rol']?.toString().toUpperCase() ?? '';
+          final userId = loginResponse['user']['id']?.toString() ?? '';
+          final userName = loginResponse['user']['username']?.toString() ?? '';
+          
           print('🔍 Rol del usuario recibido: $userRole');
 
           if (userRole == 'OPERADOR') {
+            // Guardar información del usuario para tracking
+            await _storage.write(key: 'user_id', value: userId);
+            await _storage.write(key: 'user_name', value: userName);
+            
+            // Iniciar seguimiento automático de ubicación
+            await _locationTrackingService.startTracking(
+              userId: userId,
+              userName: userName,
+            );
+            
+            print('✅ Seguimiento de ubicación iniciado para $userName');
+            
             Navigator.pushReplacement(
               context,
               MaterialPageRoute(builder: (context) => const HomeScreen()),

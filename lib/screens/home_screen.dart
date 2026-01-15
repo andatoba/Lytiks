@@ -8,6 +8,7 @@ import 'sigatoka_audit_screen.dart';
 import 'audit_consultation_screen.dart';
 import 'client_info_screen.dart';
 import 'profile_screen.dart';
+import 'location_tracking_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -652,6 +653,28 @@ class InicioTab extends StatelessWidget {
                 ),
               ),
             ],
+          ),
+
+          const SizedBox(height: 12),
+
+          // Tercera fila: Seguimiento de ubicación
+          SizedBox(
+            width: double.infinity,
+            child: _buildActionButton(
+              context,
+              icon: Icons.location_on,
+              title: '📍 Seguimiento de Ubicación',
+              color: const Color(0xFFE91E63),
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => const LocationTrackingScreen(),
+                  ),
+                );
+              },
+              isFullWidth: true,
+            ),
           ),
 
           const SizedBox(height: 12),
