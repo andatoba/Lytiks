@@ -22,7 +22,7 @@ services:
     image: mysql:8.0
     container_name: lytiks-new-mysql
     environment:
-      - MYSQL_ROOT_PASSWORD=root_password
+      - MYSQL_ROOT_PASSWORD=cla@ISdb$26
       - MYSQL_DATABASE=lytiks_db
       - MYSQL_USER=lytiks_user
       - MYSQL_PASSWORD=lytiks_pass

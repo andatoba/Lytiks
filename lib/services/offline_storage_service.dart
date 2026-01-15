@@ -8,7 +8,7 @@ import 'package:flutter/foundation.dart';
 class OfflineStorageService {
   static Database? _database;
   static const String _databaseName = 'lytiks_offline.db';
-  static const int _databaseVersion = 3;
+  static const int _databaseVersion = 4;
 
   // Singleton
   static final OfflineStorageService _instance =
@@ -80,6 +80,24 @@ class OfflineStorageService {
       ''');
       debugPrint('✅ Tabla pending_sigatoka_audits añadida en upgrade');
     }
+    if (oldVersion < 4) {
+      // Crear tabla para seguimiento de ubicación de técnicos
+      await db.execute('''
+        CREATE TABLE IF NOT EXISTS location_tracking (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          user_id TEXT NOT NULL,
+          user_name TEXT,
+          latitude REAL NOT NULL,
+          longitude REAL NOT NULL,
+          accuracy REAL,
+          matrix_latitude REAL,
+          matrix_longitude REAL,
+          timestamp TEXT NOT NULL,
+          is_synced INTEGER DEFAULT 0
+        )
+      ''');
+      debugPrint('✅ Tabla location_tracking añadida en upgrade');
+    }
   }
 
   Future<void> _onCreate(Database db, int version) async {
@@ -145,6 +163,23 @@ class OfflineStorageService {
         )
       ''');
       debugPrint('✅ Tabla pending_sigatoka_audits creada');
+
+      // Tabla para seguimiento de ubicación de técnicos
+      await db.execute('''
+        CREATE TABLE location_tracking (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          user_id TEXT NOT NULL,
+          user_name TEXT,
+          latitude REAL NOT NULL,
+          longitude REAL NOT NULL,
+          accuracy REAL,
+          matrix_latitude REAL,
+          matrix_longitude REAL,
+          timestamp TEXT NOT NULL,
+          is_synced INTEGER DEFAULT 0
+        )
+      ''');
+      debugPrint('✅ Tabla location_tracking creada');
 
       // Tabla para clientes pendientes
       await db.execute('''

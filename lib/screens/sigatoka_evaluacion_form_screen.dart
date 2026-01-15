@@ -42,7 +42,6 @@ class _SigatokaEvaluacionFormScreenState extends State<SigatokaEvaluacionFormScr
   final TextEditingController _totalHojas5taController = TextEditingController();
   
   // Variables a-e (cálculo)
-  final TextEditingController _plantasMuestreadasController = TextEditingController();
   final TextEditingController _plantasConLesionesController = TextEditingController();
   final TextEditingController _totalLesionesController = TextEditingController();
   final TextEditingController _plantas3erEstadioController = TextEditingController();
@@ -77,7 +76,6 @@ class _SigatokaEvaluacionFormScreenState extends State<SigatokaEvaluacionFormScr
     _totalHojas3eraController.dispose();
     _totalHojas4taController.dispose();
     _totalHojas5taController.dispose();
-    _plantasMuestreadasController.dispose();
     _plantasConLesionesController.dispose();
     _totalLesionesController.dispose();
     _plantas3erEstadioController.dispose();
@@ -196,12 +194,11 @@ class _SigatokaEvaluacionFormScreenState extends State<SigatokaEvaluacionFormScr
     }
     
     // Validar campos obligatorios
-    if (_plantasMuestreadasController.text.isEmpty ||
-        _plantasConLesionesController.text.isEmpty ||
+    if (_plantasConLesionesController.text.isEmpty ||
         _totalLesionesController.text.isEmpty ||
         _plantas3erEstadioController.text.isEmpty ||
         _totalLetrasController.text.isEmpty) {
-      _showError('Complete todos los campos obligatorios (a-e)');
+      _showError('Complete todos los campos obligatorios (b-e)');
       return;
     }
     
@@ -219,8 +216,7 @@ class _SigatokaEvaluacionFormScreenState extends State<SigatokaEvaluacionFormScr
         totalHojas3era: _totalHojas3eraController.text.isNotEmpty ? int.parse(_totalHojas3eraController.text) : null,
         totalHojas4ta: _totalHojas4taController.text.isNotEmpty ? int.parse(_totalHojas4taController.text) : null,
         totalHojas5ta: _totalHojas5taController.text.isNotEmpty ? int.parse(_totalHojas5taController.text) : null,
-        // Variables a-e
-        plantasMuestreadas: int.parse(_plantasMuestreadasController.text),
+        // Variables b-e
         plantasConLesiones: int.parse(_plantasConLesionesController.text),
         totalLesiones: int.parse(_totalLesionesController.text),
         plantas3erEstadio: int.parse(_plantas3erEstadioController.text),
@@ -290,7 +286,6 @@ class _SigatokaEvaluacionFormScreenState extends State<SigatokaEvaluacionFormScr
     _totalHojas3eraController.clear();
     _totalHojas4taController.clear();
     _totalHojas5taController.clear();
-    _plantasMuestreadasController.clear();
     _plantasConLesionesController.clear();
     _totalLesionesController.clear();
     _plantas3erEstadioController.clear();
@@ -751,18 +746,9 @@ class _SigatokaEvaluacionFormScreenState extends State<SigatokaEvaluacionFormScr
           ),
           const SizedBox(height: 8),
           TextField(
-            controller: _plantasMuestreadasController,
-            decoration: const InputDecoration(
-              labelText: 'a) Plantas Muestreadas *',
-              border: OutlineInputBorder(),
-            ),
-            keyboardType: TextInputType.number,
-          ),
-          const SizedBox(height: 12),
-          TextField(
             controller: _plantasConLesionesController,
             decoration: const InputDecoration(
-              labelText: 'b) Plantas con Lesiones *',
+              labelText: 'a) Plantas con Lesiones *',
               border: OutlineInputBorder(),
             ),
             keyboardType: TextInputType.number,
@@ -771,7 +757,7 @@ class _SigatokaEvaluacionFormScreenState extends State<SigatokaEvaluacionFormScr
           TextField(
             controller: _totalLesionesController,
             decoration: const InputDecoration(
-              labelText: 'c) Total de Lesiones *',
+              labelText: 'b) Total de Lesiones *',
               border: OutlineInputBorder(),
             ),
             keyboardType: TextInputType.number,
@@ -780,7 +766,7 @@ class _SigatokaEvaluacionFormScreenState extends State<SigatokaEvaluacionFormScr
           TextField(
             controller: _plantas3erEstadioController,
             decoration: const InputDecoration(
-              labelText: 'd) Plantas en 3er Estadio *',
+              labelText: 'c) Plantas en 3er Estadio *',
               border: OutlineInputBorder(),
             ),
             keyboardType: TextInputType.number,
@@ -789,7 +775,7 @@ class _SigatokaEvaluacionFormScreenState extends State<SigatokaEvaluacionFormScr
           TextField(
             controller: _totalLetrasController,
             decoration: const InputDecoration(
-              labelText: 'e) Total de Letras (severidad) *',
+              labelText: 'd) Total de Letras (severidad) *',
               border: OutlineInputBorder(),
             ),
             keyboardType: TextInputType.number,

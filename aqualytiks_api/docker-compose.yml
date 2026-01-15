@@ -1,0 +1,21 @@
+services:
+  aqualytiks-api:
+    build: .
+    container_name: aqualytiks-api
+    ports:
+      - "8083:8080"
+    environment:
+      - DB_HOST=lytiks-new-mysql
+      - DB_PORT=3306
+      - DB_USER=root
+      - DB_PASSWORD=cla@ISdb$$26
+      - DB_NAME=aqualytiks
+      - API_PORT=8083
+      - SERVER_IP=5.161.198.89
+    networks:
+      - backend_new_lytiks-network
+    restart: unless-stopped
+
+networks:
+  backend_new_lytiks-network:
+    external: true

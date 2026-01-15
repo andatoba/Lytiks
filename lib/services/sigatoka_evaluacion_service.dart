@@ -84,8 +84,7 @@ class SigatokaEvaluacionService {
     int? totalHojas3era,
     int? totalHojas4ta,
     int? totalHojas5ta,
-    // Variables a-e
-    required int plantasMuestreadas,
+    // Variables b-e
     required int plantasConLesiones,
     required int totalLesiones,
     required int plantas3erEstadio,
@@ -162,7 +161,6 @@ class SigatokaEvaluacionService {
           'totalHojas3era': totalHojas3era,
           'totalHojas4ta': totalHojas4ta,
           'totalHojas5ta': totalHojas5ta,
-          'plantasMuestreadas': plantasMuestreadas,
           'plantasConLesiones': plantasConLesiones,
           'totalLesiones': totalLesiones,
           'plantas3erEstadio': plantas3erEstadio,
