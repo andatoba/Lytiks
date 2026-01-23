@@ -23,7 +23,7 @@ class LocationTrackingService {
   // Configuración de horario: 8 AM a 4 PM (16:00)
   static const int _startHour = 8;
   static const int _endHour = 16;
-  static const Duration _trackingInterval = Duration(minutes: 5);
+  static const Duration _trackingInterval = Duration(seconds: 10);
 
   /// Iniciar el seguimiento automático de ubicación
   Future<void> startTracking({
@@ -52,7 +52,7 @@ class LocationTrackingService {
     // Capturar ubicación inmediatamente
     await _captureLocation();
 
-    // Programar capturas cada 5 minutos
+    // Programar capturas cada 10 segundos
     _trackingTimer = Timer.periodic(_trackingInterval, (timer) async {
       if (_shouldTrackNow()) {
         await _captureLocation();

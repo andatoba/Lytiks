@@ -214,7 +214,7 @@ class _LocationTrackingScreenState extends State<LocationTrackingScreen> {
                       const SizedBox(height: 4),
                       Text(
                         isTracking 
-                            ? '✅ Activo (cada 5 min, 8AM-4PM)'
+                            ? '✅ Activo (cada 10 s, 8AM-4PM)'
                             : '⏸️ Inactivo',
                         style: TextStyle(
                           color: isTracking ? Colors.green : Colors.grey,
@@ -230,7 +230,7 @@ class _LocationTrackingScreenState extends State<LocationTrackingScreen> {
             const Divider(),
             const SizedBox(height: 8),
             const Text(
-              '📍 El seguimiento automático captura tu ubicación cada 5 minutos entre las 8:00 AM y 4:00 PM.',
+              '📍 El seguimiento automático captura tu ubicación cada 10 segundos entre las 8:00 AM y 4:00 PM.',
               style: TextStyle(fontSize: 13, color: Colors.grey),
             ),
             const SizedBox(height: 8),
