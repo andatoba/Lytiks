@@ -3,6 +3,8 @@ package com.lytiks.backend.controller;
 import com.lytiks.backend.dto.LocationTrackingDTO;
 import com.lytiks.backend.entity.LocationTracking;
 import com.lytiks.backend.service.LocationTrackingService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -14,8 +16,9 @@ import java.util.List;
 import java.util.Map;
 
 @RestController
-@RequestMapping("/api/location-tracking")
+@RequestMapping("/location-tracking")
 @CrossOrigin(origins = "*")
+@Tag(name = "Seguimiento de ubicacion", description = "Endpoints para seguimiento de ubicacion de tecnicos")
 public class LocationTrackingController {
     
     @Autowired
@@ -25,6 +28,7 @@ public class LocationTrackingController {
      * Guardar una nueva ubicación del técnico
      * POST /api/location-tracking
      */
+    @Operation(summary = "Guardar ubicacion")
     @PostMapping
     public ResponseEntity<Map<String, Object>> saveLocation(@RequestBody LocationTrackingDTO dto) {
         Map<String, Object> response = new HashMap<>();
@@ -63,6 +67,7 @@ public class LocationTrackingController {
      * Obtener todas las ubicaciones de un usuario
      * GET /api/location-tracking/user/{userId}
      */
+    @Operation(summary = "Obtener ubicaciones por usuario")
     @GetMapping("/user/{userId}")
     public ResponseEntity<Map<String, Object>> getLocationsByUserId(@PathVariable String userId) {
         Map<String, Object> response = new HashMap<>();
@@ -87,6 +92,7 @@ public class LocationTrackingController {
      * Obtener ubicaciones de hoy de un usuario
      * GET /api/location-tracking/user/{userId}/today
      */
+    @Operation(summary = "Obtener ubicaciones de hoy por usuario")
     @GetMapping("/user/{userId}/today")
     public ResponseEntity<Map<String, Object>> getTodayLocationsByUserId(@PathVariable String userId) {
         Map<String, Object> response = new HashMap<>();
@@ -111,6 +117,7 @@ public class LocationTrackingController {
      * Obtener ubicaciones en horario laboral (8AM-4PM) de un usuario
      * GET /api/location-tracking/user/{userId}/work-hours
      */
+    @Operation(summary = "Obtener ubicaciones en horario laboral por usuario")
     @GetMapping("/user/{userId}/work-hours")
     public ResponseEntity<Map<String, Object>> getWorkHoursLocationsByUserId(@PathVariable String userId) {
         Map<String, Object> response = new HashMap<>();
@@ -135,6 +142,7 @@ public class LocationTrackingController {
      * Obtener todas las ubicaciones de hoy (todos los usuarios)
      * GET /api/location-tracking/today
      */
+    @Operation(summary = "Obtener ubicaciones de hoy")
     @GetMapping("/today")
     public ResponseEntity<Map<String, Object>> getTodayLocations() {
         Map<String, Object> response = new HashMap<>();
@@ -159,6 +167,7 @@ public class LocationTrackingController {
      * Obtener todas las ubicaciones (administración)
      * GET /api/location-tracking
      */
+    @Operation(summary = "Obtener todas las ubicaciones")
     @GetMapping
     public ResponseEntity<Map<String, Object>> getAllLocations() {
         Map<String, Object> response = new HashMap<>();
@@ -183,6 +192,7 @@ public class LocationTrackingController {
      * Obtener rango de fechas específico para un usuario
      * GET /api/location-tracking/user/{userId}/range
      */
+    @Operation(summary = "Obtener ubicaciones por rango de fechas")
     @GetMapping("/user/{userId}/range")
     public ResponseEntity<Map<String, Object>> getLocationsByDateRange(
             @PathVariable String userId,
@@ -214,6 +224,7 @@ public class LocationTrackingController {
      * Limpiar ubicaciones antiguas (más de X días)
      * DELETE /api/location-tracking/cleanup?days=90
      */
+    @Operation(summary = "Limpiar ubicaciones antiguas")
     @DeleteMapping("/cleanup")
     public ResponseEntity<Map<String, Object>> cleanupOldLocations(
             @RequestParam(defaultValue = "90") int days) {
