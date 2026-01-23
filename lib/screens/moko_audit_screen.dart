@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'package:image_picker/image_picker.dart';
 
@@ -26,7 +27,19 @@ class _MokoAuditScreenState extends State<MokoAuditScreen> {
 
   // Cliente seleccionado
   Map<String, dynamic>? _selectedClient;
-  final TextEditingController _cedulaController = TextEditingController();
+  final TextEditingController _nombreController = TextEditingController();
+  final FocusNode _nombreFocusNode = FocusNode();
+  List<Map<String, dynamic>> _clientSuggestions = [];
+  Timer? _searchDebounce;
+  String _lastQuery = '';
+
+  @override
+  void dispose() {
+    _searchDebounce?.cancel();
+    _nombreController.dispose();
+    _nombreFocusNode.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -319,19 +332,91 @@ class _MokoAuditScreenState extends State<MokoAuditScreen> {
           Row(
             children: [
               Expanded(
-                child: TextField(
-                  controller: _cedulaController,
-                  keyboardType: TextInputType.number,
-                  decoration: InputDecoration(
-                    labelText: 'Cédula del Cliente',
-                    hintText: 'Ingrese la cédula',
-                    prefixIcon: const Icon(Icons.badge),
-                    border: const OutlineInputBorder(),
-                    suffixIcon: IconButton(
-                      icon: const Icon(Icons.search),
-                      onPressed: _searchClientByCedula,
-                    ),
-                  ),
+                child: RawAutocomplete<Map<String, dynamic>>(
+                  textEditingController: _nombreController,
+                  focusNode: _nombreFocusNode,
+                  displayStringForOption: _formatClientName,
+                  optionsBuilder: (TextEditingValue value) {
+                    final query = value.text.trim();
+                    if (query.length < 2 || query != _lastQuery) {
+                      return const Iterable<Map<String, dynamic>>.empty();
+                    }
+                    return _clientSuggestions;
+                  },
+                  onSelected: (client) {
+                    if (!mounted) {
+                      return;
+                    }
+                    setState(() {
+                      _selectedClient = client;
+                      _clientSuggestions = [];
+                    });
+                  },
+                  fieldViewBuilder: (
+                    BuildContext context,
+                    TextEditingController controller,
+                    FocusNode focusNode,
+                    VoidCallback onFieldSubmitted,
+                  ) {
+                    return TextField(
+                      controller: controller,
+                      focusNode: focusNode,
+                      keyboardType: TextInputType.text,
+                      onChanged: _onNameChanged,
+                      decoration: InputDecoration(
+                        labelText: 'Nombre y Apellido del Cliente',
+                        hintText: 'Ingrese nombre y apellido',
+                        prefixIcon: const Icon(Icons.person),
+                        border: const OutlineInputBorder(),
+                        suffixIcon: IconButton(
+                          icon: const Icon(Icons.search),
+                          onPressed: _triggerSearch,
+                        ),
+                      ),
+                    );
+                  },
+                  optionsViewBuilder: (
+                    BuildContext context,
+                    AutocompleteOnSelected<Map<String, dynamic>> onSelected,
+                    Iterable<Map<String, dynamic>> options,
+                  ) {
+                    final optionList = options.toList();
+                    return Align(
+                      alignment: Alignment.topLeft,
+                      child: Material(
+                        elevation: 4.0,
+                        child: ConstrainedBox(
+                          constraints: const BoxConstraints(maxHeight: 240),
+                          child: ListView.separated(
+                            padding: EdgeInsets.zero,
+                            shrinkWrap: true,
+                            itemCount: optionList.length,
+                            separatorBuilder: (_, __) => const Divider(height: 1),
+                            itemBuilder: (context, index) {
+                              final client = optionList[index];
+                              final nombre = _formatClientName(client);
+                              final cedula = client['cedula']?.toString() ?? '';
+                              final finca = _formatFincaName(client);
+                              final subtitleParts = <String>[];
+                              if (cedula.isNotEmpty) {
+                                subtitleParts.add('Cédula: $cedula');
+                              }
+                              if (finca.isNotEmpty) {
+                                subtitleParts.add('Finca: $finca');
+                              }
+                              return ListTile(
+                                title: Text(nombre.isEmpty ? 'Cliente sin nombre' : nombre),
+                                subtitle: subtitleParts.isEmpty
+                                    ? null
+                                    : Text(subtitleParts.join(' | ')),
+                                onTap: () => onSelected(client),
+                              );
+                            },
+                          ),
+                        ),
+                      ),
+                    );
+                  },
                 ),
               ),
             ],
@@ -399,96 +484,87 @@ class _MokoAuditScreenState extends State<MokoAuditScreen> {
     );
   }
 
-  Future<void> _searchClientByCedula() async {
-    final cedula = _cedulaController.text.trim();
-    if (cedula.isEmpty) {
+  String _formatClientName(Map<String, dynamic> client) {
+    final nombre = client['nombre']?.toString() ?? '';
+    final apellidos = client['apellidos']?.toString() ?? '';
+    return '$nombre $apellidos'.trim();
+  }
+
+  String _formatFincaName(Map<String, dynamic> client) {
+    return (client['fincaNombre'] ?? client['nombreFinca'] ?? '').toString();
+  }
+
+  void _onNameChanged(String value) {
+    final query = value.trim();
+    _searchDebounce?.cancel();
+    final queryChanged = query != _lastQuery;
+    _lastQuery = query;
+
+    if (_selectedClient != null) {
+      final selectedName = _formatClientName(_selectedClient!).toLowerCase();
+      if (selectedName != query.toLowerCase()) {
+        setState(() {
+          _selectedClient = null;
+        });
+      }
+    }
+
+    if (query.length < 2) {
+      if (_clientSuggestions.isNotEmpty) {
+        setState(() {
+          _clientSuggestions = [];
+        });
+      }
+      return;
+    }
+
+    if (queryChanged && _clientSuggestions.isNotEmpty) {
+      setState(() {
+        _clientSuggestions = [];
+      });
+    }
+
+    _searchDebounce = Timer(
+      const Duration(milliseconds: 350),
+      () => _fetchClientSuggestions(query),
+    );
+  }
+
+  Future<void> _fetchClientSuggestions(String query) async {
+    try {
+      final clients = await _clientService.searchClientsByName(query);
+      if (!mounted || query != _lastQuery) {
+        return;
+      }
+      setState(() {
+        _clientSuggestions = clients;
+      });
+    } catch (e) {
+      if (!mounted || query != _lastQuery) {
+        return;
+      }
+      setState(() {
+        _clientSuggestions = [];
+      });
+    }
+  }
+
+  Future<void> _triggerSearch() async {
+    final query = _nombreController.text.trim();
+    _lastQuery = query;
+    if (query.length < 2) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Ingrese una cédula para buscar.'),
+          content: Text('Ingrese al menos 2 letras para buscar'),
           backgroundColor: Colors.orange,
         ),
       );
       return;
     }
 
-    // Mostrar indicador de carga
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => const AlertDialog(
-        content: Row(
-          children: [
-            CircularProgressIndicator(),
-            SizedBox(width: 16),
-            Text('Buscando cliente...'),
-          ],
-        ),
-      ),
-    );
-
-    try {
-      final client = await _clientService.searchClientByCedula(cedula);
-
-      // Cerrar diálogo de carga
-      if (mounted) Navigator.of(context).pop();
-
-      if (client != null) {
-        setState(() {
-          _selectedClient = client;
-        });
-
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Cliente encontrado y seleccionado.'),
-              backgroundColor: Colors.green,
-              duration: Duration(seconds: 2),
-            ),
-          );
-        }
-      } else {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('No se encontró ningún cliente con esta cédula'),
-              backgroundColor: Colors.orange,
-              duration: Duration(seconds: 3),
-            ),
-          );
-        }
-      }
-    } catch (e) {
-      // Cerrar diálogo de carga si hay error
-      if (mounted) Navigator.of(context).pop();
-
-      String errorMessage = 'Error al buscar cliente';
-      if (e.toString().contains('Failed to fetch') ||
-          e.toString().contains('Error de conexión')) {
-        errorMessage =
-            'No se pudo conectar con el servidor. Por favor:\n'
-            '1. Verifique su conexión a internet\n'
-            '2. Compruebe que el servidor esté en línea\n'
-            '3. Intente nuevamente en unos momentos';
-      } else {
-        errorMessage = 'Error al buscar cliente: $e';
-      }
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(errorMessage),
-            backgroundColor: Colors.red,
-            duration: const Duration(seconds: 5),
-            action: SnackBarAction(
-              label: 'OK',
-              textColor: Colors.white,
-              onPressed: () {
-                ScaffoldMessenger.of(context).hideCurrentSnackBar();
-              },
-            ),
-          ),
-        );
-      }
+    await _fetchClientSuggestions(query);
+    if (mounted) {
+      _nombreFocusNode.requestFocus();
     }
   }
 }

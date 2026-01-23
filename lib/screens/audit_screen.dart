@@ -26,11 +26,15 @@ class AuditScreen extends StatefulWidget {
 
 class _AuditScreenState extends State<AuditScreen> {
   final OfflineStorageService _offlineStorageCampo = OfflineStorageService();
-  final TextEditingController _cedulaController = TextEditingController();
+  final TextEditingController _nombreController = TextEditingController();
+  final FocusNode _nombreFocusNode = FocusNode();
   final ClientService _clientService = ClientService();
   final ImagePicker _picker = ImagePicker();
 
   Map<String, dynamic>? _selectedClient;
+  List<Map<String, dynamic>> _clientSuggestions = [];
+  dart_async.Timer? _searchDebounce;
+  String _lastQuery = '';
   bool _isBasicMode = true;
   String _selectedCrop = 'banano';
 
@@ -38,6 +42,14 @@ class _AuditScreenState extends State<AuditScreen> {
   void initState() {
     super.initState();
     _initializeDatabase();
+  }
+
+  @override
+  void dispose() {
+    _searchDebounce?.cancel();
+    _nombreController.dispose();
+    _nombreFocusNode.dispose();
+    super.dispose();
   }
 
   dart_async.Future<void> _initializeDatabase() async {
@@ -269,18 +281,90 @@ class _AuditScreenState extends State<AuditScreen> {
           Row(
             children: [
               Expanded(
-                child: TextField(
-                  controller: _cedulaController,
-                  keyboardType: TextInputType.number,
-                  decoration: InputDecoration(
-                    labelText: 'Cédula del Cliente',
-                    hintText: 'Ingrese la cédula',
-                    prefixIcon: const Icon(Icons.badge),
-                    border: const OutlineInputBorder(),
-                    suffixIcon: IconButton(
-                      icon: const Icon(Icons.search),
-                      onPressed: _searchClientByCedula,
-                    ),
+                child: RawAutocomplete<Map<String, dynamic>>(
+                  textEditingController: _nombreController,
+                  focusNode: _nombreFocusNode,
+                  displayStringForOption: _formatClientName,
+                  optionsBuilder: (TextEditingValue value) {
+                    final query = value.text.trim();
+                    if (query.length < 2 || query != _lastQuery) {
+                      return const Iterable<Map<String, dynamic>>.empty();
+                    }
+                    return _clientSuggestions;
+                  },
+                  onSelected: (client) {
+                    if (!mounted) {
+                      return;
+                    }
+                    setState(() {
+                      _selectedClient = client;
+                      _clientSuggestions = [];
+                    });
+                  },
+                  fieldViewBuilder: (
+                    BuildContext context,
+                    TextEditingController controller,
+                    FocusNode focusNode,
+                    VoidCallback onFieldSubmitted,
+                  ) {
+                    return TextField(
+                      controller: controller,
+                      focusNode: focusNode,
+                      keyboardType: TextInputType.text,
+                      onChanged: _onNameChanged,
+                      decoration: InputDecoration(
+                        labelText: 'Nombre y Apellido del Cliente',
+                        hintText: 'Ingrese nombre y apellido',
+                        prefixIcon: const Icon(Icons.person),
+                        border: const OutlineInputBorder(),
+                        suffixIcon: IconButton(
+                          icon: const Icon(Icons.search),
+                          onPressed: _triggerSearch,
+                        ),
+                      ),
+                    );
+                  },
+                  optionsViewBuilder: (
+                    BuildContext context,
+                    AutocompleteOnSelected<Map<String, dynamic>> onSelected,
+                    Iterable<Map<String, dynamic>> options,
+                  ) {
+                    final optionList = options.toList();
+                    return Align(
+                      alignment: Alignment.topLeft,
+                      child: Material(
+                        elevation: 4.0,
+                        child: ConstrainedBox(
+                          constraints: const BoxConstraints(maxHeight: 240),
+                          child: ListView.separated(
+                            padding: EdgeInsets.zero,
+                            shrinkWrap: true,
+                            itemCount: optionList.length,
+                            separatorBuilder: (_, __) => const Divider(height: 1),
+                            itemBuilder: (context, index) {
+                              final client = optionList[index];
+                              final nombre = _formatClientName(client);
+                              final cedula = client['cedula']?.toString() ?? '';
+                              final finca = _formatFincaName(client);
+                              final subtitleParts = <String>[];
+                              if (cedula.isNotEmpty) {
+                                subtitleParts.add('Cédula: $cedula');
+                              }
+                              if (finca.isNotEmpty) {
+                                subtitleParts.add('Finca: $finca');
+                              }
+                              return ListTile(
+                                title: Text(nombre.isEmpty ? 'Cliente sin nombre' : nombre),
+                                subtitle: subtitleParts.isEmpty
+                                    ? null
+                                    : Text(subtitleParts.join(' | ')),
+                                onTap: () => onSelected(client),
+                              );
+                            },
+                          ),
+                        ),
+                      ),
+                    );
                   ),
                 ),
               ),
@@ -334,65 +418,87 @@ class _AuditScreenState extends State<AuditScreen> {
     );
   }
 
-  dart_async.Future<void> _searchClientByCedula() async {
-    final cedula = _cedulaController.text.trim();
-    if (cedula.isEmpty) {
+  String _formatClientName(Map<String, dynamic> client) {
+    final nombre = client['nombre']?.toString() ?? '';
+    final apellidos = client['apellidos']?.toString() ?? '';
+    return '$nombre $apellidos'.trim();
+  }
+
+  String _formatFincaName(Map<String, dynamic> client) {
+    return (client['fincaNombre'] ?? client['nombreFinca'] ?? '').toString();
+  }
+
+  void _onNameChanged(String value) {
+    final query = value.trim();
+    _searchDebounce?.cancel();
+    final queryChanged = query != _lastQuery;
+    _lastQuery = query;
+
+    if (_selectedClient != null) {
+      final selectedName = _formatClientName(_selectedClient!).toLowerCase();
+      if (selectedName != query.toLowerCase()) {
+        setState(() {
+          _selectedClient = null;
+        });
+      }
+    }
+
+    if (query.length < 2) {
+      if (_clientSuggestions.isNotEmpty) {
+        setState(() {
+          _clientSuggestions = [];
+        });
+      }
+      return;
+    }
+
+    if (queryChanged && _clientSuggestions.isNotEmpty) {
+      setState(() {
+        _clientSuggestions = [];
+      });
+    }
+
+    _searchDebounce = dart_async.Timer(
+      const Duration(milliseconds: 350),
+      () => _fetchClientSuggestions(query),
+    );
+  }
+
+  Future<void> _fetchClientSuggestions(String query) async {
+    try {
+      final clients = await _clientService.searchClientsByName(query);
+      if (!mounted || query != _lastQuery) {
+        return;
+      }
+      setState(() {
+        _clientSuggestions = clients;
+      });
+    } catch (e) {
+      if (!mounted || query != _lastQuery) {
+        return;
+      }
+      setState(() {
+        _clientSuggestions = [];
+      });
+    }
+  }
+
+  Future<void> _triggerSearch() async {
+    final query = _nombreController.text.trim();
+    _lastQuery = query;
+    if (query.length < 2) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Ingrese un número de cédula'),
+          content: Text('Ingrese al menos 2 letras para buscar'),
           backgroundColor: Colors.orange,
         ),
       );
       return;
     }
 
-    try {
-      // Mostrar indicador de carga
-      showDialog(
-        context: context,
-        barrierDismissible: false,
-        builder: (context) => const AlertDialog(
-          content: Row(
-            children: [
-              CircularProgressIndicator(),
-              SizedBox(width: 16),
-              Text('Buscando cliente...'),
-            ],
-          ),
-        ),
-      );
-
-      final response = await _clientService.searchClientByCedula(cedula);
-
-      // Cerrar diálogo de carga
-      Navigator.of(context).pop();
-
-      if (response != null) {
-        setState(() {
-          _selectedClient = response;
-        });
-
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Cliente encontrado: ${response['nombre']}'),
-            backgroundColor: Colors.green,
-          ),
-        );
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Cliente no encontrado'),
-            backgroundColor: Colors.orange,
-          ),
-        );
-      }
-    } catch (e) {
-      // Cerrar diálogo de carga si hay error
-      Navigator.of(context).pop();
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
-      );
+    await _fetchClientSuggestions(query);
+    if (mounted) {
+      _nombreFocusNode.requestFocus();
     }
   }
 

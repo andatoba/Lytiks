@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import '../services/sigatoka_evaluacion_service.dart';
 import '../services/client_service.dart';
@@ -19,6 +20,11 @@ class _SigatokaEvaluacionFormScreenState extends State<SigatokaEvaluacionFormScr
   String? _clienteNombre;
   bool _isLoading = false;
   int _currentStep = 0;
+  List<Map<String, dynamic>> _clientSuggestions = [];
+  Timer? _searchDebounce;
+  final TextEditingController _clienteSearchController = TextEditingController();
+  final FocusNode _clienteSearchFocusNode = FocusNode();
+  String _lastQuery = '';
   
   // Controladores para el encabezado
   final TextEditingController _haciendaController = TextEditingController();
@@ -64,6 +70,9 @@ class _SigatokaEvaluacionFormScreenState extends State<SigatokaEvaluacionFormScr
 
   @override
   void dispose() {
+    _searchDebounce?.cancel();
+    _clienteSearchController.dispose();
+    _clienteSearchFocusNode.dispose();
     _haciendaController.dispose();
     _fechaController.dispose();
     _semanaController.dispose();
@@ -91,52 +100,94 @@ class _SigatokaEvaluacionFormScreenState extends State<SigatokaEvaluacionFormScr
     super.dispose();
   }
 
-  Future<void> _buscarCliente() async {
-    final cedulaDialog = TextEditingController();
-    
-    final cedula = await showDialog<String>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Buscar Cliente'),
-        content: TextField(
-          controller: cedulaDialog,
-          decoration: const InputDecoration(
-            labelText: 'Cédula del cliente',
-            border: OutlineInputBorder(),
-          ),
-          keyboardType: TextInputType.number,
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancelar'),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(context, cedulaDialog.text),
-            child: const Text('Buscar'),
-          ),
-        ],
-      ),
-    );
-    
-    if (cedula != null && cedula.isNotEmpty) {
-      setState(() => _isLoading = true);
-      try {
-        final cliente = await _clientService.searchClientByCedula(cedula);
-        if (cliente != null) {
-          setState(() {
-            _clienteId = cliente['id'];
-            _clienteNombre = '${cliente['nombre']} ${cliente['apellidos'] ?? ''}';
-            _haciendaController.text = cliente['fincaNombre'] ?? '';
-          });
-        } else {
-          _showError('Cliente no encontrado');
-        }
-      } catch (e) {
-        _showError('Error al buscar cliente: $e');
-      } finally {
-        setState(() => _isLoading = false);
+  String _formatClientName(Map<String, dynamic> client) {
+    final nombre = client['nombre']?.toString() ?? '';
+    final apellidos = client['apellidos']?.toString() ?? '';
+    return '$nombre $apellidos'.trim();
+  }
+
+  String _formatFincaName(Map<String, dynamic> client) {
+    return (client['fincaNombre'] ?? client['nombreFinca'] ?? '').toString();
+  }
+
+  void _onClientSearchChanged(String value) {
+    final query = value.trim();
+    _searchDebounce?.cancel();
+    final queryChanged = query != _lastQuery;
+    _lastQuery = query;
+
+    if (_clienteNombre != null &&
+        _clienteNombre!.toLowerCase() != query.toLowerCase()) {
+      setState(() {
+        _clienteId = null;
+        _clienteNombre = null;
+        _haciendaController.text = '';
+      });
+    }
+
+    if (query.length < 2) {
+      if (_clientSuggestions.isNotEmpty) {
+        setState(() {
+          _clientSuggestions = [];
+        });
       }
+      return;
+    }
+
+    if (queryChanged && _clientSuggestions.isNotEmpty) {
+      setState(() {
+        _clientSuggestions = [];
+      });
+    }
+
+    _searchDebounce = Timer(
+      const Duration(milliseconds: 350),
+      () => _fetchClientSuggestions(query),
+    );
+  }
+
+  Future<void> _fetchClientSuggestions(String query) async {
+    try {
+      final clients = await _clientService.searchClientsByName(query);
+      if (!mounted || query != _lastQuery) {
+        return;
+      }
+      setState(() {
+        _clientSuggestions = clients;
+      });
+    } catch (e) {
+      if (!mounted || query != _lastQuery) {
+        return;
+      }
+      setState(() {
+        _clientSuggestions = [];
+      });
+    }
+  }
+
+  void _selectClient(Map<String, dynamic> client) {
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _clienteId = client['id'];
+      _clienteNombre = _formatClientName(client);
+      _haciendaController.text = _formatFincaName(client);
+      _clientSuggestions = [];
+    });
+  }
+
+  Future<void> _triggerSearch() async {
+    final query = _clienteSearchController.text.trim();
+    _lastQuery = query;
+    if (query.length < 2) {
+      _showError('Ingrese al menos 2 letras para buscar');
+      return;
+    }
+
+    await _fetchClientSuggestions(query);
+    if (mounted) {
+      _clienteSearchFocusNode.requestFocus();
     }
   }
 
@@ -377,15 +428,83 @@ class _SigatokaEvaluacionFormScreenState extends State<SigatokaEvaluacionFormScr
               padding: const EdgeInsets.all(16.0),
               child: Column(
                 children: [
-                  ElevatedButton.icon(
-                    onPressed: _buscarCliente,
-                    icon: const Icon(Icons.search),
-                    label: const Text('Buscar Cliente por Cédula'),
-                    style: ElevatedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 24),
-                      backgroundColor: Colors.blue,
-                      foregroundColor: Colors.white,
-                    ),
+                  RawAutocomplete<Map<String, dynamic>>(
+                    textEditingController: _clienteSearchController,
+                    focusNode: _clienteSearchFocusNode,
+                    displayStringForOption: _formatClientName,
+                    optionsBuilder: (TextEditingValue value) {
+                      final query = value.text.trim();
+                      if (query.length < 2 || query != _lastQuery) {
+                        return const Iterable<Map<String, dynamic>>.empty();
+                      }
+                      return _clientSuggestions;
+                    },
+                    onSelected: _selectClient,
+                    fieldViewBuilder: (
+                      BuildContext context,
+                      TextEditingController controller,
+                      FocusNode focusNode,
+                      VoidCallback onFieldSubmitted,
+                    ) {
+                      return TextField(
+                        controller: controller,
+                        focusNode: focusNode,
+                        keyboardType: TextInputType.text,
+                        onChanged: _onClientSearchChanged,
+                        decoration: InputDecoration(
+                          labelText: 'Nombre y Apellido del Cliente',
+                          hintText: 'Ingrese nombre y apellido',
+                          prefixIcon: const Icon(Icons.person_search),
+                          border: const OutlineInputBorder(),
+                          suffixIcon: IconButton(
+                            icon: const Icon(Icons.search),
+                            onPressed: _triggerSearch,
+                          ),
+                        ),
+                      );
+                    },
+                    optionsViewBuilder: (
+                      BuildContext context,
+                      AutocompleteOnSelected<Map<String, dynamic>> onSelected,
+                      Iterable<Map<String, dynamic>> options,
+                    ) {
+                      final optionList = options.toList();
+                      return Align(
+                        alignment: Alignment.topLeft,
+                        child: Material(
+                          elevation: 4.0,
+                          child: ConstrainedBox(
+                            constraints: const BoxConstraints(maxHeight: 240),
+                            child: ListView.separated(
+                              padding: EdgeInsets.zero,
+                              shrinkWrap: true,
+                              itemCount: optionList.length,
+                              separatorBuilder: (_, __) => const Divider(height: 1),
+                              itemBuilder: (context, index) {
+                                final client = optionList[index];
+                                final nombre = _formatClientName(client);
+                                final cedula = client['cedula']?.toString() ?? '';
+                                final finca = _formatFincaName(client);
+                                final subtitleParts = <String>[];
+                                if (cedula.isNotEmpty) {
+                                  subtitleParts.add('Cédula: $cedula');
+                                }
+                                if (finca.isNotEmpty) {
+                                  subtitleParts.add('Finca: $finca');
+                                }
+                                return ListTile(
+                                  title: Text(nombre.isEmpty ? 'Cliente sin nombre' : nombre),
+                                  subtitle: subtitleParts.isEmpty
+                                      ? null
+                                      : Text(subtitleParts.join(' | ')),
+                                  onTap: () => onSelected(client),
+                                );
+                              },
+                            ),
+                          ),
+                        ),
+                      );
+                    },
                   ),
                   if (_clienteNombre != null) ...[
                     const SizedBox(height: 12),
