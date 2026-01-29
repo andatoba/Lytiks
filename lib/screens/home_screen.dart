@@ -25,7 +25,7 @@ class _HomeScreenState extends State<HomeScreen> {
   int _pendingCount = 0;
   final SyncService _syncService = SyncService();
   bool _isSyncing = false;
-  dart_async.StreamSubscription<ConnectivityResult>? _connectivitySubscription;
+  dart_async.StreamSubscription<List<ConnectivityResult>>? _connectivitySubscription;
   
   // Estadísticas del backend
   int _totalClients = 0;
@@ -196,7 +196,7 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  void _syncData({bool showDialogs = true}) async {
+  Future<void> _syncData({bool showDialogs = true}) async {
     if (_isSyncing) return;
 
     setState(() {
@@ -406,7 +406,7 @@ class _HomeScreenState extends State<HomeScreen> {
     _connectivitySubscription?.cancel();
     _connectivitySubscription =
         Connectivity().onConnectivityChanged.listen((result) async {
-      if (result == ConnectivityResult.none) {
+      if (result.contains(ConnectivityResult.none)) {
         return;
       }
 

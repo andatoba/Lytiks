@@ -354,13 +354,15 @@ class _AuditScreenState extends State<AuditScreen> {
                               final finca = _formatFincaName(client);
                               final subtitleParts = <String>[];
                               if (cedula.isNotEmpty) {
-                                subtitleParts.add('Cédula: $cedula');
+                                subtitleParts.add('Cedula: $cedula');
                               }
                               if (finca.isNotEmpty) {
                                 subtitleParts.add('Finca: $finca');
                               }
                               return ListTile(
-                                title: Text(nombre.isEmpty ? 'Cliente sin nombre' : nombre),
+                                title: Text(
+                                  nombre.isEmpty ? 'Cliente sin nombre' : nombre,
+                                ),
                                 subtitle: subtitleParts.isEmpty
                                     ? null
                                     : Text(subtitleParts.join(' | ')),
@@ -371,7 +373,7 @@ class _AuditScreenState extends State<AuditScreen> {
                         ),
                       ),
                     );
-                  ),
+                  },
                 ),
               ),
             ],
@@ -403,13 +405,13 @@ class _AuditScreenState extends State<AuditScreen> {
                         if (_selectedClient!['telefono'] != null &&
                             _selectedClient!['telefono'].toString().isNotEmpty)
                           Text(
-                            'Teléfono: ${_selectedClient!['telefono']}',
+                            'Telefono: ${_selectedClient!['telefono']}',
                             style: const TextStyle(fontSize: 12),
                           ),
                         if (_selectedClient!['direccion'] != null &&
                             _selectedClient!['direccion'].toString().isNotEmpty)
                           Text(
-                            'Dirección: ${_selectedClient!['direccion']}',
+                            'Direccion: ${_selectedClient!['direccion']}',
                             style: const TextStyle(fontSize: 12),
                           ),
                       ],

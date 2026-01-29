@@ -738,10 +738,12 @@ class _SigatokaAuditScreenState extends State<SigatokaAuditScreen> {
       if (!mounted) {
         return;
       }
-      final Map<String, dynamic>? userMap = userData?['user'] is Map<String, dynamic>
-          ? userData?['user'] as Map<String, dynamic>
-          : userData;
-      final username = userMap?['username']?.toString() ?? userData?['username']?.toString();
+      final dynamic rawUser = userData?['user'];
+      final Map<String, dynamic>? userMap = rawUser is Map
+          ? Map<String, dynamic>.from(rawUser)
+          : (userData is Map<String, dynamic> ? userData : null);
+      final username =
+          userMap?['username']?.toString() ?? userData?['username']?.toString();
 
       Map<String, dynamic>? profile;
       if (username != null && username.isNotEmpty) {
