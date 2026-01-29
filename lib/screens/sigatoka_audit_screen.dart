@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import '../services/client_service.dart';
+import '../services/auth_service.dart';
 import '../services/sigatoka_evaluacion_service.dart';
 import 'resumen_sigatoka_screen.dart';
 
@@ -59,6 +60,7 @@ class _SigatokaAuditScreenState extends State<SigatokaAuditScreen> {
   Timer? _searchDebounce;
   String _lastQuery = '';
   final ClientService _clientService = ClientService();
+  final AuthService _authService = AuthService();
 
   // 1. Encabezado
   final TextEditingController haciendaController = TextEditingController();
@@ -96,13 +98,26 @@ class _SigatokaAuditScreenState extends State<SigatokaAuditScreen> {
   
   // Lista de muestras de la sesión actual (en memoria)
   List<Map<String, dynamic>> muestrasSesion = [];
+  static const List<String> _infectionGradeOptions = [
+    '1a',
+    '1b',
+    '1c',
+    '2a',
+    '2b',
+    '2c',
+    '3a',
+    '3b',
+    '3c',
+  ];
 
   @override
   void initState() {
     super.initState();
     if (widget.clientData != null) {
       _selectedClient = widget.clientData;
+      _nombreController.text = _formatClientName(widget.clientData!);
     }
+    _prefillEvaluador();
   }
 
   Future<void> _fetchReporte(int evaluacionId) async {
@@ -683,6 +698,83 @@ class _SigatokaAuditScreenState extends State<SigatokaAuditScreen> {
     return (client['fincaNombre'] ?? client['nombreFinca'] ?? '').toString();
   }
 
+  Widget _buildInfectionGradeDropdown({
+    required TextEditingController controller,
+    required String label,
+    required String hint,
+  }) {
+    final currentValue = controller.text.trim();
+    final selectedValue =
+        _infectionGradeOptions.contains(currentValue) ? currentValue : null;
+    return DropdownButtonFormField<String>(
+      value: selectedValue,
+      isExpanded: true,
+      decoration: InputDecoration(
+        labelText: label,
+        hintText: hint,
+        border: const OutlineInputBorder(),
+      ),
+      items: _infectionGradeOptions
+          .map(
+            (option) => DropdownMenuItem<String>(
+              value: option,
+              child: Text(option),
+            ),
+          )
+          .toList(),
+      onChanged: (value) {
+        controller.text = value ?? '';
+      },
+    );
+  }
+
+  Future<void> _prefillEvaluador() async {
+    if (evaluadorController.text.trim().isNotEmpty) {
+      return;
+    }
+
+    try {
+      final userData = await _authService.getUserData();
+      if (!mounted) {
+        return;
+      }
+      final Map<String, dynamic>? userMap = userData?['user'] is Map<String, dynamic>
+          ? userData?['user'] as Map<String, dynamic>
+          : userData;
+      final username = userMap?['username']?.toString() ?? userData?['username']?.toString();
+
+      Map<String, dynamic>? profile;
+      if (username != null && username.isNotEmpty) {
+        profile = await _authService.getProfile(username);
+      }
+      if (!mounted) {
+        return;
+      }
+
+      final firstName = profile?['firstName']?.toString() ??
+          userMap?['firstName']?.toString() ??
+          userMap?['nombre']?.toString() ??
+          userData?['firstName']?.toString();
+      final lastName = profile?['lastName']?.toString() ??
+          userMap?['lastName']?.toString() ??
+          userMap?['apellidos']?.toString() ??
+          userData?['lastName']?.toString();
+
+      final fullName = [
+        if (firstName != null && firstName.isNotEmpty) firstName,
+        if (lastName != null && lastName.isNotEmpty) lastName,
+      ].join(' ').trim();
+
+      if (fullName.isNotEmpty) {
+        evaluadorController.text = fullName;
+      } else if (username != null && username.isNotEmpty) {
+        evaluadorController.text = username;
+      }
+    } catch (_) {
+      // Si falla, no bloquear la edición manual
+    }
+  }
+
   void _onNameChanged(String value) {
     final query = value.trim();
     _searchDebounce?.cancel();
@@ -1043,11 +1135,29 @@ class _SigatokaAuditScreenState extends State<SigatokaAuditScreen> {
             const SizedBox(height: 8),
             Row(
               children: [
-                Expanded(child: TextField(controller: grado3eraController, decoration: const InputDecoration(labelText: '3era hoja', hintText: '2a', border: OutlineInputBorder()))),
+                Expanded(
+                  child: _buildInfectionGradeDropdown(
+                    controller: grado3eraController,
+                    label: '3era hoja',
+                    hint: '2a',
+                  ),
+                ),
                 const SizedBox(width: 8),
-                Expanded(child: TextField(controller: grado4taController, decoration: const InputDecoration(labelText: '4ta hoja', hintText: '3c', border: OutlineInputBorder()))),
+                Expanded(
+                  child: _buildInfectionGradeDropdown(
+                    controller: grado4taController,
+                    label: '4ta hoja',
+                    hint: '3c',
+                  ),
+                ),
                 const SizedBox(width: 8),
-                Expanded(child: TextField(controller: grado5taController, decoration: const InputDecoration(labelText: '5ta hoja', hintText: '1b', border: OutlineInputBorder()))),
+                Expanded(
+                  child: _buildInfectionGradeDropdown(
+                    controller: grado5taController,
+                    label: '5ta hoja',
+                    hint: '1b',
+                  ),
+                ),
               ],
             ),
             const SizedBox(height: 16),

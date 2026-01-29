@@ -18,7 +18,9 @@ class AuditItem {
 }
 
 class AuditScreen extends StatefulWidget {
-  const AuditScreen({super.key});
+  final Map<String, dynamic>? clientData;
+
+  const AuditScreen({super.key, this.clientData});
 
   @override
   State<AuditScreen> createState() => _AuditScreenState();
@@ -42,6 +44,10 @@ class _AuditScreenState extends State<AuditScreen> {
   void initState() {
     super.initState();
     _initializeDatabase();
+    if (widget.clientData != null) {
+      _selectedClient = widget.clientData;
+      _nombreController.text = _formatClientName(widget.clientData!);
+    }
   }
 
   @override
@@ -929,6 +935,30 @@ class _AuditScreenState extends State<AuditScreen> {
         );
         return;
       }
+    }
+
+    // Validar que haya foto en todas las evaluaciones completadas
+    final List<String> missingPhotoItems = [];
+    for (var section in _auditSections.values) {
+      for (var item in section) {
+        if (item.rating != null && item.photoPath == null) {
+          missingPhotoItems.add(item.name);
+        }
+      }
+    }
+
+    if (missingPhotoItems.isNotEmpty) {
+      final preview = missingPhotoItems.take(3).join(', ');
+      final extraCount = missingPhotoItems.length - 3;
+      final suffix = extraCount > 0 ? ' y $extraCount más' : '';
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Debe tomar foto para todas las evaluaciones. Faltan: $preview$suffix'),
+          backgroundColor: Colors.orange,
+          duration: const Duration(seconds: 4),
+        ),
+      );
+      return;
     }
 
       Map<String, dynamic> auditData = {};

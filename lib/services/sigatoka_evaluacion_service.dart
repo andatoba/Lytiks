@@ -379,6 +379,20 @@ class SigatokaEvaluacionService {
     Map<String, dynamic> stoverData,
   ) async {
     try {
+      // Intentar primero el endpoint actual de cálculo completo
+      final calcularResponse = await http.post(
+        Uri.parse('$baseUrl/$evaluacionId/calcular-todo'),
+        headers: {'Content-Type': 'application/json'},
+      );
+
+      if (calcularResponse.statusCode == 200 || calcularResponse.statusCode == 201) {
+        return {
+          'success': true,
+          'message': 'Resumen guardado correctamente',
+          'reporte': jsonDecode(calcularResponse.body),
+        };
+      }
+
       // Guardar resumen
       final resumenResponse = await http.post(
         Uri.parse('$baseUrl/evaluaciones/$evaluacionId/resumen'),

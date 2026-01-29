@@ -34,6 +34,15 @@ class _MokoAuditScreenState extends State<MokoAuditScreen> {
   String _lastQuery = '';
 
   @override
+  void initState() {
+    super.initState();
+    if (widget.clientData != null) {
+      _selectedClient = widget.clientData;
+      _nombreController.text = _formatClientName(widget.clientData!);
+    }
+  }
+
+  @override
   void dispose() {
     _searchDebounce?.cancel();
     _nombreController.dispose();

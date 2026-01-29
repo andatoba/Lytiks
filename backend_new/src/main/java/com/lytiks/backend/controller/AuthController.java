@@ -66,6 +66,23 @@ public class AuthController {
             profile.put("apellidos", user.getApellidos() != null ? user.getApellidos() : "");
             profile.put("correo", user.getCorreo() != null ? user.getCorreo() : "");
             profile.put("rol", rolNombre);
+            profile.put("cedula", user.getCedula() != null ? user.getCedula() : "");
+            profile.put("direccion", user.getDireccionDom() != null ? user.getDireccionDom() : "");
+            profile.put("telefonoCasa", user.getTelefonoCasa() != null ? user.getTelefonoCasa() : "");
+            profile.put("telefonoCel", user.getTelefonoCel() != null ? user.getTelefonoCel() : "");
+            profile.put("tipoPersona", user.getTipoPersona() != null ? user.getTipoPersona() : "");
+            profile.put("idArea", user.getIdArea() != null ? user.getIdArea() : 0);
+            profile.put("idEmpresa", user.getIdEmpresa() != null ? user.getIdEmpresa() : 0);
+            profile.put("idCiudad", user.getIdCiudad() != null ? user.getIdCiudad() : 0);
+            profile.put("idSector", user.getIdSector() != null ? user.getIdSector() : 0);
+            profile.put("estado", user.getEstado() != null ? user.getEstado() : "");
+            profile.put("detalle", user.getDetalle() != null ? user.getDetalle() : "");
+            profile.put("logo", user.getLogo() != null ? user.getLogo() : "");
+            profile.put("logoRuta", user.getLogoRuta() != null ? user.getLogoRuta() : "");
+            profile.put("fechaIngreso", user.getFechaIngreso() != null ? user.getFechaIngreso() : null);
+            profile.put("fechaModificacion", user.getFechaModificacion() != null ? user.getFechaModificacion() : null);
+            profile.put("usuarioIngreso", user.getUsuarioIngreso() != null ? user.getUsuarioIngreso() : "");
+            profile.put("usuarioModificacion", user.getUsuarioModificacion() != null ? user.getUsuarioModificacion() : "");
             
             return ResponseEntity.ok(profile);
         } catch (Exception e) {
