@@ -831,6 +831,8 @@ class _InicioTabState extends State<InicioTab> {
                 _selectedClient = client;
                 _clientSuggestions = [];
               });
+              _clientService.saveSelectedClient(client);
+              _showClientFoundMessage(client);
             },
             fieldViewBuilder: (
               BuildContext context,
@@ -844,8 +846,8 @@ class _InicioTabState extends State<InicioTab> {
                 keyboardType: TextInputType.text,
                 onChanged: _onNameChanged,
                 decoration: InputDecoration(
-                  labelText: 'Nombre y Apellido del Cliente',
-                  hintText: 'Ingrese nombre y apellido',
+                  labelText: 'Nombre, Apellido o Cédula',
+                  hintText: 'Ingrese nombre, apellido o cédula',
                   prefixIcon: const Icon(Icons.person),
                   border: const OutlineInputBorder(),
                   suffixIcon: IconButton(
@@ -960,6 +962,24 @@ class _InicioTabState extends State<InicioTab> {
     return (client['fincaNombre'] ?? client['nombreFinca'] ?? '').toString();
   }
 
+  void _showClientFoundMessage(Map<String, dynamic> client) {
+    if (!mounted) {
+      return;
+    }
+    final nombre = _formatClientName(client);
+    final cedula = client['cedula']?.toString() ?? '';
+    final detail = nombre.isNotEmpty ? nombre : (cedula.isNotEmpty ? cedula : '');
+    final message = detail.isNotEmpty
+        ? 'Cliente encontrado: $detail'
+        : 'Cliente encontrado';
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: Colors.green.shade700,
+      ),
+    );
+  }
+
   void _onNameChanged(String value) {
     final query = value.trim();
     _searchDebounce?.cancel();
@@ -972,6 +992,7 @@ class _InicioTabState extends State<InicioTab> {
         setState(() {
           _selectedClient = null;
         });
+        _clientService.clearSelectedClient();
       }
     }
 
@@ -996,8 +1017,26 @@ class _InicioTabState extends State<InicioTab> {
     );
   }
 
+  bool _isLikelyCedula(String value) {
+    if (value.isEmpty) {
+      return false;
+    }
+    return RegExp(r'^[0-9]+$').hasMatch(value);
+  }
+
   Future<void> _fetchClientSuggestions(String query) async {
     try {
+      if (_isLikelyCedula(query)) {
+        final client = await _clientService.searchClientByCedula(query);
+        if (!mounted || query != _lastQuery) {
+          return;
+        }
+        setState(() {
+          _clientSuggestions = client == null ? [] : [client];
+        });
+        return;
+      }
+
       final clients = await _clientService.searchClientsByName(query);
       if (!mounted || query != _lastQuery) {
         return;
@@ -1029,9 +1068,24 @@ class _InicioTabState extends State<InicioTab> {
     }
 
     await _fetchClientSuggestions(query);
-    if (mounted) {
-      _clienteFocusNode.requestFocus();
+    if (!mounted) {
+      return;
     }
+
+    if (_clientSuggestions.length == 1) {
+      final client = _clientSuggestions.first;
+      setState(() {
+        _selectedClient = client;
+        _clientSuggestions = [];
+      });
+      _clientService.saveSelectedClient(client);
+      _clienteController.text = _formatClientName(client);
+      _clienteFocusNode.unfocus();
+      _showClientFoundMessage(client);
+      return;
+    }
+
+    _clienteFocusNode.requestFocus();
   }
 
   Widget _buildStatCard(

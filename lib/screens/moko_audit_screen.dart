@@ -39,7 +39,21 @@ class _MokoAuditScreenState extends State<MokoAuditScreen> {
     if (widget.clientData != null) {
       _selectedClient = widget.clientData;
       _nombreController.text = _formatClientName(widget.clientData!);
+      _clientService.saveSelectedClient(widget.clientData!);
+    } else {
+      _loadStoredClient();
     }
+  }
+
+  Future<void> _loadStoredClient() async {
+    final stored = await _clientService.getSelectedClient();
+    if (!mounted || stored == null) {
+      return;
+    }
+    setState(() {
+      _selectedClient = stored;
+      _nombreController.text = _formatClientName(stored);
+    });
   }
 
   @override
@@ -79,79 +93,79 @@ class _MokoAuditScreenState extends State<MokoAuditScreen> {
           _buildClientSearchSection(),
           const SizedBox(height: 40),
 
-          // Botones principales del módulo Moko
-          _buildIntuitiveButton(
-            title: 'Registrar Nuevo Foco',
-            subtitle: 'Reportar una nueva área infectada',
-            icon: Icons.add_circle_outline,
-            color: const Color(0xFFE53E3E), // Rojo para urgencia
-            onPressed: () {
-              if (_selectedClient == null) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Debe seleccionar un cliente primero'),
-                    backgroundColor: Colors.orange,
+          if (_selectedClient == null) ...[
+            _buildClientRequiredNotice(),
+          ] else ...[
+            // Botones principales del módulo Moko
+            _buildIntuitiveButton(
+              title: 'Registrar Nuevo Foco',
+              subtitle: 'Reportar una nueva área infectada',
+              icon: Icons.add_circle_outline,
+              color: const Color(0xFFE53E3E), // Rojo para urgencia
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => RegistroMokoScreen(clientData: _selectedClient),
                   ),
                 );
-                return;
-              }
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => RegistroMokoScreen(clientData: _selectedClient),
-                ),
-              );
-            },
-          ),
-          const SizedBox(height: 16),
+              },
+            ),
+            const SizedBox(height: 16),
 
-          _buildIntuitiveButton(
-            title: 'Seguimiento de Focos',
-            subtitle: 'Monitorear áreas ya identificadas',
-            icon: Icons.visibility,
-            color: const Color(0xFFED8936), // Naranja para seguimiento
-            onPressed: () {
-              if (_selectedClient == null) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Debe seleccionar un cliente primero'),
-                    backgroundColor: Colors.orange,
+            _buildIntuitiveButton(
+              title: 'Seguimiento de Focos',
+              subtitle: 'Monitorear áreas ya identificadas',
+              icon: Icons.visibility,
+              color: const Color(0xFFED8936), // Naranja para seguimiento
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => const SeguimientoFocosScreen(),
                   ),
                 );
-                return;
-              }
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => const SeguimientoFocosScreen(),
-                ),
-              );
-            },
-          ),
-          const SizedBox(height: 16),
+              },
+            ),
+            const SizedBox(height: 16),
 
-          _buildIntuitiveButton(
-            title: 'Lista de Focos',
-            subtitle: 'Ver todos los focos registrados',
-            icon: Icons.format_list_bulleted,
-            color: const Color(0xFF38A169), // Verde para consulta
-            onPressed: () {
-              if (_selectedClient == null) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Debe seleccionar un cliente primero'),
-                    backgroundColor: Colors.orange,
+            _buildIntuitiveButton(
+              title: 'Lista de Focos',
+              subtitle: 'Ver todos los focos registrados',
+              icon: Icons.format_list_bulleted,
+              color: const Color(0xFF38A169), // Verde para consulta
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => const ListaFocosScreen(),
                   ),
                 );
-                return;
-              }
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => const ListaFocosScreen(),
-                ),
-              );
-            },
+              },
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildClientRequiredNotice() {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.amber.shade50,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.amber.shade200),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.warning_amber_rounded, color: Colors.amber.shade700),
+          const SizedBox(width: 12),
+          const Expanded(
+            child: Text(
+              'Seleccione un cliente para continuar en Moko.',
+              style: TextStyle(fontWeight: FontWeight.w600),
+            ),
           ),
         ],
       ),
@@ -360,6 +374,7 @@ class _MokoAuditScreenState extends State<MokoAuditScreen> {
                       _selectedClient = client;
                       _clientSuggestions = [];
                     });
+                    _clientService.saveSelectedClient(client);
                   },
                   fieldViewBuilder: (
                     BuildContext context,
@@ -515,6 +530,7 @@ class _MokoAuditScreenState extends State<MokoAuditScreen> {
         setState(() {
           _selectedClient = null;
         });
+        _clientService.clearSelectedClient();
       }
     }
 
@@ -572,8 +588,22 @@ class _MokoAuditScreenState extends State<MokoAuditScreen> {
     }
 
     await _fetchClientSuggestions(query);
-    if (mounted) {
-      _nombreFocusNode.requestFocus();
+    if (!mounted) {
+      return;
     }
+
+    if (_clientSuggestions.length == 1) {
+      final client = _clientSuggestions.first;
+      setState(() {
+        _selectedClient = client;
+        _clientSuggestions = [];
+      });
+      _clientService.saveSelectedClient(client);
+      _nombreController.text = _formatClientName(client);
+      _nombreFocusNode.unfocus();
+      return;
+    }
+
+    _nombreFocusNode.requestFocus();
   }
 }

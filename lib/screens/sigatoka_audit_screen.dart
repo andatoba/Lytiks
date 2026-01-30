@@ -98,6 +98,7 @@ class _SigatokaAuditScreenState extends State<SigatokaAuditScreen> {
   
   // Lista de muestras de la sesión actual (en memoria)
   List<Map<String, dynamic>> muestrasSesion = [];
+  final List<int> _muestraOptions = List<int>.generate(100, (index) => index + 1);
   static const List<String> _infectionGradeOptions = [
     '1a',
     '1b',
@@ -116,8 +117,27 @@ class _SigatokaAuditScreenState extends State<SigatokaAuditScreen> {
     if (widget.clientData != null) {
       _selectedClient = widget.clientData;
       _nombreController.text = _formatClientName(widget.clientData!);
+      haciendaController.text = _formatFincaName(widget.clientData!);
+      _clientService.saveSelectedClient(widget.clientData!);
+    } else {
+      _loadStoredClient();
+    }
+    if (muestraNumController.text.trim().isEmpty) {
+      muestraNumController.text = '1';
     }
     _prefillEvaluador();
+  }
+
+  Future<void> _loadStoredClient() async {
+    final stored = await _clientService.getSelectedClient();
+    if (!mounted || stored == null) {
+      return;
+    }
+    setState(() {
+      _selectedClient = stored;
+      _nombreController.text = _formatClientName(stored);
+      haciendaController.text = _formatFincaName(stored);
+    });
   }
 
   Future<void> _fetchReporte(int evaluacionId) async {
@@ -375,7 +395,12 @@ class _SigatokaAuditScreenState extends State<SigatokaAuditScreen> {
 
     // Limpiar solo los campos de la muestra, mantener lote para siguiente
     int nextMuestra = (int.tryParse(muestraNumController.text) ?? 0) + 1;
-    muestraNumController.text = nextMuestra.toString();
+    if (nextMuestra > _muestraOptions.last) {
+      nextMuestra = _muestraOptions.last;
+    }
+    setState(() {
+      muestraNumController.text = nextMuestra.toString();
+    });
     // NO limpiar lote para facilitar ingreso múltiple
     grado3eraController.clear();
     grado4taController.clear();
@@ -446,10 +471,37 @@ class _SigatokaAuditScreenState extends State<SigatokaAuditScreen> {
                 SizedBox(height: 16),
                 _buildClientSearchSection(),
                 SizedBox(height: 24),
-                _buildEncabezadoSection(),
-                SizedBox(height: 24),
+                if (_selectedClient == null) ...[
+                  _buildClientRequiredNotice(),
+                ] else ...[
+                  _buildEncabezadoSection(),
+                  SizedBox(height: 24),
+                ],
               ],
             ),
+    );
+  }
+
+  Widget _buildClientRequiredNotice() {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.amber.shade50,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.amber.shade200),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.warning_amber_rounded, color: Colors.amber.shade700),
+          const SizedBox(width: 12),
+          const Expanded(
+            child: Text(
+              'Seleccione un cliente para continuar con la evaluación.',
+              style: TextStyle(fontWeight: FontWeight.w600),
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -570,6 +622,7 @@ class _SigatokaAuditScreenState extends State<SigatokaAuditScreen> {
                       _selectedClient = client;
                       _clientSuggestions = [];
                     });
+                    _clientService.saveSelectedClient(client);
                   },
                   fieldViewBuilder: (
                     BuildContext context,
@@ -789,6 +842,7 @@ class _SigatokaAuditScreenState extends State<SigatokaAuditScreen> {
         setState(() {
           _selectedClient = null;
         });
+        _clientService.clearSelectedClient();
       }
     }
 
@@ -846,9 +900,23 @@ class _SigatokaAuditScreenState extends State<SigatokaAuditScreen> {
     }
 
     await _fetchClientSuggestions(query);
-    if (mounted) {
-      _nombreFocusNode.requestFocus();
+    if (!mounted) {
+      return;
     }
+
+    if (_clientSuggestions.length == 1) {
+      final client = _clientSuggestions.first;
+      setState(() {
+        _selectedClient = client;
+        _clientSuggestions = [];
+      });
+      _clientService.saveSelectedClient(client);
+      _nombreController.text = _formatClientName(client);
+      _nombreFocusNode.unfocus();
+      return;
+    }
+
+    _nombreFocusNode.requestFocus();
   }
 
   // 1. Encabezado
@@ -1105,15 +1173,31 @@ class _SigatokaAuditScreenState extends State<SigatokaAuditScreen> {
             Row(
               children: [
                 Expanded(
-                  child: TextField(
-                    controller: muestraNumController,
-                    keyboardType: TextInputType.number,
+                  child: DropdownButtonFormField<int>(
+                    value: _muestraOptions.contains(
+                      int.tryParse(muestraNumController.text) ?? 1,
+                    )
+                        ? int.tryParse(muestraNumController.text) ?? 1
+                        : _muestraOptions.first,
                     decoration: const InputDecoration(
                       labelText: '🌿 Muestra # *',
-                      hintText: '1',
                       border: OutlineInputBorder(),
                       prefixIcon: Icon(Icons.tag),
                     ),
+                    items: _muestraOptions
+                        .map(
+                          (value) => DropdownMenuItem<int>(
+                            value: value,
+                            child: Text(value.toString()),
+                          ),
+                        )
+                        .toList(),
+                    onChanged: (value) {
+                      if (value == null) {
+                        return;
+                      }
+                      muestraNumController.text = value.toString();
+                    },
                   ),
                 ),
                 const SizedBox(width: 16),

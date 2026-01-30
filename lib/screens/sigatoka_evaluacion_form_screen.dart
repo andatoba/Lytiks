@@ -85,6 +85,20 @@ class _SigatokaEvaluacionFormScreenState extends State<SigatokaEvaluacionFormScr
   void initState() {
     super.initState();
     _prefillEvaluador();
+    _loadStoredClient();
+  }
+
+  Future<void> _loadStoredClient() async {
+    final stored = await _clientService.getSelectedClient();
+    if (!mounted || stored == null) {
+      return;
+    }
+    setState(() {
+      _clienteId = stored['id'];
+      _clienteNombre = _formatClientName(stored);
+      _clienteSearchController.text = _clienteNombre ?? '';
+      _haciendaController.text = _formatFincaName(stored);
+    });
   }
 
   @override
@@ -237,6 +251,7 @@ class _SigatokaEvaluacionFormScreenState extends State<SigatokaEvaluacionFormScr
         _clienteNombre = null;
         _haciendaController.text = '';
       });
+      _clientService.clearSelectedClient();
     }
 
     if (query.length < 2) {
@@ -289,6 +304,7 @@ class _SigatokaEvaluacionFormScreenState extends State<SigatokaEvaluacionFormScr
       _haciendaController.text = _formatFincaName(client);
       _clientSuggestions = [];
     });
+    _clientService.saveSelectedClient(client);
   }
 
   Future<void> _triggerSearch() async {

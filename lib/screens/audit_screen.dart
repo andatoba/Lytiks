@@ -47,7 +47,21 @@ class _AuditScreenState extends State<AuditScreen> {
     if (widget.clientData != null) {
       _selectedClient = widget.clientData;
       _nombreController.text = _formatClientName(widget.clientData!);
+      _clientService.saveSelectedClient(widget.clientData!);
+    } else {
+      _loadStoredClient();
     }
+  }
+
+  Future<void> _loadStoredClient() async {
+    final stored = await _clientService.getSelectedClient();
+    if (!mounted || stored == null) {
+      return;
+    }
+    setState(() {
+      _selectedClient = stored;
+      _nombreController.text = _formatClientName(stored);
+    });
   }
 
   @override
@@ -170,15 +184,42 @@ class _AuditScreenState extends State<AuditScreen> {
             const SizedBox(height: 20),
             _buildClientSearchSection(),
             const SizedBox(height: 20),
-            _buildConfigurationCard(),
-            const SizedBox(height: 20),
-            ..._auditSections.entries
-                .map((entry) => _buildAuditSection(entry.key, entry.value))
-                .toList(),
-            const SizedBox(height: 20),
-            _buildSaveButton(),
+            if (_selectedClient == null) ...[
+              _buildClientRequiredNotice(),
+            ] else ...[
+              _buildConfigurationCard(),
+              const SizedBox(height: 20),
+              ..._auditSections.entries
+                  .map((entry) => _buildAuditSection(entry.key, entry.value))
+                  .toList(),
+              const SizedBox(height: 20),
+              _buildSaveButton(),
+            ],
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildClientRequiredNotice() {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.amber.shade50,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.amber.shade200),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.warning_amber_rounded, color: Colors.amber.shade700),
+          const SizedBox(width: 12),
+          const Expanded(
+            child: Text(
+              'Seleccione un cliente para continuar con la auditoría.',
+              style: TextStyle(fontWeight: FontWeight.w600),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -306,6 +347,7 @@ class _AuditScreenState extends State<AuditScreen> {
                       _selectedClient = client;
                       _clientSuggestions = [];
                     });
+                    _clientService.saveSelectedClient(client);
                   },
                   fieldViewBuilder: (
                     BuildContext context,
@@ -448,6 +490,7 @@ class _AuditScreenState extends State<AuditScreen> {
         setState(() {
           _selectedClient = null;
         });
+        _clientService.clearSelectedClient();
       }
     }
 
@@ -505,9 +548,23 @@ class _AuditScreenState extends State<AuditScreen> {
     }
 
     await _fetchClientSuggestions(query);
-    if (mounted) {
-      _nombreFocusNode.requestFocus();
+    if (!mounted) {
+      return;
     }
+
+    if (_clientSuggestions.length == 1) {
+      final client = _clientSuggestions.first;
+      setState(() {
+        _selectedClient = client;
+        _clientSuggestions = [];
+      });
+      _clientService.saveSelectedClient(client);
+      _nombreController.text = _formatClientName(client);
+      _nombreFocusNode.unfocus();
+      return;
+    }
+
+    _nombreFocusNode.requestFocus();
   }
 
   Widget _buildConfigurationCard() {

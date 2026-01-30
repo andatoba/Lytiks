@@ -8,6 +8,7 @@ class ClientService {
   static const String _basePath = '/api';
 
   final storage = const FlutterSecureStorage();
+  static const String _selectedClientKey = 'selected_client';
 
   // Verificar si hay token válido
   Future<bool> hasValidToken() async {
@@ -157,8 +158,14 @@ class ClientService {
     try {
       print('\n🔍 Iniciando búsqueda de clientes por nombre: $nombre');
 
+      final trimmed = nombre.trim();
+      if (RegExp(r'^[0-9]+$').hasMatch(trimmed)) {
+        final client = await searchClientByCedula(trimmed);
+        return client == null ? [] : [client];
+      }
+
       final headers = await _getHeaders();
-      final encodedName = Uri.encodeComponent(nombre);
+      final encodedName = Uri.encodeComponent(trimmed);
       final uri = (await baseUri).replace(
         path: '$_basePath/clients/search/name/$encodedName',
       );
@@ -417,5 +424,31 @@ class ClientService {
       }
       rethrow;
     }
+  }
+
+  Future<void> saveSelectedClient(Map<String, dynamic> client) async {
+    try {
+      await storage.write(key: _selectedClientKey, value: json.encode(client));
+    } catch (_) {}
+  }
+
+  Future<Map<String, dynamic>?> getSelectedClient() async {
+    try {
+      final data = await storage.read(key: _selectedClientKey);
+      if (data == null || data.isEmpty) {
+        return null;
+      }
+      final decoded = json.decode(data);
+      if (decoded is Map) {
+        return Map<String, dynamic>.from(decoded);
+      }
+    } catch (_) {}
+    return null;
+  }
+
+  Future<void> clearSelectedClient() async {
+    try {
+      await storage.delete(key: _selectedClientKey);
+    } catch (_) {}
   }
 }
