@@ -1,0 +1,521 @@
+================================================================================
+               DOCUMENTACIÓN DE API - BACKEND LYTIKS
+================================================================================
+
+BASE URL: http://5.161.198.89:8081/api
+
+================================================================================
+🔐 MÓDULO DE AUTENTICACIÓN - /auth
+================================================================================
+
+POST /auth/login
+  Descripción: Iniciar sesión con credenciales
+  Body: { "username": "usuario", "password": "contraseña_encriptada_AES" }
+  Retorna: Token de autenticación
+
+GET /auth/perfil/{username}
+  Descripción: Obtener perfil de usuario
+  Parámetros: username (String)
+
+GET /auth/test
+  Descripción: Verificar servicio de autenticación
+
+================================================================================
+👥 MÓDULO DE CLIENTES - /api/clients
+================================================================================
+
+GET /api/clients/search/{cedula}
+  Descripción: Buscar cliente por cédula (autocompletado)
+  Parámetros: cedula (String)
+
+POST /api/clients
+  Descripción: Crear nuevo cliente
+  Body: {
+    "cedula": "string",
+    "nombre": "string",
+    "direccion": "string",
+    "ciudad": "string",
+    "provincia": "string",
+    "parroquia": "string",
+    "telefono": "string",
+    "email": "string",
+    "nombreFinca": "string",
+    "fincaHectareas": number,
+    "cultivosPrincipales": "string",
+    "geolocalizacionLat": number,
+    "geolocalizacionLon": number,
+    "tecnicoAsignadoId": number,
+    "observaciones": "string"
+  }
+
+PUT /api/clients/{id}
+  Descripción: Actualizar cliente
+  Parámetros: id (Long)
+  Body: Igual que POST
+
+GET /api/clients
+  Descripción: Obtener todos los clientes
+
+GET /api/clients/tecnico/{tecnicoId}
+  Descripción: Obtener clientes de un técnico
+  Parámetros: tecnicoId (Long)
+
+GET /api/clients/nombre/{nombre}
+  Descripción: Buscar clientes por nombre
+  Parámetros: nombre (String)
+
+GET /api/clients/{id}
+  Descripción: Obtener cliente por ID
+  Parámetros: id (Long)
+
+DELETE /api/clients/{id}
+  Descripción: Eliminar cliente
+  Parámetros: id (Long)
+
+GET /api/clients/stats
+  Descripción: Obtener estadísticas de clientes
+  Retorna: { total, activos, totalHectareas, recientes }
+
+GET /api/clients?cultivo={nombreCultivo}
+  Descripción: Buscar clientes por tipo de cultivo
+  Query: cultivo (String)
+
+================================================================================
+📋 MÓDULO DE AUDITORÍAS - /api/audits
+================================================================================
+
+POST /api/audits
+  Descripción: Crear nueva auditoría
+  Body: {
+    "clienteId": number,
+    "tecnicoId": number,
+    "hacienda": "string",
+    "cultivo": "string",
+    "fecha": "ISO8601"
+  }
+
+GET /api/audits/tecnico/{tecnicoId}
+  Descripción: Obtener auditorías de un técnico
+  Parámetros: tecnicoId (Long)
+
+GET /api/audits/{id}
+  Descripción: Obtener auditoría por ID
+  Parámetros: id (Long)
+
+GET /api/audits
+  Descripción: Obtener todas las auditorías
+
+GET /api/audits/{auditId}/scores
+  Descripción: Obtener puntuaciones de auditoría
+  Parámetros: auditId (Long)
+
+GET /api/audits/{auditId}/photos
+  Descripción: Obtener fotos de auditoría
+  Parámetros: auditId (Long)
+
+PUT /api/audits/{id}/status
+  Descripción: Actualizar estado de auditoría
+  Parámetros: id (Long)
+  Body: { "estado": "PENDIENTE" | "COMPLETADA" }
+
+GET /api/audits/dashboard/tecnico/{tecnicoId}
+  Descripción: Dashboard de auditorías para técnico
+  Parámetros: tecnicoId (Long)
+
+GET /api/audits/stats
+  Descripción: Estadísticas generales de auditorías
+
+DELETE /api/audits/{id}
+  Descripción: Eliminar auditoría
+  Parámetros: id (Long)
+
+GET /api/audits/user/{userId}
+  Descripción: Obtener todas las auditorías de un usuario
+  Parámetros: userId (Long)
+
+================================================================================
+🍌 MÓDULO DE SIGATOKA - /api/sigatoka
+================================================================================
+
+--- GESTIÓN ---
+
+POST /api/sigatoka
+  Descripción: Crear nueva evaluación Sigatoka (encabezado)
+  Body: {
+    "clienteId": number,
+    "hacienda": "string",
+    "fecha": "ISO8601",
+    "semanaEpidemiologica": number,
+    "periodo": "string",
+    "evaluador": "string"
+  }
+
+POST /api/sigatoka/{evaluacionId}/lotes
+  Descripción: Agregar lote a evaluación
+  Parámetros: evaluacionId (Long)
+  Body: { "loteCodigo": "string" }
+
+POST /api/sigatoka/lotes/{loteId}/muestras
+  Descripción: Agregar muestra a lote
+  Parámetros: loteId (Long)
+  Body: {
+    "muestraNum": number,
+    "hoja3era": "string",
+    "hoja4ta": "string",
+    "hoja5ta": "string",
+    "totalHojas3era": number,
+    "totalHojas4ta": number,
+    "totalHojas5ta": number,
+    "plantasConLesiones": number,
+    "totalLesiones": number,
+    "plantas3erEstadio": number,
+    "totalLetras": number,
+    "hvle0w": number,
+    "hvlq0w": number,
+    "hvlq5_0w": number,
+    "th0w": number,
+    "hvle10w": number,
+    "hvlq10w": number,
+    "hvlq5_10w": number,
+    "th10w": number
+  }
+
+POST /api/sigatoka/lotes/{loteId}/muestras/bulk
+  Descripción: Agregar múltiples muestras a lote
+  Parámetros: loteId (Long)
+  Body: [ ...array de muestras... ]
+
+--- CONSULTA ---
+
+GET /api/sigatoka/{evaluacionId}
+  Descripción: Obtener evaluación completa con lotes y muestras
+  Parámetros: evaluacionId (Long)
+
+GET /api/sigatoka/cliente/{clienteId}
+  Descripción: Obtener evaluaciones de un cliente
+  Parámetros: clienteId (Long)
+
+GET /api/sigatoka/{evaluacionId}/lotes
+  Descripción: Obtener lotes de evaluación
+  Parámetros: evaluacionId (Long)
+
+GET /api/sigatoka/lotes/{loteId}/muestras
+  Descripción: Obtener muestras de un lote
+  Parámetros: loteId (Long)
+
+GET /api/sigatoka/{evaluacionId}/todas-muestras
+  Descripción: Obtener todas las muestras de evaluación
+  Parámetros: evaluacionId (Long)
+
+GET /api/sigatoka/crop/{tipoCultivo}
+  Descripción: Obtener evaluaciones por tipo de cultivo
+  Parámetros: tipoCultivo (String)
+
+--- CÁLCULOS ---
+
+GET /api/sigatoka/{evaluacionId}/resumen
+  Descripción: Calcular resumen (variables a-e)
+  Parámetros: evaluacionId (Long)
+  Retorna: Totales y promedios por hoja
+
+GET /api/sigatoka/{evaluacionId}/indicadores
+  Descripción: Calcular indicadores (variables f-k)
+  Parámetros: evaluacionId (Long)
+  Retorna: Porcentajes y promedios avanzados
+
+GET /api/sigatoka/{evaluacionId}/estado-evolutivo
+  Descripción: Calcular estado evolutivo (EE)
+  Parámetros: evaluacionId (Long)
+  Retorna: EE por hoja (3era, 4ta, 5ta)
+
+GET /api/sigatoka/{evaluacionId}/stover
+  Descripción: Calcular promedios Stover (0w y 10w)
+  Parámetros: evaluacionId (Long)
+
+POST /api/sigatoka/{evaluacionId}/calcular-todo
+  Descripción: Calcular todos los indicadores
+  Parámetros: evaluacionId (Long)
+
+--- ACTUALIZACIÓN/ELIMINACIÓN ---
+
+PUT /api/sigatoka/{evaluacionId}
+  Descripción: Actualizar evaluación
+  Parámetros: evaluacionId (Long)
+  Body: Campos actualizables
+
+DELETE /api/sigatoka/{evaluacionId}
+  Descripción: Eliminar evaluación (cascada)
+  Parámetros: evaluacionId (Long)
+
+DELETE /api/sigatoka/lotes/{loteId}
+  Descripción: Eliminar lote (cascada)
+  Parámetros: loteId (Long)
+
+DELETE /api/sigatoka/muestras/{muestraId}
+  Descripción: Eliminar muestra
+  Parámetros: muestraId (Long)
+
+================================================================================
+🦠 MÓDULO DE REGISTRO MOKO - /api/moko
+================================================================================
+
+--- GESTIÓN DE FOCOS ---
+
+GET /api/moko/siguiente-numero-foco
+  Descripción: Obtener siguiente número de foco disponible
+
+GET /api/moko/sintomas
+  Descripción: Obtener todos los síntomas disponibles
+
+POST /api/moko/registrar
+  Descripción: Registrar nuevo foco de Moko
+  Content-Type: multipart/form-data
+  Parámetros:
+    - numeroFoco (Integer)
+    - clienteId (Long)
+    - nombreProductor (String)
+    - tecnicoId (Long)
+    - nombreTecnico (String)
+    - fechaRegistro (ISO8601)
+    - hacienda (String)
+    - lote (String)
+    - zona (String)
+    - coordenadasGPS (String)
+    - sintomasIds (List<Long>)
+    - superficieAfectadaM2 (Double)
+    - plantasAfectadas (Integer)
+    - severidad (String)
+    - observaciones (String)
+    - fotos (MultipartFile[])
+
+GET /api/moko/registros
+  Descripción: Obtener todos los registros de Moko
+
+GET /api/moko/registro/{id}
+  Descripción: Obtener registro por ID
+  Parámetros: id (Long)
+
+PUT /api/moko/registro/{id}
+  Descripción: Actualizar registro
+  Parámetros: id (Long)
+  Form-Data: Campos actualizables
+
+DELETE /api/moko/registro/{id}
+  Descripción: Eliminar registro
+  Parámetros: id (Long)
+
+--- CONSULTA Y BÚSQUEDA ---
+
+GET /api/moko/severidad/{severidad}
+  Descripción: Obtener registros por severidad
+  Parámetros: severidad (String) - alto|medio|bajo
+
+GET /api/moko/buscar?query={texto}
+  Descripción: Buscar registros
+  Query: query (String)
+
+GET /api/moko/cliente/{clienteId}
+  Descripción: Obtener registros de un cliente
+  Parámetros: clienteId (Long)
+
+GET /api/moko/rango-fechas?inicio={fecha1}&fin={fecha2}
+  Descripción: Registros en rango de fechas
+  Query: inicio, fin (ISO8601)
+
+GET /api/moko/recientes?limit={numero}
+  Descripción: Registros recientes
+  Query: limit (int, default: 10)
+
+GET /api/moko/con-fotos
+  Descripción: Registros que tienen fotos
+
+GET /api/moko/estadisticas
+  Descripción: Estadísticas de focos Moko
+
+--- PRODUCTOS ---
+
+GET /api/productos
+  Descripción: Obtener lista de productos
+
+GET /api/productos/contencion-moko
+  Descripción: Obtener productos de contención Moko
+
+POST /api/productos/inicializar
+  Descripción: Inicializar productos (Golden, Previotik, etc.)
+
+--- APLICACIONES ---
+
+POST /api/aplicaciones/guardar
+  Descripción: Guardar aplicación de producto
+  Body: {
+    "registroMokoId": number,
+    "productoId": number,
+    "dosis": number,
+    "unidadMedida": "string",
+    "frecuencia": "string",
+    "fechaProgramada": "ISO8601"
+  }
+
+POST /api/aplicaciones/contencion
+  Descripción: Guardar aplicación de contención
+  Body: Similar a aplicación normal
+
+GET /api/aplicaciones/seguimiento/{aplicacionId}
+  Descripción: Obtener seguimiento de aplicación
+  Parámetros: aplicacionId (Long)
+
+POST /api/aplicaciones/{aplicacionId}/completar
+  Descripción: Marcar aplicación como completada
+  Parámetros: aplicacionId (Long)
+  Form-Data: 
+    - observaciones (String, opcional)
+    - foto (MultipartFile, opcional)
+
+POST /api/aplicaciones/{aplicacionId}/reprogramar?nuevaFecha={fecha}
+  Descripción: Reprogramar aplicación
+  Parámetros: 
+    - aplicacionId (Long)
+    - nuevaFecha (ISO8601)
+
+================================================================================
+📊 MÓDULO DE SEGUIMIENTO MOKO - /api/seguimiento-moko
+================================================================================
+
+--- GESTIÓN ---
+
+POST /api/seguimiento-moko
+  Descripción: Registrar nuevo seguimiento
+  Body: {
+    "registroMokoId": number,
+    "numeroFoco": number,
+    "semanaEpidemiologica": number,
+    "fecha": "ISO8601",
+    "plantasErradicadas": number,
+    "superficieEliminadaM2": number,
+    "pediluvioActivo": boolean,
+    "cuarentenaActiva": boolean,
+    "observaciones": "string"
+  }
+
+PUT /api/seguimiento-moko/{id}
+  Descripción: Actualizar seguimiento
+  Parámetros: id (Long)
+  Body: Campos actualizables
+
+DELETE /api/seguimiento-moko/{id}
+  Descripción: Eliminar seguimiento
+  Parámetros: id (Long)
+
+--- CONSULTA ---
+
+GET /api/seguimiento-moko/todos
+  Descripción: Obtener todos los seguimientos
+
+GET /api/seguimiento-moko/foco/{focoId}
+  Descripción: Seguimientos por ID de foco
+  Parámetros: focoId (Long)
+
+GET /api/seguimiento-moko/numero-foco/{numeroFoco}
+  Descripción: Seguimientos por número de foco
+  Parámetros: numeroFoco (Integer)
+
+GET /api/seguimiento-moko/{id}
+  Descripción: Obtener seguimiento por ID
+  Parámetros: id (Long)
+
+GET /api/seguimiento-moko/ultimo/foco/{focoId}
+  Descripción: Último seguimiento de un foco
+  Parámetros: focoId (Long)
+
+GET /api/seguimiento-moko/semana/{semanaInicio}
+  Descripción: Seguimientos por semana epidemiológica
+  Parámetros: semanaInicio (Integer)
+
+GET /api/seguimiento-moko/pediluvio-activo
+  Descripción: Seguimientos con pediluvio activo
+
+GET /api/seguimiento-moko/cuarentena-activa
+  Descripción: Seguimientos con cuarentena activa
+
+GET /api/seguimiento-moko/estadisticas/foco/{focoId}
+  Descripción: Estadísticas de un foco
+  Parámetros: focoId (Long)
+
+================================================================================
+🔬 MÓDULO DE SÍNTOMAS - /api/sintomas
+================================================================================
+
+GET /api/sintomas/all
+  Descripción: Obtener todos los síntomas
+
+GET /api/sintomas/categoria/{categoria}
+  Descripción: Síntomas por categoría
+  Parámetros: categoria (String)
+
+GET /api/sintomas/severidad/{severidad}
+  Descripción: Síntomas por severidad
+  Parámetros: severidad (String)
+
+GET /api/sintomas/{id}
+  Descripción: Obtener síntoma por ID
+  Parámetros: id (Long)
+
+GET /api/sintomas/categorias
+  Descripción: Obtener categorías únicas
+
+GET /api/sintomas/buscar?texto={busqueda}
+  Descripción: Buscar síntomas por texto
+  Query: texto (String)
+
+================================================================================
+🔍 MÓDULO DE CONSULTA DE AUDITORÍAS - /api/auditorias
+================================================================================
+
+GET /api/auditorias/cedula/{cedula}
+  Descripción: Consultar todas las auditorías por cédula del cliente
+  Parámetros: cedula (String)
+  Retorna: {
+    "auditoriasNormales": [...],
+    "auditoriasMoko": [...],
+    "auditoriasSigatoka": [...]
+  }
+
+================================================================================
+📝 NOTAS IMPORTANTES
+================================================================================
+
+AUTENTICACIÓN:
+- La contraseña en /auth/login debe enviarse encriptada con AES
+- El endpoint devuelve un token que debe incluirse en headers subsecuentes:
+  Authorization: Bearer {token}
+
+CORS:
+- Todos los endpoints tienen CORS habilitado
+
+FORMATOS DE FECHA:
+- ISO 8601: yyyy-MM-ddTHH:mm:ss
+- Ejemplo: 2024-01-15T10:30:00
+
+ARCHIVOS:
+- Endpoints con fotos usan multipart/form-data
+- Fotos se almacenan en:
+  * Moko: /uploads/moko/{numeroFoco}/
+  * Auditorías: /uploads/auditorias/{auditId}/
+  * Evidencias: /uploads/evidencias/
+
+ESTADOS:
+- Auditorías: PENDIENTE | COMPLETADA
+- Clientes: ACTIVO | INACTIVO
+- Severidad: alto | medio | bajo
+
+CÓDIGOS DE RESPUESTA:
+- 200: OK
+- 201: Created
+- 400: Bad Request
+- 401: Unauthorized
+- 404: Not Found
+- 500: Internal Server Error
+
+================================================================================
+FIN DE DOCUMENTACIÓN
+================================================================================

@@ -21,7 +21,6 @@ class _ResumenSigatokaScreenState extends State<ResumenSigatokaScreen> {
 
   // Variables calculadas
   late int totalMuestras;
-  late int totalPlantasMuestreadas;
   late int totalHojas3era, totalHojas4ta, totalHojas5ta;
   late int totalLesiones3era, totalLesiones4ta, totalLesiones5ta;
   late int totalPlantas3erEstadio3era, totalPlantas3erEstadio4ta, totalPlantas3erEstadio5ta;
@@ -55,7 +54,6 @@ class _ResumenSigatokaScreenState extends State<ResumenSigatokaScreen> {
     List<Map<String, dynamic>> todasLasMuestras = widget.muestrasSesion;
 
     totalMuestras = todasLasMuestras.length;
-    totalPlantasMuestreadas = 0;
     totalHojas3era = 0;
     totalHojas4ta = 0;
     totalHojas5ta = 0;
@@ -77,8 +75,6 @@ class _ResumenSigatokaScreenState extends State<ResumenSigatokaScreen> {
     int contadorStover = 0;
 
     for (var muestra in todasLasMuestras) {
-      totalPlantasMuestreadas += _asInt(muestra['plantasMuestreadas'], defaultValue: 0);
-
       totalHojas3era += (muestra['totalHojas3era'] ?? 0) as int;
       totalHojas4ta += (muestra['totalHojas4ta'] ?? 0) as int;
       totalHojas5ta += (muestra['totalHojas5ta'] ?? 0) as int;
@@ -92,8 +88,14 @@ class _ResumenSigatokaScreenState extends State<ResumenSigatokaScreen> {
           if (numero == 3) totalPlantas3erEstadio3era++;
           if (numero > 0) totalPlantasConLesiones3era++;
         }
-        String letras = grado.replaceAll(RegExp(r'[0-9]'), '');
-        totalLetras3era += letras.length;
+        // Calcular valor de letras: a=1, b=2, c=3, etc.
+        String letras = grado.replaceAll(RegExp(r'[0-9]'), '').toLowerCase();
+        for (int i = 0; i < letras.length; i++) {
+          int valorLetra = letras.codeUnitAt(i) - 'a'.codeUnitAt(0) + 1;
+          if (valorLetra >= 1 && valorLetra <= 9) {
+            totalLetras3era += valorLetra;
+          }
+        }
       }
 
       // Procesar 4ta hoja
@@ -105,8 +107,14 @@ class _ResumenSigatokaScreenState extends State<ResumenSigatokaScreen> {
           if (numero == 3) totalPlantas3erEstadio4ta++;
           if (numero > 0) totalPlantasConLesiones4ta++;
         }
-        String letras = grado.replaceAll(RegExp(r'[0-9]'), '');
-        totalLetras4ta += letras.length;
+        // Calcular valor de letras: a=1, b=2, c=3, etc.
+        String letras = grado.replaceAll(RegExp(r'[0-9]'), '').toLowerCase();
+        for (int i = 0; i < letras.length; i++) {
+          int valorLetra = letras.codeUnitAt(i) - 'a'.codeUnitAt(0) + 1;
+          if (valorLetra >= 1 && valorLetra <= 9) {
+            totalLetras4ta += valorLetra;
+          }
+        }
       }
 
       // Procesar 5ta hoja
@@ -118,8 +126,14 @@ class _ResumenSigatokaScreenState extends State<ResumenSigatokaScreen> {
           if (numero == 3) totalPlantas3erEstadio5ta++;
           if (numero > 0) totalPlantasConLesiones5ta++;
         }
-        String letras = grado.replaceAll(RegExp(r'[0-9]'), '');
-        totalLetras5ta += letras.length;
+        // Calcular valor de letras: a=1, b=2, c=3, etc.
+        String letras = grado.replaceAll(RegExp(r'[0-9]'), '').toLowerCase();
+        for (int i = 0; i < letras.length; i++) {
+          int valorLetra = letras.codeUnitAt(i) - 'a'.codeUnitAt(0) + 1;
+          if (valorLetra >= 1 && valorLetra <= 9) {
+            totalLetras5ta += valorLetra;
+          }
+        }
       }
 
       // Sumar Stover 0w
@@ -166,9 +180,9 @@ class _ResumenSigatokaScreenState extends State<ResumenSigatokaScreen> {
     promedioHvlq5_10w = contadorStover > 0 ? sumaHvlq5_10w / contadorStover : 0;
     promedioTh10w = contadorStover > 0 ? sumaTh10w / contadorStover : 0;
 
-    promedioLesiones3era = totalPlantasMuestreadas > 0 ? totalLesiones3era / totalPlantasMuestreadas : 0;
-    promedioLesiones4ta = totalPlantasMuestreadas > 0 ? totalLesiones4ta / totalPlantasMuestreadas : 0;
-    promedioLesiones5ta = totalPlantasMuestreadas > 0 ? totalLesiones5ta / totalPlantasMuestreadas : 0;
+    promedioLesiones3era = totalMuestras > 0 ? totalLesiones3era / totalMuestras : 0;
+    promedioLesiones4ta = totalMuestras > 0 ? totalLesiones4ta / totalMuestras : 0;
+    promedioLesiones5ta = totalMuestras > 0 ? totalLesiones5ta / totalMuestras : 0;
 
     porcentaje3erEstadio3era = totalPlantasConLesiones3era > 0
         ? (totalPlantas3erEstadio3era / totalPlantasConLesiones3era) * 100
@@ -180,23 +194,23 @@ class _ResumenSigatokaScreenState extends State<ResumenSigatokaScreen> {
         ? (totalPlantas3erEstadio5ta / totalPlantasConLesiones5ta) * 100
         : 0;
 
-    porcentajePlantasLesiones3era = totalPlantasMuestreadas > 0
-        ? (totalPlantasConLesiones3era / totalPlantasMuestreadas) * 100
+    porcentajePlantasLesiones3era = totalMuestras > 0
+        ? (totalPlantasConLesiones3era / totalMuestras) * 100
         : 0;
-    porcentajePlantasLesiones4ta = totalPlantasMuestreadas > 0
-        ? (totalPlantasConLesiones4ta / totalPlantasMuestreadas) * 100
+    porcentajePlantasLesiones4ta = totalMuestras > 0
+        ? (totalPlantasConLesiones4ta / totalMuestras) * 100
         : 0;
-    porcentajePlantasLesiones5ta = totalPlantasMuestreadas > 0
-        ? (totalPlantasConLesiones5ta / totalPlantasMuestreadas) * 100
+    porcentajePlantasLesiones5ta = totalMuestras > 0
+        ? (totalPlantasConLesiones5ta / totalMuestras) * 100
         : 0;
 
-    promedioHojasFuncionales3era = totalPlantasMuestreadas > 0 ? totalHojas3era / totalPlantasMuestreadas : 0;
-    promedioHojasFuncionales4ta = totalPlantasMuestreadas > 0 ? totalHojas4ta / totalPlantasMuestreadas : 0;
-    promedioHojasFuncionales5ta = totalPlantasMuestreadas > 0 ? totalHojas5ta / totalPlantasMuestreadas : 0;
+    promedioHojasFuncionales3era = totalMuestras > 0 ? totalHojas3era / totalMuestras : 0;
+    promedioHojasFuncionales4ta = totalMuestras > 0 ? totalHojas4ta / totalMuestras : 0;
+    promedioHojasFuncionales5ta = totalMuestras > 0 ? totalHojas5ta / totalMuestras : 0;
 
-    promedioLetras3era = totalPlantasMuestreadas > 0 ? totalLetras3era / totalPlantasMuestreadas : 0;
-    promedioLetras4ta = totalPlantasMuestreadas > 0 ? totalLetras4ta / totalPlantasMuestreadas : 0;
-    promedioLetras5ta = totalPlantasMuestreadas > 0 ? totalLetras5ta / totalPlantasMuestreadas : 0;
+    promedioLetras3era = totalMuestras > 0 ? totalLetras3era / totalMuestras : 0;
+    promedioLetras4ta = totalMuestras > 0 ? totalLetras4ta / totalMuestras : 0;
+    promedioLetras5ta = totalMuestras > 0 ? totalLetras5ta / totalMuestras : 0;
 
     // Calcular Estado Evolutivo
     ee3era = promedioLesiones3era * 120 * promedioLetras3era;
@@ -427,7 +441,7 @@ class _ResumenSigatokaScreenState extends State<ResumenSigatokaScreen> {
                 ),
               ),
               Divider(height: 1, color: Colors.grey[300]),
-              _buildTablaFila('a) Total Plantas Muestreadas', totalPlantasMuestreadas.toString(), totalPlantasMuestreadas.toString(), totalPlantasMuestreadas.toString(), Colors.brown[50]!),
+              _buildTablaFila('a) Total Plantas Muestreadas', totalMuestras.toString(), totalMuestras.toString(), totalMuestras.toString(), Colors.brown[50]!),
               Divider(height: 1, color: Colors.grey[300]),
               _buildTablaFila('b) Total Plantas con Lesiones', totalPlantasConLesiones3era.toString(), totalPlantasConLesiones4ta.toString(), totalPlantasConLesiones5ta.toString(), Colors.white),
               Divider(height: 1, color: Colors.grey[300]),
@@ -456,14 +470,14 @@ class _ResumenSigatokaScreenState extends State<ResumenSigatokaScreen> {
   }
 
   Widget _buildEstadoEvolutivo() {
-    String nivel3era = ee3era < 300 ? 'BAJO' : (ee3era < 600 ? 'MODERADO' : 'ALTO');
-    Color color3era = ee3era < 300 ? Colors.green : (ee3era < 600 ? Colors.orange : Colors.red);
+    String nivel3era = ee3era < 300 ? 'BAJO' : (ee3era < 400 ? 'MODERADO' : 'ALTO');
+    Color color3era = ee3era < 300 ? Colors.green : (ee3era < 400 ? Colors.orange : Colors.red);
 
-    String nivel4ta = ee4ta < 400 ? 'BAJO' : (ee4ta < 800 ? 'MODERADO' : 'ALTO');
-    Color color4ta = ee4ta < 400 ? Colors.green : (ee4ta < 800 ? Colors.orange : Colors.red);
+    String nivel4ta = ee4ta < 300 ? 'BAJO' : (ee4ta < 400 ? 'MODERADO' : 'ALTO');
+    Color color4ta = ee4ta < 300 ? Colors.green : (ee4ta < 400 ? Colors.orange : Colors.red);
 
-    String nivel5ta = ee5ta < 500 ? 'BAJO' : (ee5ta < 1000 ? 'MODERADO' : 'ALTO');
-    Color color5ta = ee5ta < 500 ? Colors.green : (ee5ta < 1000 ? Colors.orange : Colors.red);
+    String nivel5ta = ee5ta < 300 ? 'BAJO' : (ee5ta < 400 ? 'MODERADO' : 'ALTO');
+    Color color5ta = ee5ta < 300 ? Colors.green : (ee5ta < 400 ? Colors.orange : Colors.red);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,

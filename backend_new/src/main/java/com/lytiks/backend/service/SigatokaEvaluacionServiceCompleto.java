@@ -4,6 +4,7 @@ import com.lytiks.backend.dto.*;
 import com.lytiks.backend.entity.*;
 import com.lytiks.backend.repository.*;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import lombok.extern.slf4j.Slf4j;
@@ -149,6 +150,13 @@ public class SigatokaEvaluacionServiceCompleto {
      */
     public List<SigatokaEvaluacion> obtenerEvaluacionesPorCliente(Long clienteId) {
         return evaluacionRepository.findByClienteIdOrderByFechaDesc(clienteId);
+    }
+
+    /**
+     * Obtener todas las evaluaciones
+     */
+    public List<SigatokaEvaluacion> obtenerTodasEvaluaciones() {
+        return evaluacionRepository.findAll(Sort.by(Sort.Direction.DESC, "fecha"));
     }
     
     /**

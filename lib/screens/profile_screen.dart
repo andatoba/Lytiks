@@ -22,11 +22,75 @@ class _ProfileScreenState extends State<ProfileScreen> {
     _loadUserData();
   }
 
+  Map<String, dynamic>? _extractUserMap(Map<String, dynamic>? data) {
+    if (data == null) {
+      return null;
+    }
+    final rawUser = data['user'];
+    if (rawUser is Map<String, dynamic>) {
+      return rawUser;
+    }
+    if (rawUser is Map) {
+      return Map<String, dynamic>.from(rawUser);
+    }
+    return data;
+  }
+
+  String _readField(Map<String, dynamic>? source, List<String> keys) {
+    if (source == null) return '';
+    for (final key in keys) {
+      final value = source[key];
+      if (value != null && value.toString().trim().isNotEmpty) {
+        return value.toString();
+      }
+    }
+    return '';
+  }
+
+  String _getDisplayName() {
+    final nombres = _readField(userProfile, ['nombres', 'firstName', 'nombre']) != ''
+        ? _readField(userProfile, ['nombres', 'firstName', 'nombre'])
+        : _readField(_extractUserMap(userData), ['nombres', 'firstName', 'nombre']);
+    final apellidos = _readField(userProfile, ['apellidos', 'lastName', 'apellido']) != ''
+        ? _readField(userProfile, ['apellidos', 'lastName', 'apellido'])
+        : _readField(_extractUserMap(userData), ['apellidos', 'lastName', 'apellido']);
+    final fullName = [nombres, apellidos].where((p) => p.trim().isNotEmpty).join(' ').trim();
+    if (fullName.isNotEmpty) {
+      return fullName;
+    }
+    return _getUsername();
+  }
+
+  String _getUsername() {
+    final fromProfile = _readField(userProfile, ['usuario', 'username']);
+    if (fromProfile.isNotEmpty) {
+      return fromProfile;
+    }
+    return _readField(_extractUserMap(userData), ['usuario', 'username']);
+  }
+
+  String _getEmail() {
+    final fromProfile = _readField(userProfile, ['correo', 'email']);
+    if (fromProfile.isNotEmpty) {
+      return fromProfile;
+    }
+    return _readField(_extractUserMap(userData), ['correo', 'email']);
+  }
+
+  String _getRole() {
+    final fromProfile = _readField(userProfile, ['rol', 'role']);
+    if (fromProfile.isNotEmpty) {
+      return fromProfile;
+    }
+    return _readField(_extractUserMap(userData), ['rol', 'role']);
+  }
+
   Future<void> _loadUserData() async {
     try {
       final data = await _authService.getUserData();
-      String? username = data != null ? data['username'] : null;
-      if (username == null) {
+      final storedUser = _extractUserMap(data);
+      String? username = _readField(storedUser, ['usuario', 'username']);
+      if (username.isEmpty) {
         username = await _authService.getUsername();
       }
       print('[Perfil] Username usado para perfil: $username');
@@ -91,6 +155,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final displayName = _getDisplayName();
+    final username = _getUsername();
+    final email = _getEmail();
+    final role = _getRole();
+    final cedula = _readField(userProfile, ['cedula']);
+    final telefonoCel = _readField(userProfile, ['telefonoCel', 'telefono_cel', 'telefonoCelular']);
+    final telefonoCasa = _readField(userProfile, ['telefonoCasa', 'telefono_casa']);
+    final direccion = _readField(userProfile, ['direccion', 'direccionDom', 'direccion_dom']);
+    final tipoPersona = _readField(userProfile, ['tipoPersona', 'tipo_persona']);
+    final estado = _readField(userProfile, ['estado']);
+
     return Scaffold(
       backgroundColor: Colors.grey[50],
       body: isLoading
@@ -140,9 +215,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
                         // Nombre completo
                         Text(
-                          userProfile != null
-                              ? '${userProfile!['firstName']} ${userProfile!['lastName']}'
-                              : '${userData!['firstName']} ${userData!['lastName']}',
+                          displayName.isNotEmpty ? displayName : 'Usuario',
                           style: const TextStyle(
                             fontSize: 24,
                             fontWeight: FontWeight.bold,
@@ -154,7 +227,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
                         // Usuario
                         Text(
-                          '@${userData!['username']}',
+                          username.isNotEmpty ? '@$username' : '@usuario',
                           style: TextStyle(
                             fontSize: 16,
                             color: Colors.white.withOpacity(0.8),
@@ -183,9 +256,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                               const SizedBox(width: 8),
                               Text(
                                 _authService.getRoleName(
-                                  userProfile != null
-                                      ? userProfile!['role']
-                                      : userData!['role'],
+                                  role,
                                 ),
                                 style: const TextStyle(
                                   color: Colors.white,
@@ -209,26 +280,56 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       _buildInfoItem(
                         icon: Icons.account_circle,
                         label: 'Usuario',
-                        value: userProfile != null
-                            ? userProfile!['username']
-                            : userData!['username'],
+                        value: username.isNotEmpty ? username : 'No disponible',
                       ),
                       _buildInfoItem(
                         icon: Icons.email,
                         label: 'Correo Electrónico',
-                        value: userProfile != null
-                            ? (userProfile!['email'] ?? 'No disponible')
-                            : (userData!['email'] ?? 'No disponible'),
+                        value: email.isNotEmpty ? email : 'No disponible',
                       ),
                       _buildInfoItem(
                         icon: Icons.badge,
                         label: 'Rol del Sistema',
                         value: _authService.getRoleName(
-                          userProfile != null
-                              ? userProfile!['role']
-                              : userData!['role'],
+                          role,
                         ),
                       ),
+                      if (cedula.isNotEmpty)
+                        _buildInfoItem(
+                          icon: Icons.credit_card,
+                          label: 'Cédula',
+                          value: cedula,
+                        ),
+                      if (telefonoCel.isNotEmpty)
+                        _buildInfoItem(
+                          icon: Icons.phone_android,
+                          label: 'Teléfono celular',
+                          value: telefonoCel,
+                        ),
+                      if (telefonoCasa.isNotEmpty)
+                        _buildInfoItem(
+                          icon: Icons.phone,
+                          label: 'Teléfono casa',
+                          value: telefonoCasa,
+                        ),
+                      if (direccion.isNotEmpty)
+                        _buildInfoItem(
+                          icon: Icons.home,
+                          label: 'Dirección',
+                          value: direccion,
+                        ),
+                      if (tipoPersona.isNotEmpty)
+                        _buildInfoItem(
+                          icon: Icons.person_outline,
+                          label: 'Tipo de persona',
+                          value: tipoPersona,
+                        ),
+                      if (estado.isNotEmpty)
+                        _buildInfoItem(
+                          icon: Icons.verified_user,
+                          label: 'Estado',
+                          value: estado,
+                        ),
                     ],
                   ),
                   const SizedBox(height: 16),
@@ -271,30 +372,33 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   String _getInitials() {
-    if (userData != null) {
-      final firstName = userData!['firstName'] as String;
-      final lastName = userData!['lastName'] as String;
-      return '${firstName[0]}${lastName[0]}';
+    final name = _getDisplayName().trim();
+    if (name.isEmpty) {
+      final username = _getUsername();
+      if (username.isNotEmpty) {
+        return username[0].toUpperCase();
+      }
+      return '?';
     }
-    return '?';
+    final parts = name.split(RegExp(r'\s+'));
+    if (parts.length == 1) {
+      return parts.first[0].toUpperCase();
+    }
+    return '${parts[0][0]}${parts[1][0]}'.toUpperCase();
   }
 
   Color _getRoleColor() {
-    if (userData != null) {
-      final role = userData!['role'] as String;
-      if (role == 'TECHNICIAN') {
-        return Colors.green;
-      }
+    final role = _getRole().toUpperCase();
+    if (role == 'TECHNICIAN' || role == 'OPERADOR') {
+      return Colors.green;
     }
     return Colors.grey;
   }
 
   IconData _getRoleIcon() {
-    if (userData != null) {
-      final role = userData!['role'] as String;
-      if (role == 'TECHNICIAN') {
-        return Icons.engineering;
-      }
+    final role = _getRole().toUpperCase();
+    if (role == 'TECHNICIAN' || role == 'OPERADOR') {
+      return Icons.engineering;
     }
     return Icons.person;
   }

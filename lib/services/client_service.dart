@@ -8,6 +8,7 @@ class ClientService {
   static const String _basePath = '/api';
 
   final storage = const FlutterSecureStorage();
+  static const String _selectedClientKey = 'selected_client';
 
   // Verificar si hay token válido
   Future<bool> hasValidToken() async {
@@ -127,6 +128,78 @@ class ClientService {
       } else {
         print('❌ Error ${response.statusCode}: ${response.body}');
         throw Exception('Error al buscar cliente: ${response.body}');
+      }
+    } catch (e) {
+      print('\n❌ Error detallado:');
+      print('   Tipo de error: ${e.runtimeType}');
+      print('   Mensaje: $e');
+
+      if (e.toString().contains('TimeoutException')) {
+        throw Exception(
+          'Tiempo de espera agotado. Por favor, inténtelo nuevamente.',
+        );
+      } else if (e.toString().contains('SocketException')) {
+        throw Exception(
+          'No se puede conectar al servidor. Verifica tu conexión a internet y que el servidor esté disponible.',
+        );
+      } else if (e.toString().contains('HandshakeException')) {
+        throw Exception(
+          'Error de seguridad en la conexión. Verifica la configuración SSL del servidor.',
+        );
+      } else if (e.toString().contains('Certificate')) {
+        throw Exception('Error de certificado SSL. La conexión no es segura.');
+      }
+
+      throw Exception('Error de conexión: $e');
+    }
+  }
+
+  Future<List<Map<String, dynamic>>> searchClientsByName(String nombre) async {
+    try {
+      print('\n🔍 Iniciando búsqueda de clientes por nombre: $nombre');
+
+      final trimmed = nombre.trim();
+      if (RegExp(r'^[0-9]+$').hasMatch(trimmed)) {
+        final client = await searchClientByCedula(trimmed);
+        return client == null ? [] : [client];
+      }
+
+      final headers = await _getHeaders();
+      final encodedName = Uri.encodeComponent(trimmed);
+      final uri = (await baseUri).replace(
+        path: '$_basePath/clients/search/name/$encodedName',
+      );
+
+      print('🌐 URL completa de búsqueda: ${uri.toString()}');
+
+      final response = await http
+          .get(uri, headers: headers)
+          .timeout(
+            const Duration(seconds: 30),
+            onTimeout: () {
+              throw Exception(
+                'La conexión está tomando demasiado tiempo. Verifica tu conexión a internet.',
+              );
+            },
+          );
+
+      print('📡 Response status: ${response.statusCode}');
+      print('📡 Response body: ${response.body}');
+
+      if (response.statusCode == 200) {
+        final responseData = json.decode(response.body);
+        if (responseData is List) {
+          return responseData
+              .map((item) => Map<String, dynamic>.from(item as Map))
+              .toList();
+        }
+        return [];
+      } else if (response.statusCode == 401) {
+        throw Exception('Token expirado. Por favor, inicia sesión nuevamente.');
+      } else if (response.statusCode == 404) {
+        return [];
+      } else {
+        throw Exception('Error al buscar clientes: ${response.body}');
       }
     } catch (e) {
       print('\n❌ Error detallado:');
@@ -351,5 +424,31 @@ class ClientService {
       }
       rethrow;
     }
+  }
+
+  Future<void> saveSelectedClient(Map<String, dynamic> client) async {
+    try {
+      await storage.write(key: _selectedClientKey, value: json.encode(client));
+    } catch (_) {}
+  }
+
+  Future<Map<String, dynamic>?> getSelectedClient() async {
+    try {
+      final data = await storage.read(key: _selectedClientKey);
+      if (data == null || data.isEmpty) {
+        return null;
+      }
+      final decoded = json.decode(data);
+      if (decoded is Map) {
+        return Map<String, dynamic>.from(decoded);
+      }
+    } catch (_) {}
+    return null;
+  }
+
+  Future<void> clearSelectedClient() async {
+    try {
+      await storage.delete(key: _selectedClientKey);
+    } catch (_) {}
   }
 }
