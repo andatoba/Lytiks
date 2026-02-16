@@ -14,15 +14,15 @@ class LocationTrackingService {
   factory LocationTrackingService() => _instance;
   LocationTrackingService._internal();
 
-  final storage = const FlutterSecureStorage();
+  final _storage = const FlutterSecureStorage();
   Timer? _trackingTimer;
   bool _isTracking = false;
   String? _currentUserId;
   String? _currentUserName;
 
-  // Configuración de horario: 8 AM a 4 PM (16:00)
+  // Configuración de horario: 8 AM a 6 PM (18:00)
   static const int _startHour = 8;
-  static const int _endHour = 16;
+  static const int _endHour = 18;
   // Configuración de intervalo: cada 5 segundos
   static const Duration _trackingInterval = Duration(seconds: 5);
 
@@ -58,7 +58,7 @@ class LocationTrackingService {
       if (_shouldTrackNow()) {
         await _captureLocation();
       } else {
-        debugPrint('⏰ Fuera del horario de seguimiento (8 AM - 4 PM)');
+        debugPrint('⏰ Fuera del horario de seguimiento (8 AM - 6 PM)');
       }
     });
 
@@ -169,10 +169,11 @@ class LocationTrackingService {
       };
 
       await db.insert('location_tracking', locationData);
-      debugPrint('💾 Ubicación guardada localmente');
-
+      debugPrint('✅ Ubicación guardada localmente');
     } catch (e) {
-      debugPrint('❌ Error guardando ubicación localmente: $e');
+      // En Web o si hay error, solo mostrar advertencia y continuar
+      // La ubicación se enviará directamente al servidor en la próxima sincronización
+      debugPrint('⚠️ No se pudo guardar ubicación localmente (normal en Web): $e');
     }
   }
 
@@ -202,7 +203,7 @@ class LocationTrackingService {
       debugPrint('📤 Sincronizando ${pendingLocations.length} ubicaciones pendientes...');
 
       // Obtener URL del servidor
-      final savedUrl = await storage.read(key: 'server_url');
+      final savedUrl = await _storage.read(key: 'server_url');
       final baseUrl = savedUrl ?? 'http://5.161.198.89:8081/api';
 
       for (final location in pendingLocations) {

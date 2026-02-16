@@ -2,13 +2,13 @@
 
 ## 📍 Descripción
 
-Sistema automático de captura y seguimiento de ubicación GPS para técnicos de campo. Captura coordenadas cada 5 segundos durante el horario laboral (8:00 AM - 4:00 PM) y funciona tanto online como offline.
+Sistema automático de captura y seguimiento de ubicación GPS para técnicos de campo. Captura coordenadas cada 5 segundos durante el horario laboral (8:00 AM - 6:00 PM) y funciona tanto online como offline.
 
 ## ✨ Características
 
 ### 1. **Captura Automática**
 - ✅ Captura de ubicación cada 5 segundos
-- ✅ Solo durante horario laboral: 8:00 AM - 4:00 PM
+- ✅ Solo durante horario laboral: 8:00 AM - 6:00 PM
 - ✅ Alta precisión GPS con información de accuracy
 
 ### 2. **Modo Offline**
@@ -210,7 +210,7 @@ static const Duration _trackingInterval = Duration(seconds: 5);
 En `lib/services/location_tracking_service.dart`:
 ```dart
 static const int _startHour = 8;  // Hora de inicio
-static const int _endHour = 16;   // Hora de fin (4 PM)
+static const int _endHour = 18;   // Hora de fin (6 PM)
 ```
 
 ### Cambiar Días de Retención

@@ -5,6 +5,7 @@ import 'package:http/http.dart' as http;
 import '../services/client_service.dart';
 import '../services/auth_service.dart';
 import '../services/sigatoka_evaluacion_service.dart';
+import '../utils/sigatoka_date_util.dart';
 import 'resumen_sigatoka_screen.dart';
 
 // Estructura de datos para una muestra
@@ -125,7 +126,24 @@ class _SigatokaAuditScreenState extends State<SigatokaAuditScreen> {
     if (muestraNumController.text.trim().isEmpty) {
       muestraNumController.text = '1';
     }
+    _initializeDefaultDate();
     _prefillEvaluador();
+  }
+
+  /// Inicializa la fecha actual y calcula automáticamente semana epidemiológica y período
+  void _initializeDefaultDate() {
+    final now = DateTime.now();
+    fechaController.text = '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
+    _applyDateDerivedFields(now);
+  }
+
+  /// Calcula y aplica la semana epidemiológica y período basado en una fecha
+  void _applyDateDerivedFields(DateTime date) {
+    final semanaISO = SigatokaDateUtil.getSemanaEpidemiologicaISO(date);
+    semanaController.text = semanaISO.toString();
+    
+    final periodo = SigatokaDateUtil.getPeriodoSemanaDelMes(date);
+    periodoController.text = periodo;
   }
 
   Future<void> _loadStoredClient() async {
@@ -992,6 +1010,7 @@ class _SigatokaAuditScreenState extends State<SigatokaAuditScreen> {
                 if (picked != null) {
                   setState(() {
                     fechaController.text = '${picked.year}-${picked.month.toString().padLeft(2, '0')}-${picked.day.toString().padLeft(2, '0')}';
+                    _applyDateDerivedFields(picked);
                   });
                 }
               },

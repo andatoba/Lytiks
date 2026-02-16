@@ -391,7 +391,7 @@
 ## 6️⃣ MÓDULO DE SEGUIMIENTO DE UBICACIÓN
 
 ### 6.1 `location_tracking`
-**Descripción:** Trazabilidad GPS de técnicos en campo (cada 5 segundos, 8AM-4PM)  
+**Descripción:** Trazabilidad GPS de técnicos en campo (cada 5 segundos, 8AM-6PM)  
 **Campos principales:**
 - `id` (PK, BIGINT, AUTO_INCREMENT)
 - `user_id` (VARCHAR 100, NOT NULL)
@@ -412,7 +412,7 @@
 
 **Configuración:**
 - Captura automática cada **5 segundos**
-- Horario: 8:00 AM - 4:00 PM
+- Horario: 8:00 AM - 6:00 PM
 - Retención: 90 días recomendados
 
 ---
@@ -767,7 +767,7 @@ AND REFERENCED_TABLE_NAME IS NOT NULL;
    - Ejecutar antes las tablas de catálogo (sintomas, audit_categoria, productos)
 
 2. **Configuración actual:**
-   - Location tracking: **5 segundos** (8 AM - 4 PM)
+   - Location tracking: **5 segundos** (8 AM - 6 PM)
    - Semana epidemiológica: **ISO 8601**
    - Periodo semana del mes: **Auto-calculado**
 

@@ -31,6 +31,18 @@ class OfflineStorageService {
 
   Future<Database> _initDatabase() async {
     try {
+      // Usar databaseFactoryFfi solo para plataformas desktop (NO Web)
+      if (!kIsWeb && (Platform.isWindows || Platform.isLinux || Platform.isMacOS)) {
+        sqfliteFfiInit();
+        databaseFactory = databaseFactoryFfi;
+      }
+      
+      // En Web, la funcionalidad de base de datos local no está disponible
+      if (kIsWeb) {
+        debugPrint('⚠️ Base de datos local no disponible en Web. Los datos se guardarán solo en el servidor.');
+        throw UnsupportedError('SQLite no está disponible en plataforma Web');
+      }
+      
       String path = join(await getDatabasesPath(), _databaseName);
       debugPrint('🗄️ Inicializando base de datos en: $path');
 

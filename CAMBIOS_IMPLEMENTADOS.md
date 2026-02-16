@@ -232,7 +232,7 @@ Se crearon los siguientes endpoints:
 - **Cambio principal**: Intervalo de captura de ubicación modificado
 - **Antes**: `Duration(seconds: 10)` - Cada 10 segundos
 - **Ahora**: `Duration(seconds: 5)` - Cada 5 segundos
-- **Horario de operación**: 8 AM a 4 PM (sin cambios)
+- **Horario de operación**: 8 AM a 6 PM
 - **Comentario actualizado**: "Programar capturas cada 5 segundos"
 
 ---
@@ -338,7 +338,7 @@ Base URL del servidor: `http://5.161.198.89:8081/api`
 
 ### ✅ 8. Ubicación automática cada 5 segundos
 - Intervalo configurado a 5 segundos
-- Captura en horario laboral (8 AM - 4 PM)
+- Captura en horario laboral (8 AM - 6 PM)
 - Sincronización automática con el servidor cuando hay conexión
 
 ---

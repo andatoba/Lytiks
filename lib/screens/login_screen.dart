@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../services/auth_service.dart';
 import '../services/location_tracking_service.dart';
+import '../widgets/dynamic_logo_widget.dart';
 import 'home_screen.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -44,22 +45,31 @@ class _LoginScreenState extends State<LoginScreen> {
         if (mounted) {
           final userRole = loginResponse['user']['rol']?.toString().toUpperCase() ?? '';
           final userId = loginResponse['user']['id']?.toString() ?? '';
-          final userName = loginResponse['user']['username']?.toString() ?? '';
+          
+          // Construir nombre completo del usuario
+          final firstName = loginResponse['user']['firstName']?.toString() ?? '';
+          final lastName = loginResponse['user']['lastName']?.toString() ?? '';
+          final userName = '$firstName $lastName'.trim();
+          // Fallback a username si no hay firstName/lastName
+          final displayName = userName.isNotEmpty 
+              ? userName 
+              : loginResponse['user']['username']?.toString() ?? '';
           
           print('🔍 Rol del usuario recibido: $userRole');
+          print('👤 Nombre del usuario: $displayName');
 
           if (userRole == 'OPERADOR') {
             // Guardar información del usuario para tracking
             await _storage.write(key: 'user_id', value: userId);
-            await _storage.write(key: 'user_name', value: userName);
+            await _storage.write(key: 'user_name', value: displayName);
             
             // Iniciar seguimiento automático de ubicación
             await _locationTrackingService.startTracking(
               userId: userId,
-              userName: userName,
+              userName: displayName,
             );
             
-            print('✅ Seguimiento de ubicación iniciado para $userName');
+            print('✅ Seguimiento de ubicación iniciado para $displayName');
             
             Navigator.pushReplacement(
               context,
@@ -143,8 +153,7 @@ class _LoginScreenState extends State<LoginScreen> {
                           ),
                         ],
                       ),
-                      child: Image.asset(
-                        'assets/images/logo1.png',
+                      child: DynamicLogoWidget(
                         height: logoHeight,
                         fit: BoxFit.contain,
                       ),

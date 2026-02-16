@@ -5,6 +5,7 @@ import 'package:http/http.dart' as http;
 import 'package:connectivity_plus/connectivity_plus.dart';
 import '../services/sync_service.dart';
 import '../services/client_service.dart';
+import '../widgets/dynamic_logo_widget.dart';
 import 'audit_screen.dart';
 import 'moko_audit_screen.dart';
 import 'sigatoka_audit_screen.dart';
@@ -532,8 +533,7 @@ class _InicioTabState extends State<InicioTab> {
                     color: Colors.white,
                     borderRadius: BorderRadius.circular(12),
                   ),
-                  child: Image.asset(
-                    'assets/images/logo1.png',
+                  child: const DynamicLogoWidget(
                     fit: BoxFit.contain,
                   ),
                 ),

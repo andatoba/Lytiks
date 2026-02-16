@@ -93,8 +93,16 @@ class _SigatokaEvaluacionFormScreenState extends State<SigatokaEvaluacionFormScr
   @override
   void initState() {
     super.initState();
+    _initializeDefaultDate();
     _prefillEvaluador();
     _loadStoredClient();
+  }
+
+  /// Inicializa la fecha actual y calcula automáticamente semana epidemiológica y período
+  void _initializeDefaultDate() {
+    final now = DateTime.now();
+    _fechaController.text = '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
+    _applyDateDerivedFields(now);
   }
 
   Future<void> _loadStoredClient() async {

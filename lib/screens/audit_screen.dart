@@ -39,6 +39,9 @@ class _AuditScreenState extends State<AuditScreen> {
   String _lastQuery = '';
   bool _isBasicMode = true;
   String _selectedCrop = 'banano';
+  
+  // Estado de expansión de las secciones (todas colapsadas por defecto)
+  final Map<String, bool> _expandedSections = {};
 
   @override
   void initState() {
@@ -494,7 +497,11 @@ class _AuditScreenState extends State<AuditScreen> {
       }
     }
 
-    if (query.length < 2) {
+    // Determinar si es búsqueda por cédula (numérico) o por nombre (texto)
+    final isNumeric = RegExp(r'^[0-9]+$').hasMatch(query);
+    final minLength = isNumeric ? 4 : 2; // 4 dígitos para cédula, 2 letras para nombre
+
+    if (query.length < minLength) {
       if (_clientSuggestions.isNotEmpty) {
         setState(() {
           _clientSuggestions = [];
@@ -537,11 +544,19 @@ class _AuditScreenState extends State<AuditScreen> {
   Future<void> _triggerSearch() async {
     final query = _nombreController.text.trim();
     _lastQuery = query;
-    if (query.length < 2) {
+    
+    // Determinar si es búsqueda por cédula (numérico) o por nombre (texto)
+    final isNumeric = RegExp(r'^[0-9]+$').hasMatch(query);
+    final minLength = isNumeric ? 4 : 2; // 4 dígitos para cédula, 2 letras para nombre
+    
+    if (query.length < minLength) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Ingrese al menos 2 letras para buscar'),
+        SnackBar(
+          content: Text(isNumeric 
+            ? 'Ingrese al menos 4 dígitos de la cédula para buscar'
+            : 'Ingrese al menos 2 letras del nombre para buscar'),
           backgroundColor: Colors.orange,
+          duration: const Duration(seconds: 2),
         ),
       );
       return;
@@ -770,35 +785,88 @@ class _AuditScreenState extends State<AuditScreen> {
   }
 
   Widget _buildAuditSection(String sectionName, List<AuditItem> items) {
+    // Inicializar estado de expansión si no existe
+    _expandedSections.putIfAbsent(sectionName, () => false);
+    
+    final isExpanded = _expandedSections[sectionName] ?? false;
+    
+    // Calcular puntuación total de la sección
+    int totalScore = 0;
+    int maxScore = 0;
+    for (var item in items) {
+      maxScore += item.maxScore;
+      if (item.calculatedScore != null) {
+        totalScore += item.calculatedScore!;
+      }
+    }
+    
     return Container(
-      margin: const EdgeInsets.only(bottom: 16),
-      padding: const EdgeInsets.all(16),
+      margin: const EdgeInsets.only(bottom: 12),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(12),
         boxShadow: [
           BoxShadow(
             color: Colors.grey.withOpacity(0.1),
             spreadRadius: 1,
-            blurRadius: 3,
-            offset: const Offset(0, 1),
+            blurRadius: 4,
+            offset: const Offset(0, 2),
           ),
         ],
+        border: Border.all(
+          color: isExpanded ? const Color(0xFF004B63) : Colors.grey[300]!,
+          width: isExpanded ? 2 : 1,
+        ),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            sectionName,
-            style: const TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
-              color: Color(0xFF004B63),
+      child: Theme(
+        data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+        child: ExpansionTile(
+          initiallyExpanded: isExpanded,
+          onExpansionChanged: (expanded) {
+            setState(() {
+              _expandedSections[sectionName] = expanded;
+            });
+          },
+          tilePadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+          leading: Container(
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(
+              color: isExpanded ? const Color(0xFF004B63) : Colors.grey[200],
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Icon(
+              isExpanded ? Icons.check_circle : Icons.expand_more,
+              color: isExpanded ? Colors.white : Colors.grey[600],
             ),
           ),
-          const SizedBox(height: 16),
-          ...items.map((item) => _buildAuditItem(item)).toList(),
-        ],
+          title: Text(
+            sectionName,
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.bold,
+              color: isExpanded ? const Color(0xFF004B63) : Colors.black87,
+            ),
+          ),
+          subtitle: totalScore > 0
+              ? Text(
+                  'Puntuación: $totalScore/$maxScore',
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: Colors.grey[600],
+                    fontWeight: FontWeight.w500,
+                  ),
+                )
+              : Text(
+                  'Toca para expandir',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Colors.grey[500],
+                  ),
+                ),
+          children: items.map((item) => _buildAuditItem(item)).toList(),
+        ),
       ),
     );
   }
