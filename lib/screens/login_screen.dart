@@ -63,6 +63,11 @@ class _LoginScreenState extends State<LoginScreen> {
             await _storage.write(key: 'user_id', value: userId);
             await _storage.write(key: 'user_name', value: displayName);
             
+            // Guardar id_empresa del usuario
+            final idEmpresa = loginResponse['user']['idEmpresa']?.toString() ?? '0';
+            await _storage.write(key: 'id_empresa', value: idEmpresa);
+            print('🏢 ID Empresa guardado: $idEmpresa');
+            
             // Iniciar seguimiento automático de ubicación
             await _locationTrackingService.startTracking(
               userId: userId,

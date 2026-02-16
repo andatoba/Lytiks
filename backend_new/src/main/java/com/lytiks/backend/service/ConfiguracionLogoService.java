@@ -18,9 +18,24 @@ public class ConfiguracionLogoService {
     @Autowired
     private ConfiguracionLogoRepository logoRepository;
     
+    // Logo activo global (sin empresa específica)
     public ConfiguracionLogo getLogoActivo() {
         return logoRepository.findFirstByActivoTrue()
             .orElse(null);
+    }
+    
+    // Logo activo de una empresa específica
+    public ConfiguracionLogo getLogoActivoByEmpresa(Integer idEmpresa) {
+        if (idEmpresa == null) {
+            return getLogoActivo();
+        }
+        return logoRepository.findFirstByIdEmpresaAndActivoTrue(idEmpresa)
+            .orElse(null);
+    }
+    
+    // Obtener todos los logos de una empresa
+    public List<ConfiguracionLogo> getLogosByEmpresa(Integer idEmpresa) {
+        return logoRepository.findByIdEmpresaOrderByFechaCreacionDesc(idEmpresa);
     }
     
     public List<ConfiguracionLogo> getAllLogos() {
@@ -32,11 +47,11 @@ public class ConfiguracionLogoService {
     }
     
     public ConfiguracionLogo createLogo(ConfiguracionLogo logo) {
-        // Si el logo es activo, desactivar todos los demás
+        // Si el logo es activo, desactivar todos los demás de esa empresa
         if (logo.getActivo() != null && logo.getActivo()) {
-            desactivarTodosLosLogos();
+            desactivarLogosPorEmpresa(logo.getIdEmpresa());
         }
-        log.info("Creando configuración de logo: {}", logo.getNombre());
+        log.info("Creando configuración de logo: {} para empresa: {}", logo.getNombre(), logo.getIdEmpresa());
         return logoRepository.save(logo);
     }
     
@@ -44,9 +59,9 @@ public class ConfiguracionLogoService {
         ConfiguracionLogo logo = logoRepository.findById(id)
             .orElseThrow(() -> new RuntimeException("Logo no encontrado con id: " + id));
         
-        // Si se activa este logo, desactivar los demás
+        // Si se activa este logo, desactivar los demás de esa empresa
         if (logoDetails.getActivo() != null && logoDetails.getActivo()) {
-            desactivarTodosLosLogos();
+            desactivarLogosPorEmpresa(logo.getIdEmpresa());
         }
         
         logo.setNombre(logoDetails.getNombre());
@@ -55,24 +70,42 @@ public class ConfiguracionLogoService {
         logo.setTipoMime(logoDetails.getTipoMime());
         logo.setActivo(logoDetails.getActivo());
         logo.setDescripcion(logoDetails.getDescripcion());
+        if (logoDetails.getIdEmpresa() != null) {
+            logo.setIdEmpresa(logoDetails.getIdEmpresa());
+        }
         
-        log.info("Actualizando logo: {}", logo.getId());
+        log.info("Actualizando logo: {} de empresa: {}", logo.getId(), logo.getIdEmpresa());
         return logoRepository.save(logo);
     }
     
     public void activarLogo(Long id) {
-        desactivarTodosLosLogos();
         ConfiguracionLogo logo = logoRepository.findById(id)
             .orElseThrow(() -> new RuntimeException("Logo no encontrado con id: " + id));
+        
+        // Desactivar solo los logos de la misma empresa
+        desactivarLogosPorEmpresa(logo.getIdEmpresa());
+        
         logo.setActivo(true);
         logoRepository.save(logo);
-        log.info("Logo {} activado", id);
+        log.info("Logo {} activado para empresa {}", id, logo.getIdEmpresa());
     }
     
     private void desactivarTodosLosLogos() {
         List<ConfiguracionLogo> logos = logoRepository.findAll();
         logos.forEach(l -> l.setActivo(false));
         logoRepository.saveAll(logos);
+    }
+    
+    // Desactivar solo los logos de una empresa específica
+    private void desactivarLogosPorEmpresa(Integer idEmpresa) {
+        if (idEmpresa == null) {
+            desactivarTodosLosLogos();
+            return;
+        }
+        List<ConfiguracionLogo> logos = logoRepository.findByIdEmpresaOrderByFechaCreacionDesc(idEmpresa);
+        logos.forEach(l -> l.setActivo(false));
+        logoRepository.saveAll(logos);
+        log.info("Logos de empresa {} desactivados", idEmpresa);
     }
     
     public void deleteLogo(Long id) {

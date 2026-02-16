@@ -22,9 +22,16 @@ public class ConfiguracionLogoController {
     private ConfiguracionLogoService logoService;
     
     @GetMapping("/activo")
-    public ResponseEntity<ConfiguracionLogo> getLogoActivo() {
-        log.info("GET /api/logo/activo - Obtener logo activo");
-        ConfiguracionLogo logo = logoService.getLogoActivo();
+    public ResponseEntity<ConfiguracionLogo> getLogoActivo(@RequestParam(required = false) Integer idEmpresa) {
+        log.info("GET /api/logo/activo - Obtener logo activo para empresa: {}", idEmpresa);
+        ConfiguracionLogo logo;
+        
+        if (idEmpresa != null) {
+            logo = logoService.getLogoActivoByEmpresa(idEmpresa);
+        } else {
+            logo = logoService.getLogoActivo();
+        }
+        
         if (logo != null) {
             return ResponseEntity.ok(logo);
         }
@@ -32,9 +39,16 @@ public class ConfiguracionLogoController {
     }
     
     @GetMapping
-    public ResponseEntity<List<ConfiguracionLogo>> getAllLogos() {
-        log.info("GET /api/logo - Obtener todos los logos");
-        List<ConfiguracionLogo> logos = logoService.getAllLogos();
+    public ResponseEntity<List<ConfiguracionLogo>> getAllLogos(@RequestParam(required = false) Integer idEmpresa) {
+        log.info("GET /api/logo - Obtener todos los logos para empresa: {}", idEmpresa);
+        
+        List<ConfiguracionLogo> logos;
+        if (idEmpresa != null) {
+            logos = logoService.getLogosByEmpresa(idEmpresa);
+        } else {
+            logos = logoService.getAllLogos();
+        }
+        
         return ResponseEntity.ok(logos);
     }
     

@@ -10,12 +10,29 @@ class LogoService {
     return savedUrl ?? 'http://5.161.198.89:8081/api';
   }
 
-  /// Obtiene el logo activo
-  Future<Map<String, dynamic>?> getLogoActivo() async {
+  /// Obtiene el logo activo (opcionalmente filtrado por empresa)
+  Future<Map<String, dynamic>?> getLogoActivo({int? idEmpresa}) async {
     try {
       final baseUrl = await _getBaseUrl();
+      
+      // Si no se proveyó idEmpresa, intentar obtenerlo del usuario autenticado
+      int? empresaId = idEmpresa;
+      if (empresaId == null) {
+        final idEmpresaStr = await storage.read(key: 'id_empresa');
+        if (idEmpresaStr != null) {
+          empresaId = int.tryParse(idEmpresaStr);
+        }
+      }
+      
+      // Construir URL con o sin parámetro idEmpresa
+      String url = '$baseUrl/logo/activo';
+      if (empresaId != null && empresaId > 0) {
+        url += '?idEmpresa=$empresaId';
+        print('🏢 Solicitando logo para empresa ID: $empresaId');
+      }
+      
       final response = await http.get(
-        Uri.parse('$baseUrl/logo/activo'),
+        Uri.parse(url),
         headers: {'Content-Type': 'application/json'},
       ).timeout(const Duration(seconds: 10));
 
@@ -29,12 +46,18 @@ class LogoService {
     }
   }
 
-  /// Obtiene todos los logos
-  Future<List<Map<String, dynamic>>> getAllLogos() async {
+  /// Obtiene todos los logos (opcionalmente filtrado por empresa)
+  Future<List<Map<String, dynamic>>> getAllLogos({int? idEmpresa}) async {
     try {
       final baseUrl = await _getBaseUrl();
+      
+      String url = '$baseUrl/logo';
+      if (idEmpresa != null && idEmpresa > 0) {
+        url += '?idEmpresa=$idEmpresa';
+      }
+      
       final response = await http.get(
-        Uri.parse('$baseUrl/logo'),
+        Uri.parse(url),
         headers: {'Content-Type': 'application/json'},
       ).timeout(const Duration(seconds: 10));
 
