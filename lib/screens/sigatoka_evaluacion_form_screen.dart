@@ -3,6 +3,9 @@ import 'package:flutter/material.dart';
 import '../services/sigatoka_evaluacion_service.dart';
 import '../services/client_service.dart';
 import '../services/auth_service.dart';
+import '../services/hacienda_service.dart';
+import '../services/lote_service.dart';
+import '../utils/sigatoka_date_util.dart';
 
 class SigatokaEvaluacionFormScreen extends StatefulWidget {
   const SigatokaEvaluacionFormScreen({Key? key}) : super(key: key);
@@ -15,6 +18,8 @@ class _SigatokaEvaluacionFormScreenState extends State<SigatokaEvaluacionFormScr
   final SigatokaEvaluacionService _service = SigatokaEvaluacionService();
   final ClientService _clientService = ClientService();
   final AuthService _authService = AuthService();
+  final HaciendaService _haciendaService = HaciendaService();
+  final LoteService _loteService = LoteService();
   
   // Estado de la evaluación
   int? _evaluacionId;
@@ -23,6 +28,10 @@ class _SigatokaEvaluacionFormScreenState extends State<SigatokaEvaluacionFormScr
   bool _isLoading = false;
   int _currentStep = 0;
   List<Map<String, dynamic>> _clientSuggestions = [];
+  List<Map<String, dynamic>> _haciendas = [];
+  List<Map<String, dynamic>> _lotes = [];
+  int? _selectedHaciendaId;
+  int? _selectedLoteId;
   Timer? _searchDebounce;
   final TextEditingController _clienteSearchController = TextEditingController();
   final FocusNode _clienteSearchFocusNode = FocusNode();
@@ -204,8 +213,13 @@ class _SigatokaEvaluacionFormScreenState extends State<SigatokaEvaluacionFormScr
   }
 
   void _applyDateDerivedFields(DateTime date) {
-    _semanaController.text = _isoWeekNumber(date).toString();
-    _periodoController.text = _weekOfMonth(date).toString().padLeft(2, '0');
+    // Calcular semana epidemiológica ISO
+    final semanaISO = SigatokaDateUtil.getSemanaEpidemiologicaISO(date);
+    _semanaController.text = semanaISO.toString();
+    
+    // Calcular período (Semana X de Mes Y)
+    final periodo = SigatokaDateUtil.getPeriodoSemanaDelMes(date);
+    _periodoController.text = periodo;
   }
 
   Widget _buildInfectionGradeDropdown({
@@ -305,6 +319,70 @@ class _SigatokaEvaluacionFormScreenState extends State<SigatokaEvaluacionFormScr
       _clientSuggestions = [];
     });
     _clientService.saveSelectedClient(client);
+    // Cargar haciendas del cliente seleccionado
+    _loadHaciendasByCliente();
+  }
+
+  /// Carga las haciendas del cliente seleccionado
+  Future<void> _loadHaciendasByCliente() async {
+    if (_clienteId == null) return;
+    
+    setState(() => _isLoading = true);
+    try {
+      final haciendas = await _haciendaService.getHaciendasByCliente(_clienteId!);
+      if (mounted) {
+        setState(() {
+          _haciendas = haciendas;
+          _selectedHaciendaId = null;
+          _lotes = [];
+          _selectedLoteId = null;
+        });
+      }
+    } catch (e) {
+      print('Error cargando haciendas: $e');
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+    }
+  }
+
+  /// Carga los lotes de la hacienda seleccionada
+  Future<void> _loadLotesByHacienda(int haciendaId) async {
+    setState(() => _isLoading = true);
+    try {
+      final lotes = await _loteService.getLotesByHacienda(haciendaId);
+      if (mounted) {
+        setState(() {
+          _lotes = lotes;
+          _selectedLoteId = null;
+        });
+      }
+    } catch (e) {
+      print('Error cargando lotes: $e');
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+    }
+  }
+
+  /// Calcula automáticamente la semana ISO y el período cuando se selecciona una fecha
+  void _onFechaChanged(String fechaStr) {
+    if (fechaStr.isEmpty) return;
+    
+    try {
+      final fecha = DateTime.parse(fechaStr);
+      final semanaISO = SigatokaDateUtil.getSemanaEpidemiologicaISO(fecha);
+      final periodo = SigatokaDateUtil.getPeriodoSemanaDelMes(fecha);
+      
+      setState(() {
+        _semanaController.text = semanaISO.toString();
+        _periodoController.text = periodo;
+      });
+    } catch (e) {
+      print('Error calculando semana ISO: $e');
+    }
   }
 
   Future<void> _triggerSearch() async {
@@ -687,17 +765,72 @@ class _SigatokaEvaluacionFormScreenState extends State<SigatokaEvaluacionFormScr
           ),
           const SizedBox(height: 12),
           
-          // HACIENDA
-          TextField(
-            controller: _haciendaController,
-            decoration: const InputDecoration(
-              labelText: '🏡 Hacienda *',
-              hintText: 'Nombre de la finca o predio',
-              border: OutlineInputBorder(),
-              prefixIcon: Icon(Icons.home),
+          // HACIENDA - Dropdown
+          if (_haciendas.isNotEmpty) ...[
+            DropdownButtonFormField<int>(
+              value: _selectedHaciendaId,
+              decoration: const InputDecoration(
+                labelText: '🏡 Hacienda *',
+                border: OutlineInputBorder(),
+                prefixIcon: Icon(Icons.home),
+              ),
+              items: _haciendas.map((hacienda) {
+                return DropdownMenuItem<int>(
+                  value: hacienda['id'],
+                  child: Text(hacienda['nombre'] ?? ''),
+                );
+              }).toList(),
+              onChanged: (value) {
+                setState(() {
+                  _selectedHaciendaId = value;
+                  _haciendaController.text = _haciendas
+                      .firstWhere((h) => h['id'] == value)['nombre'] ?? '';
+                });
+                if (value != null) {
+                  _loadLotesByHacienda(value);
+                }
+              },
             ),
-          ),
+          ] else ...[
+            TextField(
+              controller: _haciendaController,
+              decoration: const InputDecoration(
+                labelText: '🏡 Hacienda *',
+                hintText: 'Nombre de la finca o predio',
+                border: OutlineInputBorder(),
+                prefixIcon: Icon(Icons.home),
+              ),
+            ),
+          ],
           const SizedBox(height: 16),
+          
+          // LOTE - Dropdown (se muestra después de seleccionar hacienda)
+          if (_lotes.isNotEmpty) ...[
+            DropdownButtonFormField<int>(
+              value: _selectedLoteId,
+              decoration: const InputDecoration(
+                labelText: '🧭 Lote',
+                border: OutlineInputBorder(),
+                prefixIcon: Icon(Icons.map),
+              ),
+              items: _lotes.map((lote) {
+                return DropdownMenuItem<int>(
+                  value: lote['id'],
+                  child: Text('${lote['codigo']} - ${lote['nombre']}'),
+                );
+              }).toList(),
+              onChanged: (value) {
+                setState(() {
+                  _selectedLoteId = value;
+                  if (value != null) {
+                    final lote = _lotes.firstWhere((l) => l['id'] == value);
+                    _loteController.text = lote['codigo'] ?? '';
+                  }
+                });
+              },
+            ),
+            const SizedBox(height: 16),
+          ],
           
           // FECHA CON CALENDARIO VISUAL
           InkWell(
