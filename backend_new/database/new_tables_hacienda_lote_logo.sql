@@ -74,10 +74,10 @@ ON DUPLICATE KEY UPDATE activo = 1;
 -- Datos de ejemplo para haciendas (migrar desde clients.finca_nombre)
 INSERT INTO hacienda (nombre, detalle, cliente_id, estado)
 SELECT DISTINCT 
-    COALESCE(finca_nombre, CONCAT('Hacienda - ', nombre)) as nombre,
+    COALESCE(finca_nombre, CONCAT('Hacienda - ', c.nombre)) as nombre,
     CONCAT('Hectáreas: ', COALESCE(finca_hectareas, 0), ' - Cultivos: ', COALESCE(cultivos_principales, 'N/A')) as detalle,
-    id as cliente_id,
-    estado
-FROM clients
-WHERE finca_nombre IS NOT NULL OR id IS NOT NULL
-ON DUPLICATE KEY UPDATE nombre = nombre;
+    c.id as cliente_id,
+    c.estado
+FROM clients c
+WHERE finca_nombre IS NOT NULL OR c.id IS NOT NULL
+ON DUPLICATE KEY UPDATE detalle = VALUES(detalle);
