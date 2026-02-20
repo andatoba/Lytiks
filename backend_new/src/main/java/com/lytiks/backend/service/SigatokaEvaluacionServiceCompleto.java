@@ -3,11 +3,12 @@ package com.lytiks.backend.service;
 import com.lytiks.backend.dto.*;
 import com.lytiks.backend.entity.*;
 import com.lytiks.backend.repository.*;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import lombok.extern.slf4j.Slf4j;
 
 import java.util.*;
 import java.util.stream.Collectors;
@@ -16,9 +17,10 @@ import java.util.stream.Collectors;
  * Servicio REDISEÑADO para gestionar evaluaciones de Sigatoka con estructura completa
  */
 @Service
-@Slf4j
 @Transactional
 public class SigatokaEvaluacionServiceCompleto {
+    
+    private static final Logger log = LoggerFactory.getLogger(SigatokaEvaluacionServiceCompleto.class);
     
     @Autowired
     private SigatokaEvaluacionRepository evaluacionRepository;

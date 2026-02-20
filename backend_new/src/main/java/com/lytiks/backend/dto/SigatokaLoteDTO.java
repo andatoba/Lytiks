@@ -1,12 +1,10 @@
 package com.lytiks.backend.dto;
 
-import lombok.Data;
-import lombok.Getter;
-import lombok.Setter;
-
-@Data
-@Getter
-@Setter
 public class SigatokaLoteDTO {
     private String loteCodigo;
+
+    public SigatokaLoteDTO() {}
+
+    public String getLoteCodigo() { return loteCodigo; }
+    public void setLoteCodigo(String loteCodigo) { this.loteCodigo = loteCodigo; }
 }

@@ -368,7 +368,7 @@ public class RegistroMokoController {
     }
 
     @GetMapping("/registros/por-cliente/{clienteId}")
-    public ResponseEntity<List<RegistroMoko>> getRegistrosByCliente(@PathVariable Long clienteId) {
+    public ResponseEntity<List<RegistroMoko>> getRegistrosByClienteSimple(@PathVariable Long clienteId) {
         try {
             List<RegistroMoko> registros = registroMokoService.getRegistrosByClienteId(clienteId);
             return ResponseEntity.ok(registros);
