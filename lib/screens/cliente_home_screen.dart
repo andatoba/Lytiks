@@ -56,7 +56,12 @@ class _ClienteHomeScreenState extends State<ClienteHomeScreen> {
       
       if (clienteId != null) {
         // Buscar cliente por ID
-        _clientData = await _clientService.getClientById(clienteId);
+        try {
+          _clientData = await _clientService.getClientById(clienteId);
+        } catch (e) {
+          debugPrint('Error obteniendo cliente: $e');
+          _clientData = null;
+        }
         
         if (_clientData != null) {
           final clientId = _clientData!['id'] as int;

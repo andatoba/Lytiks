@@ -170,8 +170,8 @@ class _SigatokaEvaluacionFormScreenState extends State<SigatokaEvaluacionFormScr
       if (!mounted) {
         return;
       }
-      final Map<String, dynamic>? userMap = userData?['user'] is Map<String, dynamic>
-          ? userData?['user'] as Map<String, dynamic>
+      final Map<String, dynamic>? userMap = (userData?['user'] is Map<String, dynamic>)
+          ? (userData?['user'] as Map<String, dynamic>)
           : userData;
       final username = userMap?['username']?.toString() ?? userData?['username']?.toString();
 

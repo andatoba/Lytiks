@@ -451,28 +451,6 @@ class ClientService {
       await storage.delete(key: _selectedClientKey);
     } catch (_) {}
   }
-
-  // Obtener cliente por ID
-  Future<Map<String, dynamic>?> getClientById(int id) async {
-    try {
-      final headers = await _getHeaders();
-      final uri = (await baseUri).replace(path: '$_basePath/clients/$id');
-      
-      final response = await http.get(uri, headers: headers).timeout(
-        const Duration(seconds: 15),
-      );
-      
-      if (response.statusCode == 200) {
-        return json.decode(response.body);
-      } else if (response.statusCode == 404) {
-        return null;
-      }
-      return null;
-    } catch (e) {
-      print('Error obteniendo cliente por ID: $e');
-      return null;
-    }
-  }
   
   // Obtener evaluaciones Sigatoka de un cliente
   Future<List<Map<String, dynamic>>> getEvaluacionesSigatokaByCliente(int clienteId) async {
