@@ -99,6 +99,8 @@ public class RegistroMokoController {
             @RequestParam(value = "lote", required = false) String lote,
             @RequestParam(value = "areaHectareas", required = false) Double areaHectareas,
             @RequestParam("gpsCoordinates") String gpsCoordinates,
+            @RequestParam(value = "loteLatitud", required = false) Double loteLatitud,
+            @RequestParam(value = "loteLongitud", required = false) Double loteLongitud,
             @RequestParam("plantasAfectadas") int plantasAfectadas,
             @RequestParam("fechaDeteccion") String fechaDeteccion,
             @RequestParam(value = "sintomaId", required = false) Long sintomaId,
@@ -116,6 +118,8 @@ public class RegistroMokoController {
             System.out.println("lote: " + lote);
             System.out.println("areaHectareas: " + areaHectareas);
             System.out.println("gpsCoordinates: " + gpsCoordinates);
+            System.out.println("loteLatitud: " + loteLatitud);
+            System.out.println("loteLongitud: " + loteLongitud);
             System.out.println("plantasAfectadas: " + plantasAfectadas);
             System.out.println("fechaDeteccion: " + fechaDeteccion);
             System.out.println("sintomaId (legacy): " + sintomaId);
@@ -133,6 +137,8 @@ public class RegistroMokoController {
             registro.setLote(lote);
             registro.setAreaHectareas(areaHectareas);
             registro.setGpsCoordinates(gpsCoordinates);
+            registro.setLoteLatitud(loteLatitud);
+            registro.setLoteLongitud(loteLongitud);
             registro.setPlantasAfectadas(plantasAfectadas);
             
             // Parsear fecha con mejor manejo de errores
@@ -194,6 +200,8 @@ public class RegistroMokoController {
                 regMap.put("numeroFoco", registro.getNumeroFoco());
                 regMap.put("clienteId", registro.getClienteId());
                 regMap.put("gpsCoordinates", registro.getGpsCoordinates());
+                regMap.put("loteLatitud", registro.getLoteLatitud());
+                regMap.put("loteLongitud", registro.getLoteLongitud());
                 regMap.put("plantasAfectadas", registro.getPlantasAfectadas());
                 regMap.put("fechaDeteccion", registro.getFechaDeteccion());
                 regMap.put("sintomaId", registro.getSintomaId());
@@ -238,6 +246,8 @@ public class RegistroMokoController {
                 regMap.put("numeroFoco", registro.getNumeroFoco());
                 regMap.put("clienteId", registro.getClienteId());
                 regMap.put("gpsCoordinates", registro.getGpsCoordinates());
+                regMap.put("loteLatitud", registro.getLoteLatitud());
+                regMap.put("loteLongitud", registro.getLoteLongitud());
                 regMap.put("plantasAfectadas", registro.getPlantasAfectadas());
                 regMap.put("fechaDeteccion", registro.getFechaDeteccion());
                 regMap.put("sintomaId", registro.getSintomaId());
@@ -275,6 +285,8 @@ public class RegistroMokoController {
     public ResponseEntity<Map<String, Object>> actualizarRegistro(
             @PathVariable Long id,
             @RequestParam("gpsCoordinates") String gpsCoordinates,
+            @RequestParam(value = "loteLatitud", required = false) Double loteLatitud,
+            @RequestParam(value = "loteLongitud", required = false) Double loteLongitud,
             @RequestParam("plantasAfectadas") int plantasAfectadas,
             @RequestParam("sintomaId") Long sintomaId,
             @RequestParam("severidad") String severidad,
@@ -293,6 +305,12 @@ public class RegistroMokoController {
 
             RegistroMoko registro = registroOpt.get();
             registro.setGpsCoordinates(gpsCoordinates);
+            if (loteLatitud != null) {
+                registro.setLoteLatitud(loteLatitud);
+            }
+            if (loteLongitud != null) {
+                registro.setLoteLongitud(loteLongitud);
+            }
             registro.setPlantasAfectadas(plantasAfectadas);
             registro.setSintomaId(sintomaId);
             registro.setSeveridad(severidad);

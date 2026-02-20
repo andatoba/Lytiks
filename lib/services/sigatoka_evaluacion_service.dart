@@ -50,12 +50,18 @@ class SigatokaEvaluacionService {
   Future<Map<String, dynamic>> crearLote({
     required int evaluacionId,
     required String codigo,
+    double? latitud,
+    double? longitud,
   }) async {
     try {
       final response = await http.post(
         Uri.parse('$baseUrl/$evaluacionId/lotes'),
         headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({'loteCodigo': codigo}),
+        body: jsonEncode({
+          'loteCodigo': codigo,
+          if (latitud != null) 'latitud': latitud,
+          if (longitud != null) 'longitud': longitud,
+        }),
       );
       
       if (response.statusCode == 201 || response.statusCode == 200) {
@@ -76,6 +82,8 @@ class SigatokaEvaluacionService {
     required int evaluacionId,
     required int numeroMuestra,
     required String lote,
+    double? loteLatitud,
+    double? loteLongitud,
     // Grados de infección
     String? hoja3era,
     String? hoja4ta,
@@ -107,6 +115,8 @@ class SigatokaEvaluacionService {
         loteData = await crearLote(
           evaluacionId: evaluacionId,
           codigo: lote,
+          latitud: loteLatitud,
+          longitud: loteLongitud,
         );
       } catch (e) {
         // Si falla (probablemente lote duplicado), buscar el lote existente

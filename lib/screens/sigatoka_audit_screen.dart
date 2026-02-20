@@ -198,6 +198,8 @@ class _SigatokaAuditScreenState extends State<SigatokaAuditScreen> {
           evaluacionId: evaluacionId,
           lote: muestra['lote'],
           numeroMuestra: muestra['numeroMuestra'],
+          loteLatitud: muestra['loteLatitud'],
+          loteLongitud: muestra['loteLongitud'],
           hoja3era: muestra['hoja3era'],
           hoja4ta: muestra['hoja4ta'],
           hoja5ta: muestra['hoja5ta'],

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../services/plan_seguimiento_moko_service.dart';
+import '../services/offline_storage_service.dart';
 
 class PlanSeguimientoMokoScreen extends StatefulWidget {
   final int focoId;
@@ -316,6 +317,8 @@ class _DetalleEjecucionModal extends StatefulWidget {
 }
 
 class _DetalleEjecucionModalState extends State<_DetalleEjecucionModal> {
+  final OfflineStorageService _offlineStorage = OfflineStorageService();
+
   List<Map<String, dynamic>> _tareas = [];
   Map<int, bool> _tareasCompletadas = {};
   bool _isLoading = true;
@@ -369,13 +372,14 @@ class _DetalleEjecucionModalState extends State<_DetalleEjecucionModal> {
   Future<void> _guardarYFinalizar() async {
     setState(() => _isSaving = true);
 
+    final tareasCompletadas = _tareasCompletadas.entries
+        .where((e) => e.value)
+        .map((e) => e.key)
+        .toList();
+
     try {
       if (widget.ejecucion != null) {
         final ejecucionId = widget.ejecucion!['id'];
-        final tareasCompletadas = _tareasCompletadas.entries
-            .where((e) => e.value)
-            .map((e) => e.key)
-            .toList();
 
         await widget.service.actualizarTareas(ejecucionId, tareasCompletadas);
         await widget.service.finalizarRevision(ejecucionId);
@@ -388,21 +392,54 @@ class _DetalleEjecucionModalState extends State<_DetalleEjecucionModal> {
             ),
           );
         }
+      } else {
+        throw Exception('Ejecucion no disponible para guardar en linea');
       }
 
       widget.onFinalizarRevision();
     } catch (e) {
+      await _guardarPlanOffline(tareasCompletadas);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Error al guardar: $e'),
-            backgroundColor: Colors.red,
+            content: Text(
+              'Guardado offline. Se sincronizara cuando haya conexion.',
+            ),
+            backgroundColor: Colors.orange,
           ),
         );
       }
+      widget.onFinalizarRevision();
     } finally {
       setState(() => _isSaving = false);
     }
+  }
+
+  Future<void> _guardarPlanOffline(List<int> tareasCompletadas) async {
+    int? ejecucionPlanId;
+    final rawEjecucionId = widget.ejecucion?['id'];
+    if (rawEjecucionId is int) {
+      ejecucionPlanId = rawEjecucionId;
+    } else if (rawEjecucionId != null) {
+      ejecucionPlanId = int.tryParse(rawEjecucionId.toString());
+    }
+
+    int planSeguimientoId = 0;
+    final rawPlanId = widget.ejecucion?['planSeguimiento']?['id'] ?? widget.fase['id'];
+    if (rawPlanId is int) {
+      planSeguimientoId = rawPlanId;
+    } else if (rawPlanId != null) {
+      planSeguimientoId = int.tryParse(rawPlanId.toString()) ?? 0;
+    }
+
+    await _offlineStorage.savePendingPlanMokoUpdate(
+      focoId: widget.focoId,
+      planSeguimientoId: planSeguimientoId,
+      ejecucionPlanId: ejecucionPlanId,
+      tareasCompletadas: tareasCompletadas,
+      observaciones: null,
+      finalizar: true,
+    );
   }
 
   @override

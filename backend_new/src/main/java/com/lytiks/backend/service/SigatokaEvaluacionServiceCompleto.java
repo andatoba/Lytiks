@@ -77,6 +77,8 @@ public class SigatokaEvaluacionServiceCompleto {
         SigatokaLote lote = new SigatokaLote();
         lote.setEvaluacion(evaluacion);
         lote.setLoteCodigo(loteDTO.getLoteCodigo());
+        lote.setLatitud(loteDTO.getLatitud());
+        lote.setLongitud(loteDTO.getLongitud());
         
         return loteRepository.save(lote);
     }
