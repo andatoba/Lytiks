@@ -32,6 +32,9 @@ class _MokoAuditScreenState extends State<MokoAuditScreen> {
   List<Map<String, dynamic>> _clientSuggestions = [];
   Timer? _searchDebounce;
   String _lastQuery = '';
+  
+  // Modo cliente: bloquea búsqueda de cliente
+  bool _isClienteMode = false;
 
   @override
   void initState() {
@@ -40,6 +43,9 @@ class _MokoAuditScreenState extends State<MokoAuditScreen> {
       _selectedClient = widget.clientData;
       _nombreController.text = _formatClientName(widget.clientData!);
       _clientService.saveSelectedClient(widget.clientData!);
+      
+      // Verificar si es modo cliente (usuario con rol CLIENTE)
+      _isClienteMode = widget.clientData!['isCliente'] == true;
     } else {
       _loadStoredClient();
     }
@@ -386,16 +392,25 @@ class _MokoAuditScreenState extends State<MokoAuditScreen> {
                       controller: controller,
                       focusNode: focusNode,
                       keyboardType: TextInputType.text,
-                      onChanged: _onNameChanged,
+                      onChanged: _isClienteMode ? null : _onNameChanged,
+                      readOnly: _isClienteMode,
+                      enabled: !_isClienteMode,
                       decoration: InputDecoration(
                         labelText: 'Nombre y Apellido del Cliente',
-                        hintText: 'Ingrese nombre y apellido',
-                        prefixIcon: const Icon(Icons.person),
-                        border: const OutlineInputBorder(),
-                        suffixIcon: IconButton(
-                          icon: const Icon(Icons.search),
-                          onPressed: _triggerSearch,
+                        hintText: _isClienteMode ? 'Cliente autenticado' : 'Ingrese nombre y apellido',
+                        prefixIcon: Icon(
+                          Icons.person,
+                          color: _isClienteMode ? Colors.grey : null,
                         ),
+                        border: const OutlineInputBorder(),
+                        filled: _isClienteMode,
+                        fillColor: _isClienteMode ? Colors.grey.withOpacity(0.1) : null,
+                        suffixIcon: _isClienteMode 
+                          ? const Icon(Icons.lock, color: Colors.grey)
+                          : IconButton(
+                              icon: const Icon(Icons.search),
+                              onPressed: _triggerSearch,
+                            ),
                       ),
                     );
                   },

@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import 'package:geolocator/geolocator.dart';
 import '../services/client_service.dart';
 import '../services/auth_service.dart';
 import '../services/sigatoka_evaluacion_service.dart';
@@ -112,6 +113,14 @@ class _SigatokaAuditScreenState extends State<SigatokaAuditScreen> {
     '3c',
   ];
 
+  // Coordenadas GPS del lote
+  double? _loteLatitud;
+  double? _loteLongitud;
+  bool _obteniendoUbicacion = false;
+  
+  // Modo cliente: bloquea búsqueda de cliente y seguimiento de ubicación
+  bool _isClienteMode = false;
+
   @override
   void initState() {
     super.initState();
@@ -120,6 +129,9 @@ class _SigatokaAuditScreenState extends State<SigatokaAuditScreen> {
       _nombreController.text = _formatClientName(widget.clientData!);
       haciendaController.text = _formatFincaName(widget.clientData!);
       _clientService.saveSelectedClient(widget.clientData!);
+      
+      // Verificar si es modo cliente (usuario con rol CLIENTE)
+      _isClienteMode = widget.clientData!['isCliente'] == true;
     } else {
       _loadStoredClient();
     }
@@ -356,6 +368,70 @@ class _SigatokaAuditScreenState extends State<SigatokaAuditScreen> {
     }
   }
 
+  Future<void> _obtenerUbicacionLote() async {
+    setState(() {
+      _obteniendoUbicacion = true;
+    });
+
+    try {
+      // Verificar permisos de ubicación
+      LocationPermission permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+        if (permission == LocationPermission.denied) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Permiso de ubicación denegado'),
+              backgroundColor: Colors.red,
+            ),
+          );
+          return;
+        }
+      }
+
+      if (permission == LocationPermission.deniedForever) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Los permisos de ubicación están permanentemente denegados'),
+            backgroundColor: Colors.red,
+          ),
+        );
+        return;
+      }
+
+      // Obtener posición actual
+      Position position = await Geolocator.getCurrentPosition(
+        desiredAccuracy: LocationAccuracy.high,
+      );
+
+      setState(() {
+        _loteLatitud = position.latitude;
+        _loteLongitud = position.longitude;
+      });
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Ubicación capturada exitosamente'),
+            backgroundColor: Colors.green,
+            duration: Duration(seconds: 2),
+          ),
+        );
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error al obtener ubicación: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    } finally {
+      setState(() {
+        _obteniendoUbicacion = false;
+      });
+    }
+  }
+
   void _onAgregarMuestra() async {
     if (evaluacionId == null) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -383,6 +459,8 @@ class _SigatokaAuditScreenState extends State<SigatokaAuditScreen> {
     final muestraData = {
       'numeroMuestra': int.tryParse(muestraNumController.text) ?? 1,
       'lote': loteCodigoController.text,
+      'loteLatitud': _loteLatitud,
+      'loteLongitud': _loteLongitud,
       'hoja3era': grado3eraController.text.isEmpty ? null : grado3eraController.text,
       'hoja4ta': grado4taController.text.isEmpty ? null : grado4taController.text,
       'hoja5ta': grado5taController.text.isEmpty ? null : grado5taController.text,
@@ -652,16 +730,25 @@ class _SigatokaAuditScreenState extends State<SigatokaAuditScreen> {
                       controller: controller,
                       focusNode: focusNode,
                       keyboardType: TextInputType.text,
-                      onChanged: _onNameChanged,
+                      onChanged: _isClienteMode ? null : _onNameChanged,
+                      readOnly: _isClienteMode,
+                      enabled: !_isClienteMode,
                       decoration: InputDecoration(
                         labelText: 'Nombre y Apellido del Cliente',
-                        hintText: 'Ingrese nombre y apellido',
-                        prefixIcon: const Icon(Icons.person),
-                        border: const OutlineInputBorder(),
-                        suffixIcon: IconButton(
-                          icon: const Icon(Icons.search),
-                          onPressed: _triggerSearch,
+                        hintText: _isClienteMode ? 'Cliente autenticado' : 'Ingrese nombre y apellido',
+                        prefixIcon: Icon(
+                          Icons.person,
+                          color: _isClienteMode ? Colors.grey : null,
                         ),
+                        border: const OutlineInputBorder(),
+                        filled: _isClienteMode,
+                        fillColor: _isClienteMode ? Colors.grey.withOpacity(0.1) : null,
+                        suffixIcon: _isClienteMode 
+                          ? const Icon(Icons.lock, color: Colors.grey)
+                          : IconButton(
+                              icon: const Icon(Icons.search),
+                              onPressed: _triggerSearch,
+                            ),
                       ),
                     );
                   },
@@ -1221,18 +1308,71 @@ class _SigatokaAuditScreenState extends State<SigatokaAuditScreen> {
                 ),
                 const SizedBox(width: 16),
                 Expanded(
-                  child: TextField(
-                    controller: loteCodigoController,
-                    decoration: const InputDecoration(
-                      labelText: '🧭 Lote # *',
-                      hintText: 'A1',
-                      border: OutlineInputBorder(),
-                      prefixIcon: Icon(Icons.location_on),
-                    ),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: TextField(
+                          controller: loteCodigoController,
+                          decoration: InputDecoration(
+                            labelText: '🧭 Lote # *',
+                            hintText: 'A1',
+                            border: const OutlineInputBorder(),
+                            prefixIcon: const Icon(Icons.location_on),
+                            suffixIcon: _loteLatitud != null && _loteLongitud != null
+                                ? const Icon(Icons.check_circle, color: Colors.green)
+                                : null,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Container(
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF4CAF50),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: IconButton(
+                          onPressed: _obteniendoUbicacion ? null : _obtenerUbicacionLote,
+                          icon: _obteniendoUbicacion
+                              ? const SizedBox(
+                                  width: 24,
+                                  height: 24,
+                                  child: CircularProgressIndicator(
+                                    color: Colors.white,
+                                    strokeWidth: 2,
+                                  ),
+                                )
+                              : const Icon(Icons.my_location, color: Colors.white),
+                          tooltip: 'Obtener ubicación GPS',
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ],
             ),
+            if (_loteLatitud != null && _loteLongitud != null) ...[
+              const SizedBox(height: 8),
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: Colors.green[50],
+                  borderRadius: BorderRadius.circular(4),
+                  border: Border.all(color: Colors.green[200]!),
+                ),
+                child: Row(
+                  children: [
+                    Icon(Icons.gps_fixed, size: 16, color: Colors.green[700]),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'Lat: ${_loteLatitud!.toStringAsFixed(6)}, Lng: ${_loteLongitud!.toStringAsFixed(6)}',
+                        style: TextStyle(fontSize: 12, color: Colors.green[700]),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
             const SizedBox(height: 16),
             
             // Grados de infección

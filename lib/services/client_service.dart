@@ -451,4 +451,95 @@ class ClientService {
       await storage.delete(key: _selectedClientKey);
     } catch (_) {}
   }
+
+  // Obtener cliente por ID
+  Future<Map<String, dynamic>?> getClientById(int id) async {
+    try {
+      final headers = await _getHeaders();
+      final uri = (await baseUri).replace(path: '$_basePath/clients/$id');
+      
+      final response = await http.get(uri, headers: headers).timeout(
+        const Duration(seconds: 15),
+      );
+      
+      if (response.statusCode == 200) {
+        return json.decode(response.body);
+      } else if (response.statusCode == 404) {
+        return null;
+      }
+      return null;
+    } catch (e) {
+      print('Error obteniendo cliente por ID: $e');
+      return null;
+    }
+  }
+  
+  // Obtener evaluaciones Sigatoka de un cliente
+  Future<List<Map<String, dynamic>>> getEvaluacionesSigatokaByCliente(int clienteId) async {
+    try {
+      final headers = await _getHeaders();
+      final uri = (await baseUri).replace(
+        path: '$_basePath/sigatoka/cliente/$clienteId',
+      );
+      
+      final response = await http.get(uri, headers: headers).timeout(
+        const Duration(seconds: 15),
+      );
+      
+      if (response.statusCode == 200) {
+        final List<dynamic> data = json.decode(response.body);
+        return data.cast<Map<String, dynamic>>();
+      }
+      return [];
+    } catch (e) {
+      print('Error obteniendo evaluaciones Sigatoka: $e');
+      return [];
+    }
+  }
+  
+  // Obtener evaluaciones Moko de un cliente
+  Future<List<Map<String, dynamic>>> getEvaluacionesMokoByCliente(int clienteId) async {
+    try {
+      final headers = await _getHeaders();
+      final uri = (await baseUri).replace(
+        path: '$_basePath/moko/registros/cliente/$clienteId',
+      );
+      
+      final response = await http.get(uri, headers: headers).timeout(
+        const Duration(seconds: 15),
+      );
+      
+      if (response.statusCode == 200) {
+        final List<dynamic> data = json.decode(response.body);
+        return data.cast<Map<String, dynamic>>();
+      }
+      return [];
+    } catch (e) {
+      print('Error obteniendo evaluaciones Moko: $e');
+      return [];
+    }
+  }
+  
+  // Obtener auditorías de campo de un cliente
+  Future<List<Map<String, dynamic>>> getAuditoriasByCliente(int clienteId) async {
+    try {
+      final headers = await _getHeaders();
+      final uri = (await baseUri).replace(
+        path: '$_basePath/audits/cliente/$clienteId',
+      );
+      
+      final response = await http.get(uri, headers: headers).timeout(
+        const Duration(seconds: 15),
+      );
+      
+      if (response.statusCode == 200) {
+        final List<dynamic> data = json.decode(response.body);
+        return data.cast<Map<String, dynamic>>();
+      }
+      return [];
+    } catch (e) {
+      print('Error obteniendo auditorías: $e');
+      return [];
+    }
+  }
 }

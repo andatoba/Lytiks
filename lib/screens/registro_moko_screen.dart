@@ -38,6 +38,11 @@ class _RegistroMokoScreenState extends State<RegistroMokoScreen> {
   File? fotoTomada;
   String? metodoComprobacion;
 
+  // Coordenadas GPS del lote
+  double? _loteLatitud;
+  double? _loteLongitud;
+  bool _obteniendoUbicacion = false;
+
   // Listas para dropdowns
   List<Map<String, dynamic>> sintomas = [];
   List<String> metodosComprobacion = [
@@ -664,6 +669,8 @@ class _RegistroMokoScreenState extends State<RegistroMokoScreen> {
         'lote': _loteController.text,
         'areaHectareas': double.tryParse(_areaController.text) ?? 0.0,
         'gpsCoordinates': gpsCoordinates,
+        'loteLatitud': _loteLatitud,
+        'loteLongitud': _loteLongitud,
         'plantasAfectadas': int.tryParse(_plantasAfectadasController.text) ?? 0,
         'fechaDeteccion': fechaDeteccion.toIso8601String(),
         'sintomasIds': sintomasSeleccionados.map((s) => s['id']).toList(),
@@ -780,14 +787,67 @@ class _RegistroMokoScreenState extends State<RegistroMokoScreen> {
               style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 12),
-            TextField(
-              controller: _loteController,
-              decoration: const InputDecoration(
-                labelText: 'Lote',
-                hintText: 'Ej: Lote A',
-                border: OutlineInputBorder(),
-              ),
+            Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _loteController,
+                    decoration: InputDecoration(
+                      labelText: 'Lote',
+                      hintText: 'Ej: Lote A',
+                      border: const OutlineInputBorder(),
+                      suffixIcon: _loteLatitud != null && _loteLongitud != null
+                          ? const Icon(Icons.check_circle, color: Colors.green)
+                          : null,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Container(
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF4CAF50),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: IconButton(
+                    onPressed: _obteniendoUbicacion ? null : _obtenerUbicacionLote,
+                    icon: _obteniendoUbicacion
+                        ? const SizedBox(
+                            width: 24,
+                            height: 24,
+                            child: CircularProgressIndicator(
+                              color: Colors.white,
+                              strokeWidth: 2,
+                            ),
+                          )
+                        : const Icon(Icons.my_location, color: Colors.white),
+                    tooltip: 'Obtener ubicación GPS',
+                  ),
+                ),
+              ],
             ),
+            if (_loteLatitud != null && _loteLongitud != null) ...[
+              const SizedBox(height: 8),
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: Colors.green[50],
+                  borderRadius: BorderRadius.circular(4),
+                  border: Border.all(color: Colors.green[200]!),
+                ),
+                child: Row(
+                  children: [
+                    Icon(Icons.gps_fixed, size: 16, color: Colors.green[700]),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'Lat: ${_loteLatitud!.toStringAsFixed(6)}, Lng: ${_loteLongitud!.toStringAsFixed(6)}',
+                        style: TextStyle(fontSize: 12, color: Colors.green[700]),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
             const SizedBox(height: 12),
             TextField(
               controller: _areaController,
@@ -802,6 +862,57 @@ class _RegistroMokoScreenState extends State<RegistroMokoScreen> {
         ),
       ),
     );
+  }
+
+  Future<void> _obtenerUbicacionLote() async {
+    setState(() {
+      _obteniendoUbicacion = true;
+    });
+
+    try {
+      // Verificar permisos de ubicación
+      LocationPermission permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+        if (permission == LocationPermission.denied) {
+          _showError('Permiso de ubicación denegado');
+          return;
+        }
+      }
+
+      if (permission == LocationPermission.deniedForever) {
+        _showError('Los permisos de ubicación están permanentemente denegados');
+        return;
+      }
+
+      // Obtener posición actual
+      Position position = await Geolocator.getCurrentPosition(
+        desiredAccuracy: LocationAccuracy.high,
+      );
+
+      setState(() {
+        _loteLatitud = position.latitude;
+        _loteLongitud = position.longitude;
+        // También actualizar gpsCoordinates para compatibilidad
+        gpsCoordinates = '${position.latitude}, ${position.longitude}';
+      });
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Ubicación capturada exitosamente'),
+            backgroundColor: Colors.green,
+            duration: Duration(seconds: 2),
+          ),
+        );
+      }
+    } catch (e) {
+      _showError('Error al obtener ubicación: $e');
+    } finally {
+      setState(() {
+        _obteniendoUbicacion = false;
+      });
+    }
   }
 
   @override

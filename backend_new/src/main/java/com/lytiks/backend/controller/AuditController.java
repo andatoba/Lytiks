@@ -201,6 +201,27 @@ public ResponseEntity<Map<String, Object>> createAudit(@RequestBody Map<String, 
         }
         return ResponseEntity.ok(auditsEnriquecidos);
     }
+    
+    /**
+     * Obtener auditorías de un cliente específico
+     */
+    @GetMapping("/cliente/{clienteId}")
+    public ResponseEntity<List<Map<String, Object>>> getAuditsByCliente(@PathVariable Long clienteId) {
+        List<Audit> audits = auditRepository.findByClienteId(clienteId);
+        List<Map<String, Object>> auditsEnriquecidos = new java.util.ArrayList<>();
+        for (Audit audit : audits) {
+            Map<String, Object> auditMap = new java.util.HashMap<>();
+            auditMap.put("id", audit.getId());
+            auditMap.put("type", "Regular");
+            auditMap.put("fecha", audit.getFecha());
+            auditMap.put("hacienda", audit.getHacienda());
+            auditMap.put("cultivo", audit.getCultivo());
+            auditMap.put("estado", audit.getEstado());
+            auditMap.put("observaciones", audit.getObservaciones());
+            auditsEnriquecidos.add(auditMap);
+        }
+        return ResponseEntity.ok(auditsEnriquecidos);
+    }
 
     // Obtener puntuaciones de una auditoría
     @GetMapping("/{auditId}/scores")

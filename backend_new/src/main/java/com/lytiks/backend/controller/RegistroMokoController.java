@@ -223,6 +223,39 @@ public class RegistroMokoController {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(null);
         }
     }
+    
+    /**
+     * Obtener registros Moko de un cliente específico
+     */
+    @GetMapping("/registros/cliente/{clienteId}")
+    public ResponseEntity<List<Map<String, Object>>> getRegistrosByCliente(@PathVariable Long clienteId) {
+        try {
+            List<RegistroMoko> registros = registroMokoService.getRegistrosByClienteId(clienteId);
+            List<Map<String, Object>> registrosEnriquecidos = new java.util.ArrayList<>();
+            for (RegistroMoko registro : registros) {
+                Map<String, Object> regMap = new java.util.HashMap<>();
+                regMap.put("id", registro.getId());
+                regMap.put("numeroFoco", registro.getNumeroFoco());
+                regMap.put("clienteId", registro.getClienteId());
+                regMap.put("gpsCoordinates", registro.getGpsCoordinates());
+                regMap.put("plantasAfectadas", registro.getPlantasAfectadas());
+                regMap.put("fechaDeteccion", registro.getFechaDeteccion());
+                regMap.put("sintomaId", registro.getSintomaId());
+                regMap.put("sintomasJson", registro.getSintomasJson());
+                regMap.put("lote", registro.getLote());
+                regMap.put("areaHectareas", registro.getAreaHectareas());
+                regMap.put("severidad", registro.getSeveridad());
+                regMap.put("metodoComprobacion", registro.getMetodoComprobacion());
+                regMap.put("observaciones", registro.getObservaciones());
+                regMap.put("fotoPath", registro.getFotoPath());
+                regMap.put("fechaCreacion", registro.getFechaCreacion());
+                registrosEnriquecidos.add(regMap);
+            }
+            return ResponseEntity.ok(registrosEnriquecidos);
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(null);
+        }
+    }
 
     @GetMapping("/registro/{id}")
     public ResponseEntity<RegistroMoko> getRegistroById(@PathVariable Long id) {

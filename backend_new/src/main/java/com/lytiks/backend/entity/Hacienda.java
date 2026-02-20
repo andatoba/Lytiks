@@ -33,6 +33,12 @@ public class Hacienda {
     @Column(name = "hectareas")
     private Double hectareas;
     
+    @Column(name = "latitud")
+    private Double latitud;
+    
+    @Column(name = "longitud")
+    private Double longitud;
+    
     @Column(name = "cliente_id", nullable = false)
     private Long clienteId;
     

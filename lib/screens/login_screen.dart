@@ -4,6 +4,7 @@ import '../services/auth_service.dart';
 import '../services/location_tracking_service.dart';
 import '../widgets/dynamic_logo_widget.dart';
 import 'home_screen.dart';
+import 'cliente_home_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -62,6 +63,7 @@ class _LoginScreenState extends State<LoginScreen> {
             // Guardar información del usuario para tracking
             await _storage.write(key: 'user_id', value: userId);
             await _storage.write(key: 'user_name', value: displayName);
+            await _storage.write(key: 'user_role', value: userRole);
             
             // Guardar id_empresa del usuario
             final idEmpresa = loginResponse['user']['idEmpresa']?.toString() ?? '0';
@@ -80,13 +82,33 @@ class _LoginScreenState extends State<LoginScreen> {
               context,
               MaterialPageRoute(builder: (context) => const HomeScreen()),
             );
+          } else if (userRole == 'CLIENTE') {
+            // Guardar información del usuario cliente
+            await _storage.write(key: 'user_id', value: userId);
+            await _storage.write(key: 'user_name', value: displayName);
+            await _storage.write(key: 'user_role', value: userRole);
+            
+            // Guardar id_empresa del usuario
+            final idEmpresa = loginResponse['user']['idEmpresa']?.toString() ?? '0';
+            await _storage.write(key: 'id_empresa', value: idEmpresa);
+            print('🏢 ID Empresa guardado: $idEmpresa');
+            
+            // No iniciar seguimiento de ubicación para clientes
+            print('👤 Cliente autenticado: $displayName');
+            
+            Navigator.pushReplacement(
+              context,
+              MaterialPageRoute(
+                builder: (context) => ClienteHomeScreen(userData: loginResponse),
+              ),
+            );
           } else {
-            // Solo usuarios operadores pueden acceder
+            // Solo usuarios operadores y clientes pueden acceder
             if (mounted) {
               ScaffoldMessenger.of(context).showSnackBar(
                 const SnackBar(
                   content: Text(
-                    'Solo usuarios operadores pueden acceder a esta aplicación',
+                    'Rol de usuario no autorizado para esta aplicación',
                   ),
                   backgroundColor: Colors.red,
                 ),

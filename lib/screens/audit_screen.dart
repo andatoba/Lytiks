@@ -2,6 +2,7 @@ import 'dart:async' as dart_async;
 
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:geolocator/geolocator.dart';
 import '../services/offline_storage_service.dart';
 import '../services/client_service.dart';
 
@@ -43,16 +44,34 @@ class _AuditScreenState extends State<AuditScreen> {
   // Estado de expansión de las secciones (todas colapsadas por defecto)
   final Map<String, bool> _expandedSections = {};
 
+  // Variables para tracking de ubicación/trayecto
+  List<Map<String, dynamic>> _trayectoUbicaciones = [];
+  dart_async.Timer? _locationTimer;
+  bool _isTrackingLocation = false;
+  DateTime? _inicioEvaluacion;
+  
+  // Modo cliente: bloquea búsqueda de cliente y seguimiento de ubicación
+  bool _isClienteMode = false;
+
   @override
   void initState() {
     super.initState();
     _initializeDatabase();
+    
     if (widget.clientData != null) {
       _selectedClient = widget.clientData;
       _nombreController.text = _formatClientName(widget.clientData!);
       _clientService.saveSelectedClient(widget.clientData!);
+      
+      // Verificar si es modo cliente (usuario con rol CLIENTE)
+      _isClienteMode = widget.clientData!['isCliente'] == true;
     } else {
       _loadStoredClient();
+    }
+    
+    // Solo iniciar tracking si NO es modo cliente
+    if (!_isClienteMode) {
+      _iniciarTrackingUbicacion();
     }
   }
 
@@ -69,10 +88,79 @@ class _AuditScreenState extends State<AuditScreen> {
 
   @override
   void dispose() {
+    _detenerTrackingUbicacion(); // Detener tracking al cerrar
     _searchDebounce?.cancel();
     _nombreController.dispose();
     _nombreFocusNode.dispose();
     super.dispose();
+  }
+
+  /// Inicia el tracking de ubicación periódico
+  Future<void> _iniciarTrackingUbicacion() async {
+    _inicioEvaluacion = DateTime.now();
+    
+    try {
+      // Verificar permisos
+      LocationPermission permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+        if (permission == LocationPermission.denied) {
+          debugPrint('⚠️ Permiso de ubicación denegado');
+          return;
+        }
+      }
+
+      if (permission == LocationPermission.deniedForever) {
+        debugPrint('⚠️ Permisos de ubicación permanentemente denegados');
+        return;
+      }
+
+      _isTrackingLocation = true;
+
+      // Capturar ubicación inicial
+      await _capturarUbicacion();
+
+      // Iniciar timer para capturar cada 30 segundos
+      _locationTimer = dart_async.Timer.periodic(
+        const Duration(seconds: 30),
+        (timer) => _capturarUbicacion(),
+      );
+
+      debugPrint('✅ Tracking de ubicación iniciado');
+    } catch (e) {
+      debugPrint('❌ Error al iniciar tracking: $e');
+    }
+  }
+
+  /// Captura la ubicación actual y la agrega al trayecto
+  Future<void> _capturarUbicacion() async {
+    if (!_isTrackingLocation) return;
+
+    try {
+      Position position = await Geolocator.getCurrentPosition(
+        desiredAccuracy: LocationAccuracy.high,
+      );
+
+      _trayectoUbicaciones.add({
+        'latitud': position.latitude,
+        'longitud': position.longitude,
+        'altitud': position.altitude,
+        'precision': position.accuracy,
+        'timestamp': DateTime.now().toIso8601String(),
+      });
+
+      debugPrint('📍 Ubicación capturada: ${position.latitude}, ${position.longitude} (Total: ${_trayectoUbicaciones.length})');
+    } catch (e) {
+      debugPrint('❌ Error al capturar ubicación: $e');
+    }
+  }
+
+  /// Detiene el tracking de ubicación
+  void _detenerTrackingUbicacion() {
+    _locationTimer?.cancel();
+    _locationTimer = null;
+    _isTrackingLocation = false;
+    debugPrint('⏹️ Tracking de ubicación detenido. Total puntos: ${_trayectoUbicaciones.length}');
   }
 
   dart_async.Future<void> _initializeDatabase() async {
@@ -362,16 +450,25 @@ class _AuditScreenState extends State<AuditScreen> {
                       controller: controller,
                       focusNode: focusNode,
                       keyboardType: TextInputType.text,
-                      onChanged: _onNameChanged,
+                      onChanged: _isClienteMode ? null : _onNameChanged,
+                      readOnly: _isClienteMode,
+                      enabled: !_isClienteMode,
                       decoration: InputDecoration(
                         labelText: 'Nombre y Apellido del Cliente',
-                        hintText: 'Ingrese nombre y apellido',
-                        prefixIcon: const Icon(Icons.person),
-                        border: const OutlineInputBorder(),
-                        suffixIcon: IconButton(
-                          icon: const Icon(Icons.search),
-                          onPressed: _triggerSearch,
+                        hintText: _isClienteMode ? 'Cliente autenticado' : 'Ingrese nombre y apellido',
+                        prefixIcon: Icon(
+                          Icons.person,
+                          color: _isClienteMode ? Colors.grey : null,
                         ),
+                        border: const OutlineInputBorder(),
+                        filled: _isClienteMode,
+                        fillColor: _isClienteMode ? Colors.grey.withOpacity(0.1) : null,
+                        suffixIcon: _isClienteMode 
+                          ? const Icon(Icons.lock, color: Colors.grey)
+                          : IconButton(
+                              icon: const Icon(Icons.search),
+                              onPressed: _triggerSearch,
+                            ),
                       ),
                     );
                   },
@@ -1126,7 +1223,13 @@ class _AuditScreenState extends State<AuditScreen> {
         auditData: [auditData], // Convertir el mapa en una lista
         observations:
         'Auditoría ${_isBasicMode ? 'básica' : 'completa'} de $_selectedCrop',
+        trayectoUbicaciones: _trayectoUbicaciones, // Agregar trayecto
+        inicioEvaluacion: _inicioEvaluacion?.toIso8601String(),
+        finEvaluacion: DateTime.now().toIso8601String(),
       );
+
+      // Detener tracking después de guardar
+      _detenerTrackingUbicacion();
 
       // Calcular puntuación solo sobre los ítems completados
       final int totalScore = _calculateTotalScore();

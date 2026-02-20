@@ -39,6 +39,12 @@ public class Lote {
     @Column(name = "edad")
     private String edad;
     
+    @Column(name = "latitud")
+    private Double latitud;
+    
+    @Column(name = "longitud")
+    private Double longitud;
+    
     @Column(name = "hacienda_id", nullable = false)
     private Long haciendaId;
     

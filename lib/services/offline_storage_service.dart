@@ -8,7 +8,7 @@ import 'package:flutter/foundation.dart';
 class OfflineStorageService {
   static Database? _database;
   static const String _databaseName = 'lytiks_offline.db';
-  static const int _databaseVersion = 4;
+  static const int _databaseVersion = 5;
 
   // Singleton
   static final OfflineStorageService _instance =
@@ -110,6 +110,13 @@ class OfflineStorageService {
       ''');
       debugPrint('✅ Tabla location_tracking añadida en upgrade');
     }
+    if (oldVersion < 5) {
+      // Agregar columnas para trayecto de ubicaciones en auditorías
+      await db.execute('ALTER TABLE pending_audits ADD COLUMN trayecto_ubicaciones TEXT');
+      await db.execute('ALTER TABLE pending_audits ADD COLUMN inicio_evaluacion TEXT');
+      await db.execute('ALTER TABLE pending_audits ADD COLUMN fin_evaluacion TEXT');
+      debugPrint('✅ Columnas de trayecto añadidas a pending_audits en upgrade');
+    }
   }
 
   Future<void> _onCreate(Database db, int version) async {
@@ -130,6 +137,9 @@ class OfflineStorageService {
           latitude REAL,
           longitude REAL,
           image_path TEXT,
+          trayecto_ubicaciones TEXT,
+          inicio_evaluacion TEXT,
+          fin_evaluacion TEXT,
           created_at TEXT,
           is_synced INTEGER DEFAULT 0
         )
@@ -248,6 +258,9 @@ class OfflineStorageService {
     double? latitude,
     double? longitude,
     String? imagePath,
+    List<Map<String, dynamic>>? trayectoUbicaciones,
+    String? inicioEvaluacion,
+    String? finEvaluacion,
   }) async {
     final db = await database;
     return await db.insert('pending_audits', {
@@ -261,6 +274,9 @@ class OfflineStorageService {
       'latitude': latitude,
       'longitude': longitude,
       'image_path': imagePath,
+      'trayecto_ubicaciones': trayectoUbicaciones != null ? jsonEncode(trayectoUbicaciones) : null,
+      'inicio_evaluacion': inicioEvaluacion,
+      'fin_evaluacion': finEvaluacion,
       'created_at': DateTime.now().toIso8601String(),
       'is_synced': 0,
     });
