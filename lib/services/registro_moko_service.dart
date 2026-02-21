@@ -172,6 +172,12 @@ class RegistroMokoService {
       request.fields['lote'] = registroData['lote'] ?? '';
       request.fields['areaHectareas'] = registroData['areaHectareas'].toString();
       request.fields['gpsCoordinates'] = registroData['gpsCoordinates'] ?? '';
+      if (registroData['loteLatitud'] != null) {
+        request.fields['loteLatitud'] = registroData['loteLatitud'].toString();
+      }
+      if (registroData['loteLongitud'] != null) {
+        request.fields['loteLongitud'] = registroData['loteLongitud'].toString();
+      }
       request.fields['plantasAfectadas'] = registroData['plantasAfectadas']
           .toString();
       request.fields['fechaDeteccion'] = registroData['fechaDeteccion'];

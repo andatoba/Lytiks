@@ -3,11 +3,12 @@ package com.lytiks.backend.controller;
 import com.lytiks.backend.dto.*;
 import com.lytiks.backend.entity.*;
 import com.lytiks.backend.service.SigatokaEvaluacionServiceCompleto;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
-import lombok.extern.slf4j.Slf4j;
 
 import java.util.List;
 
@@ -20,6 +21,7 @@ import java.util.List;
  * POST   /api/sigatoka/lotes/{id}/muestras        - Agregar muestra a lote
  * POST   /api/sigatoka/lotes/{id}/muestras/bulk   - Agregar múltiples muestras
  * GET    /api/sigatoka/{id}                       - Obtener evaluación completa
+ * GET    /api/sigatoka/evaluaciones               - Obtener todas las evaluaciones
  * GET    /api/sigatoka/cliente/{id}               - Obtener evaluaciones por cliente
  * GET    /api/sigatoka/{id}/lotes                 - Obtener lotes de evaluación
  * GET    /api/sigatoka/lotes/{id}/muestras        - Obtener muestras de lote
@@ -37,8 +39,9 @@ import java.util.List;
 @RestController
 @RequestMapping("/sigatoka")
 @CrossOrigin(origins = "*")
-@Slf4j
 public class SigatokaEvaluacionController {
+    
+    private static final Logger log = LoggerFactory.getLogger(SigatokaEvaluacionController.class);
     
     @Autowired
     private SigatokaEvaluacionServiceCompleto evaluacionService;
@@ -97,6 +100,20 @@ public class SigatokaEvaluacionController {
         log.info("Obteniendo evaluación {}", evaluacionId);
         SigatokaEvaluacion evaluacion = evaluacionService.obtenerEvaluacionCompleta(evaluacionId);
         return ResponseEntity.ok(evaluacion);
+    }
+
+    /**
+     * Obtener todas las evaluaciones (opcional filtrar por clienteId)
+     */
+    @GetMapping("/evaluaciones")
+    public ResponseEntity<List<SigatokaEvaluacion>> obtenerEvaluaciones(
+            @RequestParam(required = false) Long clienteId) {
+        if (clienteId != null) {
+            log.info("Obteniendo evaluaciones del cliente {}", clienteId);
+            return ResponseEntity.ok(evaluacionService.obtenerEvaluacionesPorCliente(clienteId));
+        }
+        log.info("Obteniendo todas las evaluaciones");
+        return ResponseEntity.ok(evaluacionService.obtenerTodasEvaluaciones());
     }
 
     /**

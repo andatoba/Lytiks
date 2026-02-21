@@ -23,11 +23,14 @@ import java.nio.file.Paths;
 import java.nio.file.StandardOpenOption;
 import java.io.IOException;
 import java.util.Base64;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 @RestController
 @RequestMapping("/audits")
 @CrossOrigin(origins = "*")
 public class AuditController {
+    private static final ObjectMapper MAPPER = new ObjectMapper();
+
     @Autowired
     private com.lytiks.backend.repository.ClientRepository clientRepository;
 
@@ -52,6 +55,18 @@ public ResponseEntity<Map<String, Object>> createAudit(@RequestBody Map<String, 
         audit.setTecnicoId(auditData.get("tecnicoId") != null ? Long.valueOf(auditData.get("tecnicoId").toString()) : null);
         audit.setEstado(auditData.get("estado") != null ? auditData.get("estado").toString() : "PENDIENTE");
         audit.setObservaciones((String) auditData.get("observaciones"));
+        if (auditData.containsKey("trayectoUbicaciones") && auditData.get("trayectoUbicaciones") != null) {
+            Object trayecto = auditData.get("trayectoUbicaciones");
+            if (trayecto instanceof String) {
+                audit.setTrayectoUbicaciones((String) trayecto);
+            } else {
+                try {
+                    audit.setTrayectoUbicaciones(MAPPER.writeValueAsString(trayecto));
+                } catch (Exception e) {
+                    audit.setTrayectoUbicaciones(trayecto.toString());
+                }
+            }
+        }
 
         // Asociar cliente por cédula
         if (auditData.containsKey("cedulaCliente") && auditData.get("cedulaCliente") != null) {
@@ -191,12 +206,35 @@ public ResponseEntity<Map<String, Object>> createAudit(@RequestBody Map<String, 
             auditMap.put("estado", audit.getEstado());
             auditMap.put("tecnicoId", audit.getTecnicoId());
             auditMap.put("observaciones", audit.getObservaciones());
+            auditMap.put("trayectoUbicaciones", audit.getTrayectoUbicaciones());
             // Enriquecer con nombre del cliente
             if (audit.getClient() != null) {
                 auditMap.put("nombreCliente", audit.getClient().getNombreCompleto());
             } else {
                 auditMap.put("nombreCliente", "Cliente Desconocido");
             }
+            auditsEnriquecidos.add(auditMap);
+        }
+        return ResponseEntity.ok(auditsEnriquecidos);
+    }
+    
+    /**
+     * Obtener auditorías de un cliente específico
+     */
+    @GetMapping("/cliente/{clienteId}")
+    public ResponseEntity<List<Map<String, Object>>> getAuditsByCliente(@PathVariable Long clienteId) {
+        List<Audit> audits = auditRepository.findByClienteId(clienteId);
+        List<Map<String, Object>> auditsEnriquecidos = new java.util.ArrayList<>();
+        for (Audit audit : audits) {
+            Map<String, Object> auditMap = new java.util.HashMap<>();
+            auditMap.put("id", audit.getId());
+            auditMap.put("type", "Regular");
+            auditMap.put("fecha", audit.getFecha());
+            auditMap.put("hacienda", audit.getHacienda());
+            auditMap.put("cultivo", audit.getCultivo());
+            auditMap.put("estado", audit.getEstado());
+            auditMap.put("observaciones", audit.getObservaciones());
+            auditMap.put("trayectoUbicaciones", audit.getTrayectoUbicaciones());
             auditsEnriquecidos.add(auditMap);
         }
         return ResponseEntity.ok(auditsEnriquecidos);

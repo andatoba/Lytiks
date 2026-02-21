@@ -1,6 +1,11 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import '../services/sigatoka_evaluacion_service.dart';
 import '../services/client_service.dart';
+import '../services/auth_service.dart';
+import '../services/hacienda_service.dart';
+import '../services/lote_service.dart';
+import '../utils/sigatoka_date_util.dart';
 
 class SigatokaEvaluacionFormScreen extends StatefulWidget {
   const SigatokaEvaluacionFormScreen({Key? key}) : super(key: key);
@@ -12,6 +17,9 @@ class SigatokaEvaluacionFormScreen extends StatefulWidget {
 class _SigatokaEvaluacionFormScreenState extends State<SigatokaEvaluacionFormScreen> {
   final SigatokaEvaluacionService _service = SigatokaEvaluacionService();
   final ClientService _clientService = ClientService();
+  final AuthService _authService = AuthService();
+  final HaciendaService _haciendaService = HaciendaService();
+  final LoteService _loteService = LoteService();
   
   // Estado de la evaluación
   int? _evaluacionId;
@@ -19,6 +27,15 @@ class _SigatokaEvaluacionFormScreenState extends State<SigatokaEvaluacionFormScr
   String? _clienteNombre;
   bool _isLoading = false;
   int _currentStep = 0;
+  List<Map<String, dynamic>> _clientSuggestions = [];
+  List<Map<String, dynamic>> _haciendas = [];
+  List<Map<String, dynamic>> _lotes = [];
+  int? _selectedHaciendaId;
+  int? _selectedLoteId;
+  Timer? _searchDebounce;
+  final TextEditingController _clienteSearchController = TextEditingController();
+  final FocusNode _clienteSearchFocusNode = FocusNode();
+  String _lastQuery = '';
   
   // Controladores para el encabezado
   final TextEditingController _haciendaController = TextEditingController();
@@ -42,7 +59,6 @@ class _SigatokaEvaluacionFormScreenState extends State<SigatokaEvaluacionFormScr
   final TextEditingController _totalHojas5taController = TextEditingController();
   
   // Variables a-e (cálculo)
-  final TextEditingController _plantasMuestreadasController = TextEditingController();
   final TextEditingController _plantasConLesionesController = TextEditingController();
   final TextEditingController _totalLesionesController = TextEditingController();
   final TextEditingController _plantas3erEstadioController = TextEditingController();
@@ -62,9 +78,51 @@ class _SigatokaEvaluacionFormScreenState extends State<SigatokaEvaluacionFormScr
   
   // Datos del reporte
   Map<String, dynamic>? _reporte;
+  static const List<String> _infectionGradeOptions = [
+    '1a',
+    '1b',
+    '1c',
+    '2a',
+    '2b',
+    '2c',
+    '3a',
+    '3b',
+    '3c',
+  ];
+
+  @override
+  void initState() {
+    super.initState();
+    _initializeDefaultDate();
+    _prefillEvaluador();
+    _loadStoredClient();
+  }
+
+  /// Inicializa la fecha actual y calcula automáticamente semana epidemiológica y período
+  void _initializeDefaultDate() {
+    final now = DateTime.now();
+    _fechaController.text = '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
+    _applyDateDerivedFields(now);
+  }
+
+  Future<void> _loadStoredClient() async {
+    final stored = await _clientService.getSelectedClient();
+    if (!mounted || stored == null) {
+      return;
+    }
+    setState(() {
+      _clienteId = stored['id'];
+      _clienteNombre = _formatClientName(stored);
+      _clienteSearchController.text = _clienteNombre ?? '';
+      _haciendaController.text = _formatFincaName(stored);
+    });
+  }
 
   @override
   void dispose() {
+    _searchDebounce?.cancel();
+    _clienteSearchController.dispose();
+    _clienteSearchFocusNode.dispose();
     _haciendaController.dispose();
     _fechaController.dispose();
     _semanaController.dispose();
@@ -77,7 +135,6 @@ class _SigatokaEvaluacionFormScreenState extends State<SigatokaEvaluacionFormScr
     _totalHojas3eraController.dispose();
     _totalHojas4taController.dispose();
     _totalHojas5taController.dispose();
-    _plantasMuestreadasController.dispose();
     _plantasConLesionesController.dispose();
     _totalLesionesController.dispose();
     _plantas3erEstadioController.dispose();
@@ -93,52 +150,260 @@ class _SigatokaEvaluacionFormScreenState extends State<SigatokaEvaluacionFormScr
     super.dispose();
   }
 
-  Future<void> _buscarCliente() async {
-    final cedulaDialog = TextEditingController();
+  String _formatClientName(Map<String, dynamic> client) {
+    final nombre = client['nombre']?.toString() ?? '';
+    final apellidos = client['apellidos']?.toString() ?? '';
+    return '$nombre $apellidos'.trim();
+  }
+
+  String _formatFincaName(Map<String, dynamic> client) {
+    return (client['fincaNombre'] ?? client['nombreFinca'] ?? '').toString();
+  }
+
+  Future<void> _prefillEvaluador() async {
+    if (_evaluadorController.text.trim().isNotEmpty) {
+      return;
+    }
+
+    try {
+      final userData = await _authService.getUserData();
+      if (!mounted) {
+        return;
+      }
+      final Map<String, dynamic>? userMap = (userData?['user'] is Map<String, dynamic>)
+          ? (userData?['user'] as Map<String, dynamic>)
+          : userData;
+      final username = userMap?['username']?.toString() ?? userData?['username']?.toString();
+
+      Map<String, dynamic>? profile;
+      if (username != null && username.isNotEmpty) {
+        profile = await _authService.getProfile(username);
+      }
+      if (!mounted) {
+        return;
+      }
+
+      final firstName = profile?['firstName']?.toString() ??
+          userMap?['firstName']?.toString() ??
+          userMap?['nombre']?.toString() ??
+          userData?['firstName']?.toString();
+      final lastName = profile?['lastName']?.toString() ??
+          userMap?['lastName']?.toString() ??
+          userMap?['apellidos']?.toString() ??
+          userData?['lastName']?.toString();
+
+      final fullName = [
+        if (firstName != null && firstName.isNotEmpty) firstName,
+        if (lastName != null && lastName.isNotEmpty) lastName,
+      ].join(' ').trim();
+
+      if (fullName.isNotEmpty) {
+        _evaluadorController.text = fullName;
+      } else if (username != null && username.isNotEmpty) {
+        _evaluadorController.text = username;
+      }
+    } catch (_) {
+      // Si falla, no bloquear la edición manual
+    }
+  }
+
+  int _isoWeekNumber(DateTime date) {
+    final thursday = date.add(Duration(days: 3 - ((date.weekday + 6) % 7)));
+    final firstThursday = DateTime(thursday.year, 1, 4);
+    final diff = thursday.difference(firstThursday).inDays;
+    return 1 + (diff / 7).floor();
+  }
+
+  int _weekOfMonth(DateTime date) {
+    final firstDay = DateTime(date.year, date.month, 1);
+    final offset = firstDay.weekday - 1;
+    return ((date.day + offset - 1) / 7).floor() + 1;
+  }
+
+  void _applyDateDerivedFields(DateTime date) {
+    // Calcular semana epidemiológica ISO
+    final semanaISO = SigatokaDateUtil.getSemanaEpidemiologicaISO(date);
+    _semanaController.text = semanaISO.toString();
     
-    final cedula = await showDialog<String>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Buscar Cliente'),
-        content: TextField(
-          controller: cedulaDialog,
-          decoration: const InputDecoration(
-            labelText: 'Cédula del cliente',
-            border: OutlineInputBorder(),
-          ),
-          keyboardType: TextInputType.number,
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancelar'),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(context, cedulaDialog.text),
-            child: const Text('Buscar'),
-          ),
-        ],
+    // Calcular período (Semana X de Mes Y)
+    final periodo = SigatokaDateUtil.getPeriodoSemanaDelMes(date);
+    _periodoController.text = periodo;
+  }
+
+  Widget _buildInfectionGradeDropdown({
+    required TextEditingController controller,
+    required String label,
+    required String hint,
+  }) {
+    final currentValue = controller.text.trim();
+    final selectedValue =
+        _infectionGradeOptions.contains(currentValue) ? currentValue : null;
+    return DropdownButtonFormField<String>(
+      value: selectedValue,
+      isExpanded: true,
+      decoration: InputDecoration(
+        labelText: label,
+        hintText: hint,
+        border: const OutlineInputBorder(),
       ),
+      items: _infectionGradeOptions
+          .map(
+            (option) => DropdownMenuItem<String>(
+              value: option,
+              child: Text(option),
+            ),
+          )
+          .toList(),
+      onChanged: (value) {
+        controller.text = value ?? '';
+      },
     );
+  }
+
+  void _onClientSearchChanged(String value) {
+    final query = value.trim();
+    _searchDebounce?.cancel();
+    final queryChanged = query != _lastQuery;
+    _lastQuery = query;
+
+    if (_clienteNombre != null &&
+        _clienteNombre!.toLowerCase() != query.toLowerCase()) {
+      setState(() {
+        _clienteId = null;
+        _clienteNombre = null;
+        _haciendaController.text = '';
+      });
+      _clientService.clearSelectedClient();
+    }
+
+    if (query.length < 2) {
+      if (_clientSuggestions.isNotEmpty) {
+        setState(() {
+          _clientSuggestions = [];
+        });
+      }
+      return;
+    }
+
+    if (queryChanged && _clientSuggestions.isNotEmpty) {
+      setState(() {
+        _clientSuggestions = [];
+      });
+    }
+
+    _searchDebounce = Timer(
+      const Duration(milliseconds: 350),
+      () => _fetchClientSuggestions(query),
+    );
+  }
+
+  Future<void> _fetchClientSuggestions(String query) async {
+    try {
+      final clients = await _clientService.searchClientsByName(query);
+      if (!mounted || query != _lastQuery) {
+        return;
+      }
+      setState(() {
+        _clientSuggestions = clients;
+      });
+    } catch (e) {
+      if (!mounted || query != _lastQuery) {
+        return;
+      }
+      setState(() {
+        _clientSuggestions = [];
+      });
+    }
+  }
+
+  void _selectClient(Map<String, dynamic> client) {
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _clienteId = client['id'];
+      _clienteNombre = _formatClientName(client);
+      _haciendaController.text = _formatFincaName(client);
+      _clientSuggestions = [];
+    });
+    _clientService.saveSelectedClient(client);
+    // Cargar haciendas del cliente seleccionado
+    _loadHaciendasByCliente();
+  }
+
+  /// Carga las haciendas del cliente seleccionado
+  Future<void> _loadHaciendasByCliente() async {
+    if (_clienteId == null) return;
     
-    if (cedula != null && cedula.isNotEmpty) {
-      setState(() => _isLoading = true);
-      try {
-        final cliente = await _clientService.searchClientByCedula(cedula);
-        if (cliente != null) {
-          setState(() {
-            _clienteId = cliente['id'];
-            _clienteNombre = '${cliente['nombre']} ${cliente['apellidos'] ?? ''}';
-            _haciendaController.text = cliente['fincaNombre'] ?? '';
-          });
-        } else {
-          _showError('Cliente no encontrado');
-        }
-      } catch (e) {
-        _showError('Error al buscar cliente: $e');
-      } finally {
+    setState(() => _isLoading = true);
+    try {
+      final haciendas = await _haciendaService.getHaciendasByCliente(_clienteId!);
+      if (mounted) {
+        setState(() {
+          _haciendas = haciendas;
+          _selectedHaciendaId = null;
+          _lotes = [];
+          _selectedLoteId = null;
+        });
+      }
+    } catch (e) {
+      print('Error cargando haciendas: $e');
+    } finally {
+      if (mounted) {
         setState(() => _isLoading = false);
       }
+    }
+  }
+
+  /// Carga los lotes de la hacienda seleccionada
+  Future<void> _loadLotesByHacienda(int haciendaId) async {
+    setState(() => _isLoading = true);
+    try {
+      final lotes = await _loteService.getLotesByHacienda(haciendaId);
+      if (mounted) {
+        setState(() {
+          _lotes = lotes;
+          _selectedLoteId = null;
+        });
+      }
+    } catch (e) {
+      print('Error cargando lotes: $e');
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+    }
+  }
+
+  /// Calcula automáticamente la semana ISO y el período cuando se selecciona una fecha
+  void _onFechaChanged(String fechaStr) {
+    if (fechaStr.isEmpty) return;
+    
+    try {
+      final fecha = DateTime.parse(fechaStr);
+      final semanaISO = SigatokaDateUtil.getSemanaEpidemiologicaISO(fecha);
+      final periodo = SigatokaDateUtil.getPeriodoSemanaDelMes(fecha);
+      
+      setState(() {
+        _semanaController.text = semanaISO.toString();
+        _periodoController.text = periodo;
+      });
+    } catch (e) {
+      print('Error calculando semana ISO: $e');
+    }
+  }
+
+  Future<void> _triggerSearch() async {
+    final query = _clienteSearchController.text.trim();
+    _lastQuery = query;
+    if (query.length < 2) {
+      _showError('Ingrese al menos 2 letras para buscar');
+      return;
+    }
+
+    await _fetchClientSuggestions(query);
+    if (mounted) {
+      _clienteSearchFocusNode.requestFocus();
     }
   }
 
@@ -196,12 +461,11 @@ class _SigatokaEvaluacionFormScreenState extends State<SigatokaEvaluacionFormScr
     }
     
     // Validar campos obligatorios
-    if (_plantasMuestreadasController.text.isEmpty ||
-        _plantasConLesionesController.text.isEmpty ||
+    if (_plantasConLesionesController.text.isEmpty ||
         _totalLesionesController.text.isEmpty ||
         _plantas3erEstadioController.text.isEmpty ||
         _totalLetrasController.text.isEmpty) {
-      _showError('Complete todos los campos obligatorios (a-e)');
+      _showError('Complete todos los campos obligatorios (b-e)');
       return;
     }
     
@@ -219,8 +483,7 @@ class _SigatokaEvaluacionFormScreenState extends State<SigatokaEvaluacionFormScr
         totalHojas3era: _totalHojas3eraController.text.isNotEmpty ? int.parse(_totalHojas3eraController.text) : null,
         totalHojas4ta: _totalHojas4taController.text.isNotEmpty ? int.parse(_totalHojas4taController.text) : null,
         totalHojas5ta: _totalHojas5taController.text.isNotEmpty ? int.parse(_totalHojas5taController.text) : null,
-        // Variables a-e
-        plantasMuestreadas: int.parse(_plantasMuestreadasController.text),
+        // Variables b-e
         plantasConLesiones: int.parse(_plantasConLesionesController.text),
         totalLesiones: int.parse(_totalLesionesController.text),
         plantas3erEstadio: int.parse(_plantas3erEstadioController.text),
@@ -290,7 +553,6 @@ class _SigatokaEvaluacionFormScreenState extends State<SigatokaEvaluacionFormScr
     _totalHojas3eraController.clear();
     _totalHojas4taController.clear();
     _totalHojas5taController.clear();
-    _plantasMuestreadasController.clear();
     _plantasConLesionesController.clear();
     _totalLesionesController.clear();
     _plantas3erEstadioController.clear();
@@ -382,15 +644,83 @@ class _SigatokaEvaluacionFormScreenState extends State<SigatokaEvaluacionFormScr
               padding: const EdgeInsets.all(16.0),
               child: Column(
                 children: [
-                  ElevatedButton.icon(
-                    onPressed: _buscarCliente,
-                    icon: const Icon(Icons.search),
-                    label: const Text('Buscar Cliente por Cédula'),
-                    style: ElevatedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 24),
-                      backgroundColor: Colors.blue,
-                      foregroundColor: Colors.white,
-                    ),
+                  RawAutocomplete<Map<String, dynamic>>(
+                    textEditingController: _clienteSearchController,
+                    focusNode: _clienteSearchFocusNode,
+                    displayStringForOption: _formatClientName,
+                    optionsBuilder: (TextEditingValue value) {
+                      final query = value.text.trim();
+                      if (query.length < 2 || query != _lastQuery) {
+                        return const Iterable<Map<String, dynamic>>.empty();
+                      }
+                      return _clientSuggestions;
+                    },
+                    onSelected: _selectClient,
+                    fieldViewBuilder: (
+                      BuildContext context,
+                      TextEditingController controller,
+                      FocusNode focusNode,
+                      VoidCallback onFieldSubmitted,
+                    ) {
+                      return TextField(
+                        controller: controller,
+                        focusNode: focusNode,
+                        keyboardType: TextInputType.text,
+                        onChanged: _onClientSearchChanged,
+                        decoration: InputDecoration(
+                          labelText: 'Nombre y Apellido del Cliente',
+                          hintText: 'Ingrese nombre y apellido',
+                          prefixIcon: const Icon(Icons.person_search),
+                          border: const OutlineInputBorder(),
+                          suffixIcon: IconButton(
+                            icon: const Icon(Icons.search),
+                            onPressed: _triggerSearch,
+                          ),
+                        ),
+                      );
+                    },
+                    optionsViewBuilder: (
+                      BuildContext context,
+                      AutocompleteOnSelected<Map<String, dynamic>> onSelected,
+                      Iterable<Map<String, dynamic>> options,
+                    ) {
+                      final optionList = options.toList();
+                      return Align(
+                        alignment: Alignment.topLeft,
+                        child: Material(
+                          elevation: 4.0,
+                          child: ConstrainedBox(
+                            constraints: const BoxConstraints(maxHeight: 240),
+                            child: ListView.separated(
+                              padding: EdgeInsets.zero,
+                              shrinkWrap: true,
+                              itemCount: optionList.length,
+                              separatorBuilder: (_, __) => const Divider(height: 1),
+                              itemBuilder: (context, index) {
+                                final client = optionList[index];
+                                final nombre = _formatClientName(client);
+                                final cedula = client['cedula']?.toString() ?? '';
+                                final finca = _formatFincaName(client);
+                                final subtitleParts = <String>[];
+                                if (cedula.isNotEmpty) {
+                                  subtitleParts.add('Cédula: $cedula');
+                                }
+                                if (finca.isNotEmpty) {
+                                  subtitleParts.add('Finca: $finca');
+                                }
+                                return ListTile(
+                                  title: Text(nombre.isEmpty ? 'Cliente sin nombre' : nombre),
+                                  subtitle: subtitleParts.isEmpty
+                                      ? null
+                                      : Text(subtitleParts.join(' | ')),
+                                  onTap: () => onSelected(client),
+                                );
+                              },
+                            ),
+                          ),
+                        ),
+                      );
+                    },
                   ),
                   if (_clienteNombre != null) ...[
                     const SizedBox(height: 12),
@@ -443,17 +773,72 @@ class _SigatokaEvaluacionFormScreenState extends State<SigatokaEvaluacionFormScr
           ),
           const SizedBox(height: 12),
           
-          // HACIENDA
-          TextField(
-            controller: _haciendaController,
-            decoration: const InputDecoration(
-              labelText: '🏡 Hacienda *',
-              hintText: 'Nombre de la finca o predio',
-              border: OutlineInputBorder(),
-              prefixIcon: Icon(Icons.home),
+          // HACIENDA - Dropdown
+          if (_haciendas.isNotEmpty) ...[
+            DropdownButtonFormField<int>(
+              value: _selectedHaciendaId,
+              decoration: const InputDecoration(
+                labelText: '🏡 Hacienda *',
+                border: OutlineInputBorder(),
+                prefixIcon: Icon(Icons.home),
+              ),
+              items: _haciendas.map((hacienda) {
+                return DropdownMenuItem<int>(
+                  value: hacienda['id'],
+                  child: Text(hacienda['nombre'] ?? ''),
+                );
+              }).toList(),
+              onChanged: (value) {
+                setState(() {
+                  _selectedHaciendaId = value;
+                  _haciendaController.text = _haciendas
+                      .firstWhere((h) => h['id'] == value)['nombre'] ?? '';
+                });
+                if (value != null) {
+                  _loadLotesByHacienda(value);
+                }
+              },
             ),
-          ),
+          ] else ...[
+            TextField(
+              controller: _haciendaController,
+              decoration: const InputDecoration(
+                labelText: '🏡 Hacienda *',
+                hintText: 'Nombre de la finca o predio',
+                border: OutlineInputBorder(),
+                prefixIcon: Icon(Icons.home),
+              ),
+            ),
+          ],
           const SizedBox(height: 16),
+          
+          // LOTE - Dropdown (se muestra después de seleccionar hacienda)
+          if (_lotes.isNotEmpty) ...[
+            DropdownButtonFormField<int>(
+              value: _selectedLoteId,
+              decoration: const InputDecoration(
+                labelText: '🧭 Lote',
+                border: OutlineInputBorder(),
+                prefixIcon: Icon(Icons.map),
+              ),
+              items: _lotes.map((lote) {
+                return DropdownMenuItem<int>(
+                  value: lote['id'],
+                  child: Text('${lote['codigo']} - ${lote['nombre']}'),
+                );
+              }).toList(),
+              onChanged: (value) {
+                setState(() {
+                  _selectedLoteId = value;
+                  if (value != null) {
+                    final lote = _lotes.firstWhere((l) => l['id'] == value);
+                    _loteController.text = lote['codigo'] ?? '';
+                  }
+                });
+              },
+            ),
+            const SizedBox(height: 16),
+          ],
           
           // FECHA CON CALENDARIO VISUAL
           InkWell(
@@ -485,6 +870,7 @@ class _SigatokaEvaluacionFormScreenState extends State<SigatokaEvaluacionFormScr
               if (picked != null) {
                 setState(() {
                   _fechaController.text = '${picked.year}-${picked.month.toString().padLeft(2, '0')}-${picked.day.toString().padLeft(2, '0')}';
+                  _applyDateDerivedFields(picked);
                 });
               }
             },
@@ -659,35 +1045,26 @@ class _SigatokaEvaluacionFormScreenState extends State<SigatokaEvaluacionFormScr
           Row(
             children: [
               Expanded(
-                child: TextField(
+                child: _buildInfectionGradeDropdown(
                   controller: _hoja3eraController,
-                  decoration: const InputDecoration(
-                    labelText: '3era Hoja',
-                    hintText: 'ej: 2a',
-                    border: OutlineInputBorder(),
-                  ),
+                  label: '3era Hoja',
+                  hint: 'Ej: 2a',
                 ),
               ),
               const SizedBox(width: 8),
               Expanded(
-                child: TextField(
+                child: _buildInfectionGradeDropdown(
                   controller: _hoja4taController,
-                  decoration: const InputDecoration(
-                    labelText: '4ta Hoja',
-                    hintText: 'ej: 3c',
-                    border: OutlineInputBorder(),
-                  ),
+                  label: '4ta Hoja',
+                  hint: 'Ej: 3c',
                 ),
               ),
               const SizedBox(width: 8),
               Expanded(
-                child: TextField(
+                child: _buildInfectionGradeDropdown(
                   controller: _hoja5taController,
-                  decoration: const InputDecoration(
-                    labelText: '5ta Hoja',
-                    hintText: 'ej: 4b',
-                    border: OutlineInputBorder(),
-                  ),
+                  label: '5ta Hoja',
+                  hint: 'Ej: 1b',
                 ),
               ),
             ],
@@ -751,18 +1128,9 @@ class _SigatokaEvaluacionFormScreenState extends State<SigatokaEvaluacionFormScr
           ),
           const SizedBox(height: 8),
           TextField(
-            controller: _plantasMuestreadasController,
-            decoration: const InputDecoration(
-              labelText: 'a) Plantas Muestreadas *',
-              border: OutlineInputBorder(),
-            ),
-            keyboardType: TextInputType.number,
-          ),
-          const SizedBox(height: 12),
-          TextField(
             controller: _plantasConLesionesController,
             decoration: const InputDecoration(
-              labelText: 'b) Plantas con Lesiones *',
+              labelText: 'a) Plantas con Lesiones *',
               border: OutlineInputBorder(),
             ),
             keyboardType: TextInputType.number,
@@ -771,7 +1139,7 @@ class _SigatokaEvaluacionFormScreenState extends State<SigatokaEvaluacionFormScr
           TextField(
             controller: _totalLesionesController,
             decoration: const InputDecoration(
-              labelText: 'c) Total de Lesiones *',
+              labelText: 'b) Total de Lesiones *',
               border: OutlineInputBorder(),
             ),
             keyboardType: TextInputType.number,
@@ -780,7 +1148,7 @@ class _SigatokaEvaluacionFormScreenState extends State<SigatokaEvaluacionFormScr
           TextField(
             controller: _plantas3erEstadioController,
             decoration: const InputDecoration(
-              labelText: 'd) Plantas en 3er Estadio *',
+              labelText: 'c) Plantas en 3er Estadio *',
               border: OutlineInputBorder(),
             ),
             keyboardType: TextInputType.number,
@@ -789,7 +1157,7 @@ class _SigatokaEvaluacionFormScreenState extends State<SigatokaEvaluacionFormScr
           TextField(
             controller: _totalLetrasController,
             decoration: const InputDecoration(
-              labelText: 'e) Total de Letras (severidad) *',
+              labelText: 'd) Total de Letras (severidad) *',
               border: OutlineInputBorder(),
             ),
             keyboardType: TextInputType.number,

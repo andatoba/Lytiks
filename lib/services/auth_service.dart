@@ -154,6 +154,26 @@ class AuthService {
     final userData = await getUserData();
     return userData?['id'];
   }
+  
+  // Obtener id_empresa del usuario autenticado
+  Future<int?> getIdEmpresa() async {
+    // Primero intentar desde user_data guardado
+    final userData = await getUserData();
+    if (userData != null && userData['user'] != null) {
+      final idEmpresa = userData['user']['idEmpresa'];
+      if (idEmpresa != null) {
+        return idEmpresa is int ? idEmpresa : int.tryParse(idEmpresa.toString());
+      }
+    }
+    
+    // Fallback: leer desde storage directo
+    final idEmpresaStr = await storage.read(key: 'id_empresa');
+    if (idEmpresaStr != null) {
+      return int.tryParse(idEmpresaStr);
+    }
+    
+    return null;
+  }
 
   Future<void> logout() async {
     await storage.delete(key: 'token');

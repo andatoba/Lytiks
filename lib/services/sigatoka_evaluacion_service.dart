@@ -50,12 +50,18 @@ class SigatokaEvaluacionService {
   Future<Map<String, dynamic>> crearLote({
     required int evaluacionId,
     required String codigo,
+    double? latitud,
+    double? longitud,
   }) async {
     try {
       final response = await http.post(
         Uri.parse('$baseUrl/$evaluacionId/lotes'),
         headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({'loteCodigo': codigo}),
+        body: jsonEncode({
+          'loteCodigo': codigo,
+          if (latitud != null) 'latitud': latitud,
+          if (longitud != null) 'longitud': longitud,
+        }),
       );
       
       if (response.statusCode == 201 || response.statusCode == 200) {
@@ -76,6 +82,8 @@ class SigatokaEvaluacionService {
     required int evaluacionId,
     required int numeroMuestra,
     required String lote,
+    double? loteLatitud,
+    double? loteLongitud,
     // Grados de infección
     String? hoja3era,
     String? hoja4ta,
@@ -84,8 +92,7 @@ class SigatokaEvaluacionService {
     int? totalHojas3era,
     int? totalHojas4ta,
     int? totalHojas5ta,
-    // Variables a-e
-    required int plantasMuestreadas,
+    // Variables b-e
     required int plantasConLesiones,
     required int totalLesiones,
     required int plantas3erEstadio,
@@ -108,6 +115,8 @@ class SigatokaEvaluacionService {
         loteData = await crearLote(
           evaluacionId: evaluacionId,
           codigo: lote,
+          latitud: loteLatitud,
+          longitud: loteLongitud,
         );
       } catch (e) {
         // Si falla (probablemente lote duplicado), buscar el lote existente
@@ -162,7 +171,6 @@ class SigatokaEvaluacionService {
           'totalHojas3era': totalHojas3era,
           'totalHojas4ta': totalHojas4ta,
           'totalHojas5ta': totalHojas5ta,
-          'plantasMuestreadas': plantasMuestreadas,
           'plantasConLesiones': plantasConLesiones,
           'totalLesiones': totalLesiones,
           'plantas3erEstadio': plantas3erEstadio,
@@ -378,9 +386,12 @@ class SigatokaEvaluacionService {
     int evaluacionId,
     Map<String, dynamic> resumenData,
     Map<String, dynamic> indicadoresData,
-    Map<String, dynamic> stoverData,
-  ) async {
+    Map<String, dynamic> stoverData, {
+    Map<String, dynamic>? conteoLiterales,
+  }) async {
     try {
+      print('📊 Guardando resumen calculado en FRONTEND (no recalcular en backend)');
+      
       // Guardar resumen
       final resumenResponse = await http.post(
         Uri.parse('$baseUrl/evaluaciones/$evaluacionId/resumen'),
@@ -394,6 +405,7 @@ class SigatokaEvaluacionService {
           'message': 'Error al guardar resumen: ${resumenResponse.body}',
         };
       }
+      print('✅ Resumen guardado');
       
       // Guardar indicadores (Estado Evolutivo)
       final indicadoresResponse = await http.post(
@@ -408,6 +420,7 @@ class SigatokaEvaluacionService {
           'message': 'Error al guardar indicadores: ${indicadoresResponse.body}',
         };
       }
+      print('✅ Indicadores guardados');
       
       // Guardar Stover promedio
       final stoverResponse = await http.post(
@@ -422,10 +435,30 @@ class SigatokaEvaluacionService {
           'message': 'Error al guardar Stover: ${stoverResponse.body}',
         };
       }
+      print('✅ Stover guardado');
+      
+      // Guardar conteo de literales si se proporciona
+      if (conteoLiterales != null) {
+        try {
+          final literalesResponse = await http.post(
+            Uri.parse('$baseUrl/evaluaciones/$evaluacionId/literales'),
+            headers: {'Content-Type': 'application/json'},
+            body: jsonEncode(conteoLiterales),
+          );
+          
+          if (literalesResponse.statusCode == 200 || literalesResponse.statusCode == 201) {
+            print('✅ Literales guardados');
+          } else {
+            print('⚠️ No se pudo guardar literales (endpoint puede no existir): ${literalesResponse.statusCode}');
+          }
+        } catch (e) {
+          print('⚠️ Error al guardar literales (opcional): $e');
+        }
+      }
       
       return {
         'success': true,
-        'message': 'Resumen guardado correctamente',
+        'message': 'Resumen guardado correctamente (calculado en app)',
       };
     } catch (e) {
       return {

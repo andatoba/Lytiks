@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'package:image_picker/image_picker.dart';
 
@@ -26,7 +27,48 @@ class _MokoAuditScreenState extends State<MokoAuditScreen> {
 
   // Cliente seleccionado
   Map<String, dynamic>? _selectedClient;
-  final TextEditingController _cedulaController = TextEditingController();
+  final TextEditingController _nombreController = TextEditingController();
+  final FocusNode _nombreFocusNode = FocusNode();
+  List<Map<String, dynamic>> _clientSuggestions = [];
+  Timer? _searchDebounce;
+  String _lastQuery = '';
+  
+  // Modo cliente: bloquea búsqueda de cliente
+  bool _isClienteMode = false;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.clientData != null) {
+      _selectedClient = widget.clientData;
+      _nombreController.text = _formatClientName(widget.clientData!);
+      _clientService.saveSelectedClient(widget.clientData!);
+      
+      // Verificar si es modo cliente (usuario con rol CLIENTE)
+      _isClienteMode = widget.clientData!['isCliente'] == true;
+    } else {
+      _loadStoredClient();
+    }
+  }
+
+  Future<void> _loadStoredClient() async {
+    final stored = await _clientService.getSelectedClient();
+    if (!mounted || stored == null) {
+      return;
+    }
+    setState(() {
+      _selectedClient = stored;
+      _nombreController.text = _formatClientName(stored);
+    });
+  }
+
+  @override
+  void dispose() {
+    _searchDebounce?.cancel();
+    _nombreController.dispose();
+    _nombreFocusNode.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -57,79 +99,79 @@ class _MokoAuditScreenState extends State<MokoAuditScreen> {
           _buildClientSearchSection(),
           const SizedBox(height: 40),
 
-          // Botones principales del módulo Moko
-          _buildIntuitiveButton(
-            title: 'Registrar Nuevo Foco',
-            subtitle: 'Reportar una nueva área infectada',
-            icon: Icons.add_circle_outline,
-            color: const Color(0xFFE53E3E), // Rojo para urgencia
-            onPressed: () {
-              if (_selectedClient == null) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Debe seleccionar un cliente primero'),
-                    backgroundColor: Colors.orange,
+          if (_selectedClient == null) ...[
+            _buildClientRequiredNotice(),
+          ] else ...[
+            // Botones principales del módulo Moko
+            _buildIntuitiveButton(
+              title: 'Registrar Nuevo Foco',
+              subtitle: 'Reportar una nueva área infectada',
+              icon: Icons.add_circle_outline,
+              color: const Color(0xFFE53E3E), // Rojo para urgencia
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => RegistroMokoScreen(clientData: _selectedClient),
                   ),
                 );
-                return;
-              }
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => RegistroMokoScreen(clientData: _selectedClient),
-                ),
-              );
-            },
-          ),
-          const SizedBox(height: 16),
+              },
+            ),
+            const SizedBox(height: 16),
 
-          _buildIntuitiveButton(
-            title: 'Seguimiento de Focos',
-            subtitle: 'Monitorear áreas ya identificadas',
-            icon: Icons.visibility,
-            color: const Color(0xFFED8936), // Naranja para seguimiento
-            onPressed: () {
-              if (_selectedClient == null) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Debe seleccionar un cliente primero'),
-                    backgroundColor: Colors.orange,
+            _buildIntuitiveButton(
+              title: 'Seguimiento de Focos',
+              subtitle: 'Monitorear áreas ya identificadas',
+              icon: Icons.visibility,
+              color: const Color(0xFFED8936), // Naranja para seguimiento
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => const SeguimientoFocosScreen(),
                   ),
                 );
-                return;
-              }
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => const SeguimientoFocosScreen(),
-                ),
-              );
-            },
-          ),
-          const SizedBox(height: 16),
+              },
+            ),
+            const SizedBox(height: 16),
 
-          _buildIntuitiveButton(
-            title: 'Lista de Focos',
-            subtitle: 'Ver todos los focos registrados',
-            icon: Icons.format_list_bulleted,
-            color: const Color(0xFF38A169), // Verde para consulta
-            onPressed: () {
-              if (_selectedClient == null) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Debe seleccionar un cliente primero'),
-                    backgroundColor: Colors.orange,
+            _buildIntuitiveButton(
+              title: 'Lista de Focos',
+              subtitle: 'Ver todos los focos registrados',
+              icon: Icons.format_list_bulleted,
+              color: const Color(0xFF38A169), // Verde para consulta
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => const ListaFocosScreen(),
                   ),
                 );
-                return;
-              }
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => const ListaFocosScreen(),
-                ),
-              );
-            },
+              },
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildClientRequiredNotice() {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.amber.shade50,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.amber.shade200),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.warning_amber_rounded, color: Colors.amber.shade700),
+          const SizedBox(width: 12),
+          const Expanded(
+            child: Text(
+              'Seleccione un cliente para continuar en Moko.',
+              style: TextStyle(fontWeight: FontWeight.w600),
+            ),
           ),
         ],
       ),
@@ -319,19 +361,101 @@ class _MokoAuditScreenState extends State<MokoAuditScreen> {
           Row(
             children: [
               Expanded(
-                child: TextField(
-                  controller: _cedulaController,
-                  keyboardType: TextInputType.number,
-                  decoration: InputDecoration(
-                    labelText: 'Cédula del Cliente',
-                    hintText: 'Ingrese la cédula',
-                    prefixIcon: const Icon(Icons.badge),
-                    border: const OutlineInputBorder(),
-                    suffixIcon: IconButton(
-                      icon: const Icon(Icons.search),
-                      onPressed: _searchClientByCedula,
-                    ),
-                  ),
+                child: RawAutocomplete<Map<String, dynamic>>(
+                  textEditingController: _nombreController,
+                  focusNode: _nombreFocusNode,
+                  displayStringForOption: _formatClientName,
+                  optionsBuilder: (TextEditingValue value) {
+                    final query = value.text.trim();
+                    if (query.length < 2 || query != _lastQuery) {
+                      return const Iterable<Map<String, dynamic>>.empty();
+                    }
+                    return _clientSuggestions;
+                  },
+                  onSelected: (client) {
+                    if (!mounted) {
+                      return;
+                    }
+                    setState(() {
+                      _selectedClient = client;
+                      _clientSuggestions = [];
+                    });
+                    _clientService.saveSelectedClient(client);
+                  },
+                  fieldViewBuilder: (
+                    BuildContext context,
+                    TextEditingController controller,
+                    FocusNode focusNode,
+                    VoidCallback onFieldSubmitted,
+                  ) {
+                    return TextField(
+                      controller: controller,
+                      focusNode: focusNode,
+                      keyboardType: TextInputType.text,
+                      onChanged: _isClienteMode ? null : _onNameChanged,
+                      readOnly: _isClienteMode,
+                      enabled: !_isClienteMode,
+                      decoration: InputDecoration(
+                        labelText: 'Nombre y Apellido del Cliente',
+                        hintText: _isClienteMode ? 'Cliente autenticado' : 'Ingrese nombre y apellido',
+                        prefixIcon: Icon(
+                          Icons.person,
+                          color: _isClienteMode ? Colors.grey : null,
+                        ),
+                        border: const OutlineInputBorder(),
+                        filled: _isClienteMode,
+                        fillColor: _isClienteMode ? Colors.grey.withOpacity(0.1) : null,
+                        suffixIcon: _isClienteMode 
+                          ? const Icon(Icons.lock, color: Colors.grey)
+                          : IconButton(
+                              icon: const Icon(Icons.search),
+                              onPressed: _triggerSearch,
+                            ),
+                      ),
+                    );
+                  },
+                  optionsViewBuilder: (
+                    BuildContext context,
+                    AutocompleteOnSelected<Map<String, dynamic>> onSelected,
+                    Iterable<Map<String, dynamic>> options,
+                  ) {
+                    final optionList = options.toList();
+                    return Align(
+                      alignment: Alignment.topLeft,
+                      child: Material(
+                        elevation: 4.0,
+                        child: ConstrainedBox(
+                          constraints: const BoxConstraints(maxHeight: 240),
+                          child: ListView.separated(
+                            padding: EdgeInsets.zero,
+                            shrinkWrap: true,
+                            itemCount: optionList.length,
+                            separatorBuilder: (_, __) => const Divider(height: 1),
+                            itemBuilder: (context, index) {
+                              final client = optionList[index];
+                              final nombre = _formatClientName(client);
+                              final cedula = client['cedula']?.toString() ?? '';
+                              final finca = _formatFincaName(client);
+                              final subtitleParts = <String>[];
+                              if (cedula.isNotEmpty) {
+                                subtitleParts.add('Cédula: $cedula');
+                              }
+                              if (finca.isNotEmpty) {
+                                subtitleParts.add('Finca: $finca');
+                              }
+                              return ListTile(
+                                title: Text(nombre.isEmpty ? 'Cliente sin nombre' : nombre),
+                                subtitle: subtitleParts.isEmpty
+                                    ? null
+                                    : Text(subtitleParts.join(' | ')),
+                                onTap: () => onSelected(client),
+                              );
+                            },
+                          ),
+                        ),
+                      ),
+                    );
+                  },
                 ),
               ),
             ],
@@ -399,96 +523,102 @@ class _MokoAuditScreenState extends State<MokoAuditScreen> {
     );
   }
 
-  Future<void> _searchClientByCedula() async {
-    final cedula = _cedulaController.text.trim();
-    if (cedula.isEmpty) {
+  String _formatClientName(Map<String, dynamic> client) {
+    final nombre = client['nombre']?.toString() ?? '';
+    final apellidos = client['apellidos']?.toString() ?? '';
+    return '$nombre $apellidos'.trim();
+  }
+
+  String _formatFincaName(Map<String, dynamic> client) {
+    return (client['fincaNombre'] ?? client['nombreFinca'] ?? '').toString();
+  }
+
+  void _onNameChanged(String value) {
+    final query = value.trim();
+    _searchDebounce?.cancel();
+    final queryChanged = query != _lastQuery;
+    _lastQuery = query;
+
+    if (_selectedClient != null) {
+      final selectedName = _formatClientName(_selectedClient!).toLowerCase();
+      if (selectedName != query.toLowerCase()) {
+        setState(() {
+          _selectedClient = null;
+        });
+        _clientService.clearSelectedClient();
+      }
+    }
+
+    if (query.length < 2) {
+      if (_clientSuggestions.isNotEmpty) {
+        setState(() {
+          _clientSuggestions = [];
+        });
+      }
+      return;
+    }
+
+    if (queryChanged && _clientSuggestions.isNotEmpty) {
+      setState(() {
+        _clientSuggestions = [];
+      });
+    }
+
+    _searchDebounce = Timer(
+      const Duration(milliseconds: 350),
+      () => _fetchClientSuggestions(query),
+    );
+  }
+
+  Future<void> _fetchClientSuggestions(String query) async {
+    try {
+      final clients = await _clientService.searchClientsByName(query);
+      if (!mounted || query != _lastQuery) {
+        return;
+      }
+      setState(() {
+        _clientSuggestions = clients;
+      });
+    } catch (e) {
+      if (!mounted || query != _lastQuery) {
+        return;
+      }
+      setState(() {
+        _clientSuggestions = [];
+      });
+    }
+  }
+
+  Future<void> _triggerSearch() async {
+    final query = _nombreController.text.trim();
+    _lastQuery = query;
+    if (query.length < 2) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Ingrese una cédula para buscar.'),
+          content: Text('Ingrese al menos 2 letras para buscar'),
           backgroundColor: Colors.orange,
         ),
       );
       return;
     }
 
-    // Mostrar indicador de carga
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => const AlertDialog(
-        content: Row(
-          children: [
-            CircularProgressIndicator(),
-            SizedBox(width: 16),
-            Text('Buscando cliente...'),
-          ],
-        ),
-      ),
-    );
-
-    try {
-      final client = await _clientService.searchClientByCedula(cedula);
-
-      // Cerrar diálogo de carga
-      if (mounted) Navigator.of(context).pop();
-
-      if (client != null) {
-        setState(() {
-          _selectedClient = client;
-        });
-
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Cliente encontrado y seleccionado.'),
-              backgroundColor: Colors.green,
-              duration: Duration(seconds: 2),
-            ),
-          );
-        }
-      } else {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('No se encontró ningún cliente con esta cédula'),
-              backgroundColor: Colors.orange,
-              duration: Duration(seconds: 3),
-            ),
-          );
-        }
-      }
-    } catch (e) {
-      // Cerrar diálogo de carga si hay error
-      if (mounted) Navigator.of(context).pop();
-
-      String errorMessage = 'Error al buscar cliente';
-      if (e.toString().contains('Failed to fetch') ||
-          e.toString().contains('Error de conexión')) {
-        errorMessage =
-            'No se pudo conectar con el servidor. Por favor:\n'
-            '1. Verifique su conexión a internet\n'
-            '2. Compruebe que el servidor esté en línea\n'
-            '3. Intente nuevamente en unos momentos';
-      } else {
-        errorMessage = 'Error al buscar cliente: $e';
-      }
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(errorMessage),
-            backgroundColor: Colors.red,
-            duration: const Duration(seconds: 5),
-            action: SnackBarAction(
-              label: 'OK',
-              textColor: Colors.white,
-              onPressed: () {
-                ScaffoldMessenger.of(context).hideCurrentSnackBar();
-              },
-            ),
-          ),
-        );
-      }
+    await _fetchClientSuggestions(query);
+    if (!mounted) {
+      return;
     }
+
+    if (_clientSuggestions.length == 1) {
+      final client = _clientSuggestions.first;
+      setState(() {
+        _selectedClient = client;
+        _clientSuggestions = [];
+      });
+      _clientService.saveSelectedClient(client);
+      _nombreController.text = _formatClientName(client);
+      _nombreFocusNode.unfocus();
+      return;
+    }
+
+    _nombreFocusNode.requestFocus();
   }
 }

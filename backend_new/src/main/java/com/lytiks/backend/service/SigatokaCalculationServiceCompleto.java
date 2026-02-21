@@ -2,10 +2,11 @@ package com.lytiks.backend.service;
 
 import com.lytiks.backend.entity.*;
 import com.lytiks.backend.repository.*;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import lombok.extern.slf4j.Slf4j;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -16,9 +17,10 @@ import java.util.*;
  * Implementa TODAS las fórmulas del formato Excel
  */
 @Service
-@Slf4j
 @Transactional
 public class SigatokaCalculationServiceCompleto {
+    
+    private static final Logger log = LoggerFactory.getLogger(SigatokaCalculationServiceCompleto.class);
     
     private static final int SCALE = 2;
     private static final RoundingMode ROUNDING = RoundingMode.HALF_UP;

@@ -2,10 +2,11 @@ package com.lytiks.backend.service;
 
 import com.lytiks.backend.entity.*;
 import com.lytiks.backend.repository.*;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import lombok.extern.slf4j.Slf4j;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -35,9 +36,10 @@ import java.util.List;
  * EE 5ta hoja = f×80×k
  */
 @Service
-@Slf4j
 @Transactional
 public class SigatokaCalculationService {
+    
+    private static final Logger log = LoggerFactory.getLogger(SigatokaCalculationService.class);
     
     @Autowired
     private SigatokaMuestraRepository muestraRepository;

@@ -8,7 +8,7 @@ import 'package:flutter/foundation.dart';
 class OfflineStorageService {
   static Database? _database;
   static const String _databaseName = 'lytiks_offline.db';
-  static const int _databaseVersion = 3;
+  static const int _databaseVersion = 6;
 
   // Singleton
   static final OfflineStorageService _instance =
@@ -31,6 +31,18 @@ class OfflineStorageService {
 
   Future<Database> _initDatabase() async {
     try {
+      // Usar databaseFactoryFfi solo para plataformas desktop (NO Web)
+      if (!kIsWeb && (Platform.isWindows || Platform.isLinux || Platform.isMacOS)) {
+        sqfliteFfiInit();
+        databaseFactory = databaseFactoryFfi;
+      }
+      
+      // En Web, la funcionalidad de base de datos local no está disponible
+      if (kIsWeb) {
+        debugPrint('⚠️ Base de datos local no disponible en Web. Los datos se guardarán solo en el servidor.');
+        throw UnsupportedError('SQLite no está disponible en plataforma Web');
+      }
+      
       String path = join(await getDatabasesPath(), _databaseName);
       debugPrint('🗄️ Inicializando base de datos en: $path');
 
@@ -80,6 +92,48 @@ class OfflineStorageService {
       ''');
       debugPrint('✅ Tabla pending_sigatoka_audits añadida en upgrade');
     }
+    if (oldVersion < 4) {
+      // Crear tabla para seguimiento de ubicación de técnicos
+      await db.execute('''
+        CREATE TABLE IF NOT EXISTS location_tracking (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          user_id TEXT NOT NULL,
+          user_name TEXT,
+          latitude REAL NOT NULL,
+          longitude REAL NOT NULL,
+          accuracy REAL,
+          matrix_latitude REAL,
+          matrix_longitude REAL,
+          timestamp TEXT NOT NULL,
+          is_synced INTEGER DEFAULT 0
+        )
+      ''');
+      debugPrint('✅ Tabla location_tracking añadida en upgrade');
+    }
+    if (oldVersion < 5) {
+      // Agregar columnas para trayecto de ubicaciones en auditorías
+      await db.execute('ALTER TABLE pending_audits ADD COLUMN trayecto_ubicaciones TEXT');
+      await db.execute('ALTER TABLE pending_audits ADD COLUMN inicio_evaluacion TEXT');
+      await db.execute('ALTER TABLE pending_audits ADD COLUMN fin_evaluacion TEXT');
+      debugPrint('✅ Columnas de trayecto añadidas a pending_audits en upgrade');
+    }
+    if (oldVersion < 6) {
+      // Crear tabla para plan de seguimiento Moko pendiente
+      await db.execute('''
+        CREATE TABLE IF NOT EXISTS pending_plan_moko_updates (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          foco_id INTEGER,
+          plan_seg_moko_id INTEGER,
+          ejecucion_plan_id INTEGER,
+          tareas_completadas TEXT,
+          observaciones TEXT,
+          finalizar INTEGER DEFAULT 1,
+          created_at TEXT,
+          is_synced INTEGER DEFAULT 0
+        )
+      ''');
+      debugPrint('✅ Tabla pending_plan_moko_updates añadida en upgrade');
+    }
   }
 
   Future<void> _onCreate(Database db, int version) async {
@@ -100,6 +154,9 @@ class OfflineStorageService {
           latitude REAL,
           longitude REAL,
           image_path TEXT,
+          trayecto_ubicaciones TEXT,
+          inicio_evaluacion TEXT,
+          fin_evaluacion TEXT,
           created_at TEXT,
           is_synced INTEGER DEFAULT 0
         )
@@ -123,6 +180,22 @@ class OfflineStorageService {
       ''');
       debugPrint('✅ Tabla pending_moko_audits creada');
 
+      // Tabla para plan de seguimiento Moko pendiente
+      await db.execute('''
+        CREATE TABLE pending_plan_moko_updates (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          foco_id INTEGER,
+          plan_seg_moko_id INTEGER,
+          ejecucion_plan_id INTEGER,
+          tareas_completadas TEXT,
+          observaciones TEXT,
+          finalizar INTEGER DEFAULT 1,
+          created_at TEXT,
+          is_synced INTEGER DEFAULT 0
+        )
+      ''');
+      debugPrint('✅ Tabla pending_plan_moko_updates creada');
+
       // Tabla para auditorías Sigatoka pendientes
       await db.execute('''
         CREATE TABLE pending_sigatoka_audits (
@@ -145,6 +218,23 @@ class OfflineStorageService {
         )
       ''');
       debugPrint('✅ Tabla pending_sigatoka_audits creada');
+
+      // Tabla para seguimiento de ubicación de técnicos
+      await db.execute('''
+        CREATE TABLE location_tracking (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          user_id TEXT NOT NULL,
+          user_name TEXT,
+          latitude REAL NOT NULL,
+          longitude REAL NOT NULL,
+          accuracy REAL,
+          matrix_latitude REAL,
+          matrix_longitude REAL,
+          timestamp TEXT NOT NULL,
+          is_synced INTEGER DEFAULT 0
+        )
+      ''');
+      debugPrint('✅ Tabla location_tracking creada');
 
       // Tabla para clientes pendientes
       await db.execute('''
@@ -201,6 +291,9 @@ class OfflineStorageService {
     double? latitude,
     double? longitude,
     String? imagePath,
+    List<Map<String, dynamic>>? trayectoUbicaciones,
+    String? inicioEvaluacion,
+    String? finEvaluacion,
   }) async {
     final db = await database;
     return await db.insert('pending_audits', {
@@ -214,6 +307,9 @@ class OfflineStorageService {
       'latitude': latitude,
       'longitude': longitude,
       'image_path': imagePath,
+      'trayecto_ubicaciones': trayectoUbicaciones != null ? jsonEncode(trayectoUbicaciones) : null,
+      'inicio_evaluacion': inicioEvaluacion,
+      'fin_evaluacion': finEvaluacion,
       'created_at': DateTime.now().toIso8601String(),
       'is_synced': 0,
     });
@@ -289,6 +385,48 @@ class OfflineStorageService {
     final db = await database;
     await db.update(
       'pending_moko_audits',
+      {'is_synced': 1},
+      where: 'id = ?',
+      whereArgs: [id],
+    );
+  }
+
+  // PLAN SEGUIMIENTO MOKO
+  Future<int> savePendingPlanMokoUpdate({
+    required int focoId,
+    required int planSeguimientoId,
+    int? ejecucionPlanId,
+    required List<int> tareasCompletadas,
+    String? observaciones,
+    bool finalizar = true,
+  }) async {
+    final db = await database;
+    return await db.insert('pending_plan_moko_updates', {
+      'foco_id': focoId,
+      'plan_seg_moko_id': planSeguimientoId,
+      'ejecucion_plan_id': ejecucionPlanId,
+      'tareas_completadas': jsonEncode(tareasCompletadas),
+      'observaciones': observaciones,
+      'finalizar': finalizar ? 1 : 0,
+      'created_at': DateTime.now().toIso8601String(),
+      'is_synced': 0,
+    });
+  }
+
+  Future<List<Map<String, dynamic>>> getPendingPlanMokoUpdates() async {
+    final db = await database;
+    return await db.query(
+      'pending_plan_moko_updates',
+      where: 'is_synced = ?',
+      whereArgs: [0],
+      orderBy: 'created_at DESC',
+    );
+  }
+
+  Future<void> markPlanMokoUpdateAsSynced(int id) async {
+    final db = await database;
+    await db.update(
+      'pending_plan_moko_updates',
       {'is_synced': 1},
       where: 'id = ?',
       whereArgs: [id],
@@ -473,6 +611,14 @@ class OfflineStorageService {
         ) ??
         0;
 
+    final planMokoCount =
+        Sqflite.firstIntValue(
+          await db.rawQuery(
+            'SELECT COUNT(*) FROM pending_plan_moko_updates WHERE is_synced = 0',
+          ),
+        ) ??
+        0;
+
     final sigatokaCount =
         Sqflite.firstIntValue(
           await db.rawQuery(
@@ -497,7 +643,7 @@ class OfflineStorageService {
         ) ??
         0;
 
-    return auditCount + mokoCount + sigatokaCount + clientCount + photoCount;
+    return auditCount + mokoCount + planMokoCount + sigatokaCount + clientCount + photoCount;
   }
 
   // LIMPIAR DATOS SINCRONIZADOS
@@ -505,6 +651,7 @@ class OfflineStorageService {
     final db = await database;
     await db.delete('pending_audits', where: 'is_synced = 1');
     await db.delete('pending_moko_audits', where: 'is_synced = 1');
+    await db.delete('pending_plan_moko_updates', where: 'is_synced = 1');
     await db.delete('pending_sigatoka_audits', where: 'is_synced = 1');
     await db.delete('pending_clients', where: 'is_synced = 1');
     await db.delete('pending_audit_photos', where: 'is_synced = 1');
@@ -515,6 +662,7 @@ class OfflineStorageService {
     final db = await database;
     await db.delete('pending_audits');
     await db.delete('pending_moko_audits');
+    await db.delete('pending_plan_moko_updates');
     await db.delete('pending_sigatoka_audits');
     await db.delete('pending_clients');
     await db.delete('pending_audit_photos');

@@ -2,6 +2,7 @@ import 'dart:async' as dart_async;
 
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:geolocator/geolocator.dart';
 import '../services/offline_storage_service.dart';
 import '../services/client_service.dart';
 
@@ -18,7 +19,9 @@ class AuditItem {
 }
 
 class AuditScreen extends StatefulWidget {
-  const AuditScreen({super.key});
+  final Map<String, dynamic>? clientData;
+
+  const AuditScreen({super.key, this.clientData});
 
   @override
   State<AuditScreen> createState() => _AuditScreenState();
@@ -26,18 +29,138 @@ class AuditScreen extends StatefulWidget {
 
 class _AuditScreenState extends State<AuditScreen> {
   final OfflineStorageService _offlineStorageCampo = OfflineStorageService();
-  final TextEditingController _cedulaController = TextEditingController();
+  final TextEditingController _nombreController = TextEditingController();
+  final FocusNode _nombreFocusNode = FocusNode();
   final ClientService _clientService = ClientService();
   final ImagePicker _picker = ImagePicker();
 
   Map<String, dynamic>? _selectedClient;
+  List<Map<String, dynamic>> _clientSuggestions = [];
+  dart_async.Timer? _searchDebounce;
+  String _lastQuery = '';
   bool _isBasicMode = true;
   String _selectedCrop = 'banano';
+  
+  // Estado de expansión de las secciones (todas colapsadas por defecto)
+  final Map<String, bool> _expandedSections = {};
+
+  // Variables para tracking de ubicación/trayecto
+  List<Map<String, dynamic>> _trayectoUbicaciones = [];
+  dart_async.Timer? _locationTimer;
+  bool _isTrackingLocation = false;
+  DateTime? _inicioEvaluacion;
+  
+  // Modo cliente: bloquea búsqueda de cliente y seguimiento de ubicación
+  bool _isClienteMode = false;
 
   @override
   void initState() {
     super.initState();
     _initializeDatabase();
+    
+    if (widget.clientData != null) {
+      _selectedClient = widget.clientData;
+      _nombreController.text = _formatClientName(widget.clientData!);
+      _clientService.saveSelectedClient(widget.clientData!);
+      
+      // Verificar si es modo cliente (usuario con rol CLIENTE)
+      _isClienteMode = widget.clientData!['isCliente'] == true;
+    } else {
+      _loadStoredClient();
+    }
+    
+    // Solo iniciar tracking si NO es modo cliente
+    if (!_isClienteMode) {
+      _iniciarTrackingUbicacion();
+    }
+  }
+
+  Future<void> _loadStoredClient() async {
+    final stored = await _clientService.getSelectedClient();
+    if (!mounted || stored == null) {
+      return;
+    }
+    setState(() {
+      _selectedClient = stored;
+      _nombreController.text = _formatClientName(stored);
+    });
+  }
+
+  @override
+  void dispose() {
+    _detenerTrackingUbicacion(); // Detener tracking al cerrar
+    _searchDebounce?.cancel();
+    _nombreController.dispose();
+    _nombreFocusNode.dispose();
+    super.dispose();
+  }
+
+  /// Inicia el tracking de ubicación periódico
+  Future<void> _iniciarTrackingUbicacion() async {
+    _inicioEvaluacion = DateTime.now();
+    
+    try {
+      // Verificar permisos
+      LocationPermission permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+        if (permission == LocationPermission.denied) {
+          debugPrint('⚠️ Permiso de ubicación denegado');
+          return;
+        }
+      }
+
+      if (permission == LocationPermission.deniedForever) {
+        debugPrint('⚠️ Permisos de ubicación permanentemente denegados');
+        return;
+      }
+
+      _isTrackingLocation = true;
+
+      // Capturar ubicación inicial
+      await _capturarUbicacion();
+
+      // Iniciar timer para capturar cada 30 segundos
+      _locationTimer = dart_async.Timer.periodic(
+        const Duration(seconds: 30),
+        (timer) => _capturarUbicacion(),
+      );
+
+      debugPrint('✅ Tracking de ubicación iniciado');
+    } catch (e) {
+      debugPrint('❌ Error al iniciar tracking: $e');
+    }
+  }
+
+  /// Captura la ubicación actual y la agrega al trayecto
+  Future<void> _capturarUbicacion() async {
+    if (!_isTrackingLocation) return;
+
+    try {
+      Position position = await Geolocator.getCurrentPosition(
+        desiredAccuracy: LocationAccuracy.high,
+      );
+
+      _trayectoUbicaciones.add({
+        'latitud': position.latitude,
+        'longitud': position.longitude,
+        'altitud': position.altitude,
+        'precision': position.accuracy,
+        'timestamp': DateTime.now().toIso8601String(),
+      });
+
+      debugPrint('📍 Ubicación capturada: ${position.latitude}, ${position.longitude} (Total: ${_trayectoUbicaciones.length})');
+    } catch (e) {
+      debugPrint('❌ Error al capturar ubicación: $e');
+    }
+  }
+
+  /// Detiene el tracking de ubicación
+  void _detenerTrackingUbicacion() {
+    _locationTimer?.cancel();
+    _locationTimer = null;
+    _isTrackingLocation = false;
+    debugPrint('⏹️ Tracking de ubicación detenido. Total puntos: ${_trayectoUbicaciones.length}');
   }
 
   dart_async.Future<void> _initializeDatabase() async {
@@ -152,15 +275,42 @@ class _AuditScreenState extends State<AuditScreen> {
             const SizedBox(height: 20),
             _buildClientSearchSection(),
             const SizedBox(height: 20),
-            _buildConfigurationCard(),
-            const SizedBox(height: 20),
-            ..._auditSections.entries
-                .map((entry) => _buildAuditSection(entry.key, entry.value))
-                .toList(),
-            const SizedBox(height: 20),
-            _buildSaveButton(),
+            if (_selectedClient == null) ...[
+              _buildClientRequiredNotice(),
+            ] else ...[
+              _buildConfigurationCard(),
+              const SizedBox(height: 20),
+              ..._auditSections.entries
+                  .map((entry) => _buildAuditSection(entry.key, entry.value))
+                  .toList(),
+              const SizedBox(height: 20),
+              _buildSaveButton(),
+            ],
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildClientRequiredNotice() {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.amber.shade50,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.amber.shade200),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.warning_amber_rounded, color: Colors.amber.shade700),
+          const SizedBox(width: 12),
+          const Expanded(
+            child: Text(
+              'Seleccione un cliente para continuar con la auditoría.',
+              style: TextStyle(fontWeight: FontWeight.w600),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -269,19 +419,103 @@ class _AuditScreenState extends State<AuditScreen> {
           Row(
             children: [
               Expanded(
-                child: TextField(
-                  controller: _cedulaController,
-                  keyboardType: TextInputType.number,
-                  decoration: InputDecoration(
-                    labelText: 'Cédula del Cliente',
-                    hintText: 'Ingrese la cédula',
-                    prefixIcon: const Icon(Icons.badge),
-                    border: const OutlineInputBorder(),
-                    suffixIcon: IconButton(
-                      icon: const Icon(Icons.search),
-                      onPressed: _searchClientByCedula,
-                    ),
-                  ),
+                child: RawAutocomplete<Map<String, dynamic>>(
+                  textEditingController: _nombreController,
+                  focusNode: _nombreFocusNode,
+                  displayStringForOption: _formatClientName,
+                  optionsBuilder: (TextEditingValue value) {
+                    final query = value.text.trim();
+                    if (query.length < 2 || query != _lastQuery) {
+                      return const Iterable<Map<String, dynamic>>.empty();
+                    }
+                    return _clientSuggestions;
+                  },
+                  onSelected: (client) {
+                    if (!mounted) {
+                      return;
+                    }
+                    setState(() {
+                      _selectedClient = client;
+                      _clientSuggestions = [];
+                    });
+                    _clientService.saveSelectedClient(client);
+                  },
+                  fieldViewBuilder: (
+                    BuildContext context,
+                    TextEditingController controller,
+                    FocusNode focusNode,
+                    VoidCallback onFieldSubmitted,
+                  ) {
+                    return TextField(
+                      controller: controller,
+                      focusNode: focusNode,
+                      keyboardType: TextInputType.text,
+                      onChanged: _isClienteMode ? null : _onNameChanged,
+                      readOnly: _isClienteMode,
+                      enabled: !_isClienteMode,
+                      decoration: InputDecoration(
+                        labelText: 'Nombre y Apellido del Cliente',
+                        hintText: _isClienteMode ? 'Cliente autenticado' : 'Ingrese nombre y apellido',
+                        prefixIcon: Icon(
+                          Icons.person,
+                          color: _isClienteMode ? Colors.grey : null,
+                        ),
+                        border: const OutlineInputBorder(),
+                        filled: _isClienteMode,
+                        fillColor: _isClienteMode ? Colors.grey.withOpacity(0.1) : null,
+                        suffixIcon: _isClienteMode 
+                          ? const Icon(Icons.lock, color: Colors.grey)
+                          : IconButton(
+                              icon: const Icon(Icons.search),
+                              onPressed: _triggerSearch,
+                            ),
+                      ),
+                    );
+                  },
+                  optionsViewBuilder: (
+                    BuildContext context,
+                    AutocompleteOnSelected<Map<String, dynamic>> onSelected,
+                    Iterable<Map<String, dynamic>> options,
+                  ) {
+                    final optionList = options.toList();
+                    return Align(
+                      alignment: Alignment.topLeft,
+                      child: Material(
+                        elevation: 4.0,
+                        child: ConstrainedBox(
+                          constraints: const BoxConstraints(maxHeight: 240),
+                          child: ListView.separated(
+                            padding: EdgeInsets.zero,
+                            shrinkWrap: true,
+                            itemCount: optionList.length,
+                            separatorBuilder: (_, __) => const Divider(height: 1),
+                            itemBuilder: (context, index) {
+                              final client = optionList[index];
+                              final nombre = _formatClientName(client);
+                              final cedula = client['cedula']?.toString() ?? '';
+                              final finca = _formatFincaName(client);
+                              final subtitleParts = <String>[];
+                              if (cedula.isNotEmpty) {
+                                subtitleParts.add('Cedula: $cedula');
+                              }
+                              if (finca.isNotEmpty) {
+                                subtitleParts.add('Finca: $finca');
+                              }
+                              return ListTile(
+                                title: Text(
+                                  nombre.isEmpty ? 'Cliente sin nombre' : nombre,
+                                ),
+                                subtitle: subtitleParts.isEmpty
+                                    ? null
+                                    : Text(subtitleParts.join(' | ')),
+                                onTap: () => onSelected(client),
+                              );
+                            },
+                          ),
+                        ),
+                      ),
+                    );
+                  },
                 ),
               ),
             ],
@@ -313,13 +547,13 @@ class _AuditScreenState extends State<AuditScreen> {
                         if (_selectedClient!['telefono'] != null &&
                             _selectedClient!['telefono'].toString().isNotEmpty)
                           Text(
-                            'Teléfono: ${_selectedClient!['telefono']}',
+                            'Telefono: ${_selectedClient!['telefono']}',
                             style: const TextStyle(fontSize: 12),
                           ),
                         if (_selectedClient!['direccion'] != null &&
                             _selectedClient!['direccion'].toString().isNotEmpty)
                           Text(
-                            'Dirección: ${_selectedClient!['direccion']}',
+                            'Direccion: ${_selectedClient!['direccion']}',
                             style: const TextStyle(fontSize: 12),
                           ),
                       ],
@@ -334,66 +568,115 @@ class _AuditScreenState extends State<AuditScreen> {
     );
   }
 
-  dart_async.Future<void> _searchClientByCedula() async {
-    final cedula = _cedulaController.text.trim();
-    if (cedula.isEmpty) {
+  String _formatClientName(Map<String, dynamic> client) {
+    final nombre = client['nombre']?.toString() ?? '';
+    final apellidos = client['apellidos']?.toString() ?? '';
+    return '$nombre $apellidos'.trim();
+  }
+
+  String _formatFincaName(Map<String, dynamic> client) {
+    return (client['fincaNombre'] ?? client['nombreFinca'] ?? '').toString();
+  }
+
+  void _onNameChanged(String value) {
+    final query = value.trim();
+    _searchDebounce?.cancel();
+    final queryChanged = query != _lastQuery;
+    _lastQuery = query;
+
+    if (_selectedClient != null) {
+      final selectedName = _formatClientName(_selectedClient!).toLowerCase();
+      if (selectedName != query.toLowerCase()) {
+        setState(() {
+          _selectedClient = null;
+        });
+        _clientService.clearSelectedClient();
+      }
+    }
+
+    // Determinar si es búsqueda por cédula (numérico) o por nombre (texto)
+    final isNumeric = RegExp(r'^[0-9]+$').hasMatch(query);
+    final minLength = isNumeric ? 4 : 2; // 4 dígitos para cédula, 2 letras para nombre
+
+    if (query.length < minLength) {
+      if (_clientSuggestions.isNotEmpty) {
+        setState(() {
+          _clientSuggestions = [];
+        });
+      }
+      return;
+    }
+
+    if (queryChanged && _clientSuggestions.isNotEmpty) {
+      setState(() {
+        _clientSuggestions = [];
+      });
+    }
+
+    _searchDebounce = dart_async.Timer(
+      const Duration(milliseconds: 350),
+      () => _fetchClientSuggestions(query),
+    );
+  }
+
+  Future<void> _fetchClientSuggestions(String query) async {
+    try {
+      final clients = await _clientService.searchClientsByName(query);
+      if (!mounted || query != _lastQuery) {
+        return;
+      }
+      setState(() {
+        _clientSuggestions = clients;
+      });
+    } catch (e) {
+      if (!mounted || query != _lastQuery) {
+        return;
+      }
+      setState(() {
+        _clientSuggestions = [];
+      });
+    }
+  }
+
+  Future<void> _triggerSearch() async {
+    final query = _nombreController.text.trim();
+    _lastQuery = query;
+    
+    // Determinar si es búsqueda por cédula (numérico) o por nombre (texto)
+    final isNumeric = RegExp(r'^[0-9]+$').hasMatch(query);
+    final minLength = isNumeric ? 4 : 2; // 4 dígitos para cédula, 2 letras para nombre
+    
+    if (query.length < minLength) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Ingrese un número de cédula'),
+        SnackBar(
+          content: Text(isNumeric 
+            ? 'Ingrese al menos 4 dígitos de la cédula para buscar'
+            : 'Ingrese al menos 2 letras del nombre para buscar'),
           backgroundColor: Colors.orange,
+          duration: const Duration(seconds: 2),
         ),
       );
       return;
     }
 
-    try {
-      // Mostrar indicador de carga
-      showDialog(
-        context: context,
-        barrierDismissible: false,
-        builder: (context) => const AlertDialog(
-          content: Row(
-            children: [
-              CircularProgressIndicator(),
-              SizedBox(width: 16),
-              Text('Buscando cliente...'),
-            ],
-          ),
-        ),
-      );
-
-      final response = await _clientService.searchClientByCedula(cedula);
-
-      // Cerrar diálogo de carga
-      Navigator.of(context).pop();
-
-      if (response != null) {
-        setState(() {
-          _selectedClient = response;
-        });
-
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Cliente encontrado: ${response['nombre']}'),
-            backgroundColor: Colors.green,
-          ),
-        );
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Cliente no encontrado'),
-            backgroundColor: Colors.orange,
-          ),
-        );
-      }
-    } catch (e) {
-      // Cerrar diálogo de carga si hay error
-      Navigator.of(context).pop();
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
-      );
+    await _fetchClientSuggestions(query);
+    if (!mounted) {
+      return;
     }
+
+    if (_clientSuggestions.length == 1) {
+      final client = _clientSuggestions.first;
+      setState(() {
+        _selectedClient = client;
+        _clientSuggestions = [];
+      });
+      _clientService.saveSelectedClient(client);
+      _nombreController.text = _formatClientName(client);
+      _nombreFocusNode.unfocus();
+      return;
+    }
+
+    _nombreFocusNode.requestFocus();
   }
 
   Widget _buildConfigurationCard() {
@@ -599,35 +882,88 @@ class _AuditScreenState extends State<AuditScreen> {
   }
 
   Widget _buildAuditSection(String sectionName, List<AuditItem> items) {
+    // Inicializar estado de expansión si no existe
+    _expandedSections.putIfAbsent(sectionName, () => false);
+    
+    final isExpanded = _expandedSections[sectionName] ?? false;
+    
+    // Calcular puntuación total de la sección
+    int totalScore = 0;
+    int maxScore = 0;
+    for (var item in items) {
+      maxScore += item.maxScore;
+      if (item.calculatedScore != null) {
+        totalScore += item.calculatedScore!;
+      }
+    }
+    
     return Container(
-      margin: const EdgeInsets.only(bottom: 16),
-      padding: const EdgeInsets.all(16),
+      margin: const EdgeInsets.only(bottom: 12),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(12),
         boxShadow: [
           BoxShadow(
             color: Colors.grey.withOpacity(0.1),
             spreadRadius: 1,
-            blurRadius: 3,
-            offset: const Offset(0, 1),
+            blurRadius: 4,
+            offset: const Offset(0, 2),
           ),
         ],
+        border: Border.all(
+          color: isExpanded ? const Color(0xFF004B63) : Colors.grey[300]!,
+          width: isExpanded ? 2 : 1,
+        ),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            sectionName,
-            style: const TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
-              color: Color(0xFF004B63),
+      child: Theme(
+        data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+        child: ExpansionTile(
+          initiallyExpanded: isExpanded,
+          onExpansionChanged: (expanded) {
+            setState(() {
+              _expandedSections[sectionName] = expanded;
+            });
+          },
+          tilePadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+          leading: Container(
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(
+              color: isExpanded ? const Color(0xFF004B63) : Colors.grey[200],
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Icon(
+              isExpanded ? Icons.check_circle : Icons.expand_more,
+              color: isExpanded ? Colors.white : Colors.grey[600],
             ),
           ),
-          const SizedBox(height: 16),
-          ...items.map((item) => _buildAuditItem(item)).toList(),
-        ],
+          title: Text(
+            sectionName,
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.bold,
+              color: isExpanded ? const Color(0xFF004B63) : Colors.black87,
+            ),
+          ),
+          subtitle: totalScore > 0
+              ? Text(
+                  'Puntuación: $totalScore/$maxScore',
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: Colors.grey[600],
+                    fontWeight: FontWeight.w500,
+                  ),
+                )
+              : Text(
+                  'Toca para expandir',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Colors.grey[500],
+                  ),
+                ),
+          children: items.map((item) => _buildAuditItem(item)).toList(),
+        ),
       ),
     );
   }
@@ -825,6 +1161,30 @@ class _AuditScreenState extends State<AuditScreen> {
       }
     }
 
+    // Validar que haya foto en todas las evaluaciones completadas
+    final List<String> missingPhotoItems = [];
+    for (var section in _auditSections.values) {
+      for (var item in section) {
+        if (item.rating != null && item.photoPath == null) {
+          missingPhotoItems.add(item.name);
+        }
+      }
+    }
+
+    if (missingPhotoItems.isNotEmpty) {
+      final preview = missingPhotoItems.take(3).join(', ');
+      final extraCount = missingPhotoItems.length - 3;
+      final suffix = extraCount > 0 ? ' y $extraCount más' : '';
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Debe tomar foto para todas las evaluaciones. Faltan: $preview$suffix'),
+          backgroundColor: Colors.orange,
+          duration: const Duration(seconds: 4),
+        ),
+      );
+      return;
+    }
+
       Map<String, dynamic> auditData = {};
       for (final section in _auditSections.entries) {
         auditData[section.key] = section.value
@@ -863,7 +1223,13 @@ class _AuditScreenState extends State<AuditScreen> {
         auditData: [auditData], // Convertir el mapa en una lista
         observations:
         'Auditoría ${_isBasicMode ? 'básica' : 'completa'} de $_selectedCrop',
+        trayectoUbicaciones: _trayectoUbicaciones, // Agregar trayecto
+        inicioEvaluacion: _inicioEvaluacion?.toIso8601String(),
+        finEvaluacion: DateTime.now().toIso8601String(),
       );
+
+      // Detener tracking después de guardar
+      _detenerTrackingUbicacion();
 
       // Calcular puntuación solo sobre los ítems completados
       final int totalScore = _calculateTotalScore();
