@@ -34,6 +34,11 @@ class _ResumenSigatokaScreenState extends State<ResumenSigatokaScreen> {
   late double promedioHojasFuncionales3era, promedioHojasFuncionales4ta, promedioHojasFuncionales5ta;
   late double promedioLetras3era, promedioLetras4ta, promedioLetras5ta;
   late double ee3era, ee4ta, ee5ta;
+  
+  // Conteo de literales (a-j)
+  late Map<String, int> literales3era;
+  late Map<String, int> literales4ta;
+  late Map<String, int> literales5ta;
 
   @override
   void initState() {
@@ -86,7 +91,7 @@ class _ResumenSigatokaScreenState extends State<ResumenSigatokaScreen> {
         if (numero != null) {
           totalLesiones3era += numero;
           if (numero == 3) totalPlantas3erEstadio3era++;
-          if (numero > 0) totalPlantasConLesiones3era++;
+          totalPlantasConLesiones3era++; // Cada muestra = 1 planta evaluada (incluso con 0 lesiones)
         }
         // Calcular valor de letras: a=1, b=2, c=3, etc.
         String letras = grado.replaceAll(RegExp(r'[0-9]'), '').toLowerCase();
@@ -105,7 +110,7 @@ class _ResumenSigatokaScreenState extends State<ResumenSigatokaScreen> {
         if (numero != null) {
           totalLesiones4ta += numero;
           if (numero == 3) totalPlantas3erEstadio4ta++;
-          if (numero > 0) totalPlantasConLesiones4ta++;
+          totalPlantasConLesiones4ta++; // Cada muestra = 1 planta evaluada (incluso con 0 lesiones)
         }
         // Calcular valor de letras: a=1, b=2, c=3, etc.
         String letras = grado.replaceAll(RegExp(r'[0-9]'), '').toLowerCase();
@@ -124,7 +129,7 @@ class _ResumenSigatokaScreenState extends State<ResumenSigatokaScreen> {
         if (numero != null) {
           totalLesiones5ta += numero;
           if (numero == 3) totalPlantas3erEstadio5ta++;
-          if (numero > 0) totalPlantasConLesiones5ta++;
+          totalPlantasConLesiones5ta++; // Cada muestra = 1 planta evaluada (incluso con 0 lesiones)
         }
         // Calcular valor de letras: a=1, b=2, c=3, etc.
         String letras = grado.replaceAll(RegExp(r'[0-9]'), '').toLowerCase();
@@ -216,6 +221,34 @@ class _ResumenSigatokaScreenState extends State<ResumenSigatokaScreen> {
     ee3era = promedioLesiones3era * 120 * promedioLetras3era;
     ee4ta = promedioLesiones4ta * 100 * promedioLetras4ta;
     ee5ta = promedioLesiones5ta * 80 * promedioLetras5ta;
+    
+    // Calcular conteo de literales (a-j)
+    literales3era = _contarLiterales(todasLasMuestras, 'hoja3era');
+    literales4ta = _contarLiterales(todasLasMuestras, 'hoja4ta');
+    literales5ta = _contarLiterales(todasLasMuestras, 'hoja5ta');
+  }
+  
+  /// Cuenta cuántas veces aparece cada literal (a-j) en las hojas
+  Map<String, int> _contarLiterales(List<Map<String, dynamic>> muestras, String campo) {
+    final conteo = {
+      'a': 0, 'b': 0, 'c': 0, 'd': 0, 'e': 0,
+      'f': 0, 'g': 0, 'h': 0, 'i': 0, 'j': 0,
+    };
+    
+    for (var muestra in muestras) {
+      if (muestra[campo] != null) {
+        String valor = muestra[campo].toString().toLowerCase();
+        if (valor.isNotEmpty) {
+          // Extraer última letra: '2a' → 'a', '3b' → 'b'
+          String letra = valor[valor.length - 1];
+          if (conteo.containsKey(letra)) {
+            conteo[letra] = conteo[letra]! + 1;
+          }
+        }
+      }
+    }
+    
+    return conteo;
   }
 
   Future<void> _guardarResumen() async {
@@ -272,13 +305,21 @@ class _ResumenSigatokaScreenState extends State<ResumenSigatokaScreen> {
         'hvlq5_10w': promedioHvlq5_10w,
         'th10w': promedioTh10w,
       };
+      
+      // Preparar conteo de literales
+      final conteoLiterales = {
+        '3era': literales3era,
+        '4ta': literales4ta,
+        '5ta': literales5ta,
+      };
 
-      // Guardar en la base de datos
+      // Guardar en la base de datos (CALCULADO EN FRONTEND)
       final result = await _service.guardarResumenCompleto(
         widget.evaluacionId,
         resumenData,
         indicadoresData,
         stoverData,
+        conteoLiterales: conteoLiterales,
       );
 
       setState(() => isLoading = false);
@@ -343,6 +384,8 @@ class _ResumenSigatokaScreenState extends State<ResumenSigatokaScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            _buildConteoLiterales(),
+            const SizedBox(height: 24),
             _buildVariablesTable(),
             const SizedBox(height: 24),
             _buildEstadoEvolutivo(),
@@ -351,6 +394,112 @@ class _ResumenSigatokaScreenState extends State<ResumenSigatokaScreen> {
             const SizedBox(height: 24),
             _buildStoverPromedioReal(),
           ],
+        ),
+      ),
+    );
+  }
+  
+  /// Widget para mostrar el conteo de literales (a-j)
+  Widget _buildConteoLiterales() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Icon(Icons.format_list_numbered, color: Colors.purple[700], size: 24),
+            const SizedBox(width: 8),
+            Text(
+              '🔢 CONTEO DE LITERALES (a-j)',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: Colors.purple[700],
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        Container(
+          decoration: BoxDecoration(
+            border: Border.all(color: Colors.grey[300]!),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Table(
+            border: TableBorder.symmetric(inside: BorderSide(color: Colors.grey[300]!)),
+            columnWidths: const {
+              0: FlexColumnWidth(1.2),
+              1: FlexColumnWidth(1),
+              2: FlexColumnWidth(1),
+              3: FlexColumnWidth(1),
+              4: FlexColumnWidth(1.2),
+            },
+            children: [
+              // Header
+              TableRow(
+                decoration: BoxDecoration(color: Colors.purple[700]),
+                children: [
+                  _cellHeader('Literal'),
+                  _cellHeader('3era H'),
+                  _cellHeader('4ta H'),
+                  _cellHeader('5ta H'),
+                  _cellHeader('Total'),
+                ],
+              ),
+              // Filas a-j
+              for (var letra in ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j'])
+                TableRow(
+                  decoration: BoxDecoration(
+                    color: ['a', 'c', 'e', 'g', 'i'].contains(letra)
+                        ? Colors.purple[50]
+                        : Colors.white,
+                  ),
+                  children: [
+                    _cell(letra.toUpperCase(), bold: true),
+                    _cell(literales3era[letra].toString()),
+                    _cell(literales4ta[letra].toString()),
+                    _cell(literales5ta[letra].toString()),
+                    _cell(
+                      (literales3era[letra]! +
+                              literales4ta[letra]! +
+                              literales5ta[letra]!)
+                          .toString(),
+                      bold: true,
+                      color: Colors.purple[700]!,
+                    ),
+                  ],
+                ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+  
+  Widget _cellHeader(String text) {
+    return Padding(
+      padding: const EdgeInsets.all(10.0),
+      child: Text(
+        text,
+        textAlign: TextAlign.center,
+        style: TextStyle(
+          fontWeight: FontWeight.bold,
+          fontSize: 13,
+          color: Colors.white,
+        ),
+      ),
+    );
+  }
+
+  Widget _cell(String text, {bool bold = false, Color? color}) {
+    return Padding(
+      padding: const EdgeInsets.all(10.0),
+      child: Text(
+        text,
+        textAlign: TextAlign.center,
+        style: TextStyle(
+          fontSize: 13,
+          fontWeight: bold ? FontWeight.bold : FontWeight.normal,
+          color: color,
         ),
       ),
     );

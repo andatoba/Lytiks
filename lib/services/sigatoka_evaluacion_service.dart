@@ -386,23 +386,12 @@ class SigatokaEvaluacionService {
     int evaluacionId,
     Map<String, dynamic> resumenData,
     Map<String, dynamic> indicadoresData,
-    Map<String, dynamic> stoverData,
-  ) async {
+    Map<String, dynamic> stoverData, {
+    Map<String, dynamic>? conteoLiterales,
+  }) async {
     try {
-      // Intentar primero el endpoint actual de cálculo completo
-      final calcularResponse = await http.post(
-        Uri.parse('$baseUrl/$evaluacionId/calcular-todo'),
-        headers: {'Content-Type': 'application/json'},
-      );
-
-      if (calcularResponse.statusCode == 200 || calcularResponse.statusCode == 201) {
-        return {
-          'success': true,
-          'message': 'Resumen guardado correctamente',
-          'reporte': jsonDecode(calcularResponse.body),
-        };
-      }
-
+      print('📊 Guardando resumen calculado en FRONTEND (no recalcular en backend)');
+      
       // Guardar resumen
       final resumenResponse = await http.post(
         Uri.parse('$baseUrl/evaluaciones/$evaluacionId/resumen'),
@@ -416,6 +405,7 @@ class SigatokaEvaluacionService {
           'message': 'Error al guardar resumen: ${resumenResponse.body}',
         };
       }
+      print('✅ Resumen guardado');
       
       // Guardar indicadores (Estado Evolutivo)
       final indicadoresResponse = await http.post(
@@ -430,6 +420,7 @@ class SigatokaEvaluacionService {
           'message': 'Error al guardar indicadores: ${indicadoresResponse.body}',
         };
       }
+      print('✅ Indicadores guardados');
       
       // Guardar Stover promedio
       final stoverResponse = await http.post(
@@ -444,10 +435,30 @@ class SigatokaEvaluacionService {
           'message': 'Error al guardar Stover: ${stoverResponse.body}',
         };
       }
+      print('✅ Stover guardado');
+      
+      // Guardar conteo de literales si se proporciona
+      if (conteoLiterales != null) {
+        try {
+          final literalesResponse = await http.post(
+            Uri.parse('$baseUrl/evaluaciones/$evaluacionId/literales'),
+            headers: {'Content-Type': 'application/json'},
+            body: jsonEncode(conteoLiterales),
+          );
+          
+          if (literalesResponse.statusCode == 200 || literalesResponse.statusCode == 201) {
+            print('✅ Literales guardados');
+          } else {
+            print('⚠️ No se pudo guardar literales (endpoint puede no existir): ${literalesResponse.statusCode}');
+          }
+        } catch (e) {
+          print('⚠️ Error al guardar literales (opcional): $e');
+        }
+      }
       
       return {
         'success': true,
-        'message': 'Resumen guardado correctamente',
+        'message': 'Resumen guardado correctamente (calculado en app)',
       };
     } catch (e) {
       return {
