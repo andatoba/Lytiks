@@ -1,0 +1,4 @@
+#NOTE: This is a Maven Resolver internal implementation file, its format can be changed without prior notice.
+#Fri Feb 20 16:22:29 ECT 2026
+@default-central-https\://repo.maven.apache.org/maven2/.lastUpdated=1771622549138
+https\://repo.maven.apache.org/maven2/.error=Could not transfer artifact org.flywaydb\:flyway-mysql\:pom\:9.16.3 from/to central (https\://repo.maven.apache.org/maven2)\: transfer failed for https\://repo.maven.apache.org/maven2/org/flywaydb/flyway-mysql/9.16.3/flyway-mysql-9.16.3.pom

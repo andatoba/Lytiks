@@ -386,9 +386,8 @@ class SigatokaEvaluacionService {
     int evaluacionId,
     Map<String, dynamic> resumenData,
     Map<String, dynamic> indicadoresData,
-    Map<String, dynamic> stoverData, {
-    Map<String, dynamic>? conteoLiterales,
-  }) async {
+    Map<String, dynamic> stoverData,
+  ) async {
     try {
       print('📊 Guardando resumen calculado en FRONTEND (no recalcular en backend)');
       
@@ -436,25 +435,6 @@ class SigatokaEvaluacionService {
         };
       }
       print('✅ Stover guardado');
-      
-      // Guardar conteo de literales si se proporciona
-      if (conteoLiterales != null) {
-        try {
-          final literalesResponse = await http.post(
-            Uri.parse('$baseUrl/evaluaciones/$evaluacionId/literales'),
-            headers: {'Content-Type': 'application/json'},
-            body: jsonEncode(conteoLiterales),
-          );
-          
-          if (literalesResponse.statusCode == 200 || literalesResponse.statusCode == 201) {
-            print('✅ Literales guardados');
-          } else {
-            print('⚠️ No se pudo guardar literales (endpoint puede no existir): ${literalesResponse.statusCode}');
-          }
-        } catch (e) {
-          print('⚠️ Error al guardar literales (opcional): $e');
-        }
-      }
       
       return {
         'success': true,

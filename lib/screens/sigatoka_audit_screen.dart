@@ -479,8 +479,28 @@ class _SigatokaAuditScreenState extends State<SigatokaAuditScreen> {
       'th10w': double.tryParse(th10wController.text) ?? 0.0,
     };
 
+    int nextMuestra = (int.tryParse(muestraNumController.text) ?? 0) + 1;
+    if (nextMuestra > _muestraOptions.last) {
+      nextMuestra = _muestraOptions.last;
+    }
+
     setState(() {
       muestrasSesion.add(muestraData);
+      muestraNumController.text = nextMuestra.toString();
+      grado3eraController.clear();
+      grado4taController.clear();
+      grado5taController.clear();
+      totalHojas3eraController.clear();
+      totalHojas4taController.clear();
+      totalHojas5taController.clear();
+      hvle0wController.clear();
+      hvlq0wController.clear();
+      hvlq5_0wController.clear();
+      th0wController.clear();
+      hvle10wController.clear();
+      hvlq10wController.clear();
+      hvlq5_10wController.clear();
+      th10wController.clear();
     });
 
     ScaffoldMessenger.of(context).showSnackBar(
@@ -491,29 +511,7 @@ class _SigatokaAuditScreenState extends State<SigatokaAuditScreen> {
       ),
     );
 
-    // Limpiar solo los campos de la muestra, mantener lote para siguiente
-    int nextMuestra = (int.tryParse(muestraNumController.text) ?? 0) + 1;
-    if (nextMuestra > _muestraOptions.last) {
-      nextMuestra = _muestraOptions.last;
-    }
-    setState(() {
-      muestraNumController.text = nextMuestra.toString();
-    });
     // NO limpiar lote para facilitar ingreso múltiple
-    grado3eraController.clear();
-    grado4taController.clear();
-    grado5taController.clear();
-    totalHojas3eraController.clear();
-    totalHojas4taController.clear();
-    totalHojas5taController.clear();
-    hvle0wController.clear();
-    hvlq0wController.clear();
-    hvlq5_0wController.clear();
-    th0wController.clear();
-    hvle10wController.clear();
-    hvlq10wController.clear();
-    hvlq5_10wController.clear();
-    th10wController.clear();
   }
 
   @override
