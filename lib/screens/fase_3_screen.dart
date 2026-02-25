@@ -49,7 +49,7 @@ class _Fase3ScreenState extends State<Fase3Screen> {
     final ejecucionPlanId = parseInt(widget.ejecucion?['id']);
 
     return DefaultTabController(
-      length: 2,
+      length: 1,
       child: Scaffold(
         backgroundColor: Colors.grey[100],
         appBar: AppBar(
@@ -63,7 +63,6 @@ class _Fase3ScreenState extends State<Fase3Screen> {
             indicatorColor: Colors.white,
             tabs: [
               Tab(text: 'Detalles'),
-              Tab(text: 'Script'),
             ],
           ),
         ),
@@ -76,13 +75,6 @@ class _Fase3ScreenState extends State<Fase3Screen> {
               service: widget.service,
               observacionesOverride: _observacionesOverride,
               embedded: true,
-            ),
-            Fase3ScriptPage(
-              service: widget.service,
-              focoId: widget.focoId,
-              planSeguimientoId: planSeguimientoId,
-              ejecucionPlanId: ejecucionPlanId,
-              onSavedObservaciones: _actualizarObservaciones,
             ),
           ],
         ),
