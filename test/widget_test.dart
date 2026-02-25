@@ -1,5 +1,6 @@
 // Test básico para la aplicación Lytiks
 //
+// NOTA: Este archivo debería estar en test/widget_test.dart, no en la raíz
 // Para ejecutar los tests:
 // flutter test
 

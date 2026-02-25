@@ -424,10 +424,16 @@ class SyncService {
         );
 
         final finalizar = _parseInt(planData['finalizar']) ?? 1;
+        final observaciones = planData['observaciones']?.toString();
         if (finalizar == 1) {
           await _planSeguimientoMokoService.finalizarRevision(
             ejecucionPlanId,
-            observaciones: planData['observaciones']?.toString(),
+            observaciones: observaciones,
+          );
+        } else if (observaciones != null && observaciones.isNotEmpty) {
+          await _planSeguimientoMokoService.actualizarObservaciones(
+            ejecucionPlanId,
+            observaciones: observaciones,
           );
         }
 

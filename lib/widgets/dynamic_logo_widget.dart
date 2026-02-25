@@ -15,7 +15,7 @@ class DynamicLogoWidget extends StatefulWidget {
     this.height,
     this.width,
     this.fit = BoxFit.contain,
-    this.fallbackAsset = 'assets/images/logo1.png',
+    this.fallbackAsset = 'assets/images/LOGO COLOR.png',
   });
 
   @override

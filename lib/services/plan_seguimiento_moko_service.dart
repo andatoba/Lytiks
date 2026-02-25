@@ -226,6 +226,30 @@ class PlanSeguimientoMokoService {
     }
   }
 
+  /// Actualiza observaciones de una fase sin finalizarla
+  Future<Map<String, dynamic>> actualizarObservaciones(
+    int ejecucionPlanId, {
+    String? observaciones,
+  }) async {
+    try {
+      final base = await baseUri;
+      final response = await http.put(
+        base.replace(path: '${base.path}/ejecucion/$ejecucionPlanId/observaciones'),
+        headers: {'Content-Type': 'application/json'},
+        body: json.encode({'observaciones': observaciones}),
+      );
+
+      if (response.statusCode == 200) {
+        return json.decode(utf8.decode(response.bodyBytes));
+      } else {
+        throw Exception('Error al actualizar observaciones: ${response.statusCode}');
+      }
+    } catch (e) {
+      print('❌ Error al actualizar observaciones: $e');
+      rethrow;
+    }
+  }
+
   /// Datos de fallback para modo offline
   List<Map<String, dynamic>> _getFasesFallback() {
     return [

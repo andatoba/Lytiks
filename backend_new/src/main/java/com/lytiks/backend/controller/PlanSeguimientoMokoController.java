@@ -229,4 +229,29 @@ public class PlanSeguimientoMokoController {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(error);
         }
     }
+
+    /**
+     * Actualiza observaciones de una fase sin finalizarla
+     */
+    @PutMapping("/ejecucion/{ejecucionPlanId}/observaciones")
+    public ResponseEntity<Map<String, Object>> actualizarObservaciones(
+            @PathVariable Long ejecucionPlanId,
+            @RequestBody(required = false) Map<String, String> body) {
+        try {
+            String observaciones = body != null ? body.get("observaciones") : null;
+            EjecucionPlanMoko plan = planService.actualizarObservacionesFase(ejecucionPlanId, observaciones);
+
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", true);
+            response.put("message", "Observaciones actualizadas correctamente");
+            response.put("plan", plan);
+
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            Map<String, Object> error = new HashMap<>();
+            error.put("success", false);
+            error.put("error", "Error al actualizar observaciones: " + e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(error);
+        }
+    }
 }

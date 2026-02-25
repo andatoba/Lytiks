@@ -213,6 +213,27 @@ public class PlanSeguimientoMokoService {
         
         return ejecucionPlanRepository.save(plan);
     }
+
+    /**
+     * Actualiza observaciones de una fase sin finalizarla
+     */
+    @Transactional
+    public EjecucionPlanMoko actualizarObservacionesFase(Long ejecucionPlanId, String observaciones) {
+        Optional<EjecucionPlanMoko> optPlan = ejecucionPlanRepository.findById(ejecucionPlanId);
+        if (optPlan.isEmpty()) {
+            throw new RuntimeException("Plan de ejecución no encontrado: " + ejecucionPlanId);
+        }
+
+        EjecucionPlanMoko plan = optPlan.get();
+        plan.setObservaciones(observaciones);
+        plan.setFechaModificacion(LocalDateTime.now());
+
+        if (plan.getFechaInicio() == null) {
+            plan.setFechaInicio(LocalDateTime.now());
+        }
+
+        return ejecucionPlanRepository.save(plan);
+    }
     
     /**
      * Obtiene las tareas de una fase específica

@@ -1,6 +1,11 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import '../services/plan_seguimiento_moko_service.dart';
-import '../services/offline_storage_service.dart';
+import 'fase_1_screen.dart';
+import 'fase_2_screen.dart';
+import 'fase_3_screen.dart';
+import 'fase_4_screen.dart';
+import 'fase_detalle_screen.dart';
 
 class PlanSeguimientoMokoScreen extends StatefulWidget {
   final int focoId;
@@ -44,7 +49,13 @@ class _PlanSeguimientoMokoScreenState extends State<PlanSeguimientoMokoScreen> {
       final estado = await _service.getEstadoPlan(widget.focoId);
       
       setState(() {
-        _fases = fases;
+        _fases = fases.map((fase) {
+          final cleaned = Map<String, dynamic>.from(fase);
+          cleaned['nombre'] = _limpiarTexto(fase['nombre']?.toString() ?? '');
+          cleaned['detalle'] =
+              _limpiarTexto(fase['detalle']?.toString() ?? '');
+          return cleaned;
+        }).toList();
         _ejecuciones = List<Map<String, dynamic>>.from(estado['ejecuciones'] ?? []);
         _isLoading = false;
         
@@ -61,7 +72,13 @@ class _PlanSeguimientoMokoScreenState extends State<PlanSeguimientoMokoScreen> {
       // Cargar datos de fallback
       final fases = await _service.getFases();
       setState(() {
-        _fases = fases;
+        _fases = fases.map((fase) {
+          final cleaned = Map<String, dynamic>.from(fase);
+          cleaned['nombre'] = _limpiarTexto(fase['nombre']?.toString() ?? '');
+          cleaned['detalle'] =
+              _limpiarTexto(fase['detalle']?.toString() ?? '');
+          return cleaned;
+        }).toList();
         _isLoading = false;
       });
     }
@@ -196,7 +213,9 @@ class _PlanSeguimientoMokoScreenState extends State<PlanSeguimientoMokoScreen> {
           // Contenido de la fase
           Expanded(
             child: InkWell(
-              onTap: habilitado ? () => _mostrarDetalleFase(fase, ejecucion) : null,
+              onTap: habilitado
+                  ? () => _mostrarDetalleFase(fase, ejecucion, index)
+                  : null,
               borderRadius: BorderRadius.circular(12),
               child: Container(
                 padding: const EdgeInsets.all(16),
@@ -266,9 +285,10 @@ class _PlanSeguimientoMokoScreenState extends State<PlanSeguimientoMokoScreen> {
   }
 
   String _formatNombreFase(String nombre) {
+    final limpio = _limpiarTexto(nombre);
     // Convertir a formato de título
     final palabrasMayusculas = ['SAR'];
-    return nombre.split(' ').map((palabra) {
+    return limpio.split(' ').map((palabra) {
       if (palabrasMayusculas.contains(palabra.toUpperCase())) {
         return palabra.toUpperCase();
       }
@@ -278,312 +298,68 @@ class _PlanSeguimientoMokoScreenState extends State<PlanSeguimientoMokoScreen> {
     }).join(' ');
   }
 
-  void _mostrarDetalleFase(Map<String, dynamic> fase, Map<String, dynamic>? ejecucion) {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (context) => _DetalleEjecucionModal(
-        fase: fase,
-        ejecucion: ejecucion,
-        focoId: widget.focoId,
-        service: _service,
-        onFinalizarRevision: () {
-          Navigator.pop(context);
-          _cargarDatos();
-        },
-      ),
-    );
-  }
-}
-
-class _DetalleEjecucionModal extends StatefulWidget {
-  final Map<String, dynamic> fase;
-  final Map<String, dynamic>? ejecucion;
-  final int focoId;
-  final PlanSeguimientoMokoService service;
-  final VoidCallback onFinalizarRevision;
-
-  const _DetalleEjecucionModal({
-    required this.fase,
-    this.ejecucion,
-    required this.focoId,
-    required this.service,
-    required this.onFinalizarRevision,
-  });
-
-  @override
-  State<_DetalleEjecucionModal> createState() => _DetalleEjecucionModalState();
-}
-
-class _DetalleEjecucionModalState extends State<_DetalleEjecucionModal> {
-  final OfflineStorageService _offlineStorage = OfflineStorageService();
-
-  List<Map<String, dynamic>> _tareas = [];
-  Map<int, bool> _tareasCompletadas = {};
-  bool _isLoading = true;
-  bool _isSaving = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _cargarTareas();
-  }
-
-  Future<void> _cargarTareas() async {
-    try {
-      if (widget.ejecucion != null) {
-        // Cargar tareas de la ejecución
-        final ejecucionId = widget.ejecucion!['id'];
-        final tareas = await widget.service.getTareasEjecucion(ejecucionId);
-        
-        setState(() {
-          _tareas = tareas;
-          for (var tarea in tareas) {
-            _tareasCompletadas[tarea['id']] = tarea['completado'] ?? false;
-          }
-          _isLoading = false;
-        });
-      } else {
-        // Cargar tareas de la fase desde fallback
-        final tareas = widget.fase['tareas'] ?? [];
-        setState(() {
-          _tareas = List<Map<String, dynamic>>.from(tareas);
-          for (var tarea in _tareas) {
-            _tareasCompletadas[tarea['id']] = false;
-          }
-          _isLoading = false;
-        });
-      }
-    } catch (e) {
-      print('❌ Error al cargar tareas: $e');
-      // Usar tareas del fallback
-      final tareas = widget.fase['tareas'] ?? [];
-      setState(() {
-        _tareas = List<Map<String, dynamic>>.from(tareas);
-        for (var tarea in _tareas) {
-          _tareasCompletadas[tarea['id']] = false;
-        }
-        _isLoading = false;
-      });
+  String _limpiarTexto(String texto) {
+    if (texto.isEmpty) return texto;
+    if (texto.contains('Ã') || texto.contains('Â')) {
+      try {
+        return utf8.decode(latin1.encode(texto));
+      } catch (_) {}
     }
+    return texto;
   }
 
-  Future<void> _guardarYFinalizar() async {
-    setState(() => _isSaving = true);
-
-    final tareasCompletadas = _tareasCompletadas.entries
-        .where((e) => e.value)
-        .map((e) => e.key)
-        .toList();
-
-    try {
-      if (widget.ejecucion != null) {
-        final ejecucionId = widget.ejecucion!['id'];
-
-        await widget.service.actualizarTareas(ejecucionId, tareasCompletadas);
-        await widget.service.finalizarRevision(ejecucionId);
-
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Revisión guardada exitosamente'),
-              backgroundColor: Colors.green,
-            ),
-          );
-        }
-      } else {
-        throw Exception('Ejecucion no disponible para guardar en linea');
-      }
-
-      widget.onFinalizarRevision();
-    } catch (e) {
-      await _guardarPlanOffline(tareasCompletadas);
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              'Guardado offline. Se sincronizara cuando haya conexion.',
-            ),
-            backgroundColor: Colors.orange,
-          ),
-        );
-      }
-      widget.onFinalizarRevision();
-    } finally {
-      setState(() => _isSaving = false);
-    }
+  int _parseNumeroFase(dynamic value, int fallback) {
+    if (value is int) return value;
+    if (value is String) return int.tryParse(value) ?? fallback;
+    return fallback;
   }
 
-  Future<void> _guardarPlanOffline(List<int> tareasCompletadas) async {
-    int? ejecucionPlanId;
-    final rawEjecucionId = widget.ejecucion?['id'];
-    if (rawEjecucionId is int) {
-      ejecucionPlanId = rawEjecucionId;
-    } else if (rawEjecucionId != null) {
-      ejecucionPlanId = int.tryParse(rawEjecucionId.toString());
-    }
-
-    int planSeguimientoId = 0;
-    final rawPlanId = widget.ejecucion?['planSeguimiento']?['id'] ?? widget.fase['id'];
-    if (rawPlanId is int) {
-      planSeguimientoId = rawPlanId;
-    } else if (rawPlanId != null) {
-      planSeguimientoId = int.tryParse(rawPlanId.toString()) ?? 0;
-    }
-
-    await _offlineStorage.savePendingPlanMokoUpdate(
-      focoId: widget.focoId,
-      planSeguimientoId: planSeguimientoId,
-      ejecucionPlanId: ejecucionPlanId,
-      tareasCompletadas: tareasCompletadas,
-      observaciones: null,
-      finalizar: true,
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final nombre = widget.fase['nombre'] ?? 'Fase';
-    
-    return Container(
-      height: MediaQuery.of(context).size.height * 0.7,
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      child: Column(
-        children: [
-          // Handle
-          Container(
-            margin: const EdgeInsets.only(top: 12),
-            width: 40,
-            height: 4,
-            decoration: BoxDecoration(
-              color: Colors.grey[300],
-              borderRadius: BorderRadius.circular(2),
-            ),
-          ),
-          // Header
-          Padding(
-            padding: const EdgeInsets.all(20),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'DETALLE DE EJECUCIÓN',
-                  style: TextStyle(
-                    color: Colors.grey[600],
-                    fontSize: 12,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  nombre,
-                  style: const TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const Divider(height: 1),
-          // Tareas
-          Expanded(
-            child: _isLoading
-                ? const Center(child: CircularProgressIndicator())
-                : _buildTareasList(),
-          ),
-          // Botón finalizar
-          SafeArea(
-            child: Padding(
-              padding: const EdgeInsets.all(20),
-              child: SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  onPressed: _isSaving ? null : _guardarYFinalizar,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF1A365D),
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                  ),
-                  child: _isSaving
-                      ? const SizedBox(
-                          height: 20,
-                          width: 20,
-                          child: CircularProgressIndicator(
-                            color: Colors.white,
-                            strokeWidth: 2,
-                          ),
-                        )
-                      : const Text(
-                          'FINALIZAR REVISIÓN',
-                          style: TextStyle(
-                            fontWeight: FontWeight.bold,
-                            color: Colors.white,
-                          ),
-                        ),
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildTareasList() {
-    return ListView(
-      padding: const EdgeInsets.symmetric(horizontal: 20),
-      children: [
-        const Padding(
-          padding: EdgeInsets.symmetric(vertical: 16),
-          child: Text(
-            'TAREAS REQUERIDAS',
-            style: TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.bold,
-              color: Colors.grey,
-            ),
-          ),
+  Future<void> _mostrarDetalleFase(
+    Map<String, dynamic> fase,
+    Map<String, dynamic>? ejecucion,
+    int numeroFase,
+  ) async {
+    final faseNumero = _parseNumeroFase(fase['orden'], numeroFase);
+    final screen = switch (faseNumero) {
+      1 => Fase1Screen(
+          fase: fase,
+          ejecucion: ejecucion,
+          focoId: widget.focoId,
+          service: _service,
         ),
-        ..._tareas.map((tarea) {
-          final tareaId = tarea['id'] ?? tarea['itemTarea']?['id'];
-          final nombre = tarea['itemTarea']?['nombre'] ?? tarea['nombre'] ?? '';
-          final dosis = tarea['itemTarea']?['dosis'] ?? tarea['dosis'] ?? '';
-          final completado = _tareasCompletadas[tareaId] ?? false;
+      2 => Fase2Screen(
+          fase: fase,
+          ejecucion: ejecucion,
+          focoId: widget.focoId,
+          service: _service,
+        ),
+      3 => Fase3Screen(
+          fase: fase,
+          ejecucion: ejecucion,
+          focoId: widget.focoId,
+          service: _service,
+        ),
+      4 => Fase4Screen(
+          fase: fase,
+          ejecucion: ejecucion,
+          focoId: widget.focoId,
+          service: _service,
+        ),
+      _ => FaseDetalleScreen(
+          fase: fase,
+          ejecucion: ejecucion,
+          focoId: widget.focoId,
+          service: _service,
+        ),
+    };
 
-          return CheckboxListTile(
-            value: completado,
-            onChanged: (value) {
-              setState(() {
-                _tareasCompletadas[tareaId] = value ?? false;
-              });
-            },
-            title: Text(
-              nombre,
-              style: TextStyle(
-                fontSize: 14,
-                decoration: completado ? TextDecoration.lineThrough : null,
-                color: completado ? Colors.grey : Colors.black87,
-              ),
-            ),
-            subtitle: dosis.isNotEmpty
-                ? Text(
-                    'Dosis: $dosis',
-                    style: const TextStyle(fontSize: 12),
-                  )
-                : null,
-            controlAffinity: ListTileControlAffinity.leading,
-            contentPadding: EdgeInsets.zero,
-            activeColor: const Color(0xFF1A365D),
-          );
-        }).toList(),
-      ],
+    final actualizado = await Navigator.push<bool>(
+      context,
+      MaterialPageRoute(builder: (context) => screen),
     );
+
+    if (actualizado == true && mounted) {
+      _cargarDatos();
+    }
   }
 }

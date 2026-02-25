@@ -5,7 +5,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:geolocator/geolocator.dart';
 import '../services/registro_moko_service.dart';
 import '../services/offline_storage_service.dart';
-import 'contencion_screen.dart';
+import 'plan_seguimiento_moko_screen.dart';
 
 class RegistroMokoScreen extends StatefulWidget {
   final Map<String, dynamic>? clientData;
@@ -662,6 +662,8 @@ class _RegistroMokoScreenState extends State<RegistroMokoScreen> {
     });
 
     try {
+      Map<String, dynamic>? savedRegistro;
+
       // Preparar datos para guardar
       Map<String, dynamic> registroData = {
         'numeroFoco': numeroFoco,
@@ -686,7 +688,10 @@ class _RegistroMokoScreenState extends State<RegistroMokoScreen> {
 
       // Intentar guardar en el servidor primero
       try {
-        await _registroMokoService.guardarRegistro(registroData, fotoTomada);
+        savedRegistro = await _registroMokoService.guardarRegistro(
+          registroData,
+          fotoTomada,
+        );
         
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -727,11 +732,16 @@ class _RegistroMokoScreenState extends State<RegistroMokoScreen> {
           ),
         );
 
-        // Navegar a la pantalla de Contención
+        final focoId = savedRegistro?['id'] ?? 0;
+        final numeroFocoRegistrado = savedRegistro?['numeroFoco'] ?? numeroFoco ?? 0;
+
         Navigator.push(
           context,
           MaterialPageRoute(
-            builder: (_) => ContencionScreen(clientData: widget.clientData),
+            builder: (_) => PlanSeguimientoMokoScreen(
+              focoId: focoId,
+              numeroFoco: numeroFocoRegistrado,
+            ),
           ),
         );
       }
@@ -743,6 +753,7 @@ class _RegistroMokoScreenState extends State<RegistroMokoScreen> {
       });
     }
   }
+
 
   bool _validarFormulario() {
     if (sintomasSeleccionados.isEmpty) {

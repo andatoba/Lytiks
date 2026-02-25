@@ -68,7 +68,7 @@ ADD CONSTRAINT fk_sigatoka_lote FOREIGN KEY (lote_id) REFERENCES lote(id) ON DEL
 
 -- Insertar logo por defecto
 INSERT INTO configuracion_logo (nombre, ruta_logo, activo, descripcion)
-VALUES ('Logo Principal Lytiks', 'assets/images/logo2.png', 1, 'Logo principal de la aplicación Lytiks')
+VALUES ('Logo Principal Lytiks', 'assets/images/LOGO COLOR.png', 1, 'Logo principal de la aplicación Lytiks')
 ON DUPLICATE KEY UPDATE activo = 1;
 
 -- Datos de ejemplo para haciendas (migrar desde clients.finca_nombre)
