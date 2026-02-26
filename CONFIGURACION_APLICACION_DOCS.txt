@@ -1,0 +1,233 @@
+=================================================================================
+  DOCUMENTACIÓN: CONFIGURACIONES DE APLICACIÓN - PLAN SEGUIMIENTO MOKO
+=================================================================================
+
+📋 DESCRIPCIÓN
+-------------------------------------------------------------------------------
+Esta funcionalidad permite programar y gestionar aplicaciones de tareas en el
+plan de seguimiento de Moko. Los técnicos pueden:
+- Programar fechas de aplicación
+- Configurar frecuencia (cada X días)
+- Establecer repeticiones
+- Configurar recordatorios
+- Marcar tareas como completadas
+- Sincronizar con el servidor
+
+🗄️ BASE DE DATOS
+-------------------------------------------------------------------------------
+Tabla: configuraciones_aplicacion
+
+Campos:
+- id: BIGINT (Primary Key, Auto Increment)
+- foco_id: BIGINT (ID del foco de Moko)
+- fase_id: BIGINT (ID de la fase del plan)
+- tarea_id: BIGINT (ID de la tarea)
+- nombre_tarea: VARCHAR(500) (Nombre de la tarea)
+- fecha_programada: DATETIME (Fecha programada para aplicación)
+- frecuencia: INT (Frecuencia en días, ej: 7 = cada 7 días)
+- repeticiones: INT (Número de veces a repetir)
+- recordatorio: VARCHAR(50) (ej: "1 día antes", "Sin recordatorio")
+- completado: TINYINT(1) (0=Pendiente, 1=Completado)
+- fecha_creacion: DATETIME (Fecha de creación del registro)
+- fecha_completado: DATETIME NULL (Fecha cuando se marcó como completado)
+- observaciones: TEXT NULL (Observaciones adicionales)
+- created_at: TIMESTAMP (Auto generado)
+- updated_at: TIMESTAMP (Auto actualizado)
+
+Índices:
+- UK: uk_foco_fase_tarea (foco_id, fase_id, tarea_id) - Solo una config por tarea
+- INDEX: idx_foco_id, idx_fase_id, idx_tarea_id
+- INDEX: idx_fecha_programada, idx_completado
+
+🌐 ENDPOINTS API
+-------------------------------------------------------------------------------
+
+BASE URL: http://5.161.198.89:8081/api/moko/plan-seguimiento
+
+1. GUARDAR/ACTUALIZAR CONFIGURACIÓN
+   POST /configuracion-aplicacion
+   
+   Body:
+   {
+     "focoId": 1,
+     "faseId": 2,
+     "tareaId": 5,
+     "nombreTarea": "Proyección con glifosato",
+     "fechaProgramada": "2026-03-15T08:00:00",
+     "frecuencia": 7,
+     "repeticiones": 3,
+     "recordatorio": "1 día antes",
+     "completado": false,
+     "fechaCreacion": "2026-02-25T10:00:00",
+     "observaciones": "Primera aplicación del ciclo"
+   }
+   
+   Response:
+   {
+     "success": true,
+     "message": "Configuración guardada correctamente",
+     "configuracion": { ...objeto guardado... }
+   }
+
+2. OBTENER CONFIGURACIONES DE UN FOCO
+   GET /foco/{focoId}/configuraciones
+   
+   Response: Array de configuraciones
+   [
+     {
+       "id": 1,
+       "focoId": 1,
+       "faseId": 2,
+       ...resto de campos
+     }
+   ]
+
+3. OBTENER CONFIGURACIONES DE UN FOCO Y FASE
+   GET /foco/{focoId}/fase/{faseId}/configuraciones
+   
+   Response: Array de configuraciones filtradas por foco y fase
+
+4. OBTENER CONFIGURACIONES PENDIENTES
+   GET /foco/{focoId}/configuraciones/pendientes
+   
+   Response: Array de configuraciones con completado=false
+
+5. MARCAR CONFIGURACIÓN COMO COMPLETADA
+   PUT /configuracion-aplicacion/{id}/completar
+   
+   Response:
+   {
+     "success": true,
+     "message": "Configuración marcada como completada",
+     "configuracion": { ...objeto actualizado... }
+   }
+
+6. ELIMINAR CONFIGURACIÓN
+   DELETE /configuracion-aplicacion/{id}
+   
+   Response:
+   {
+     "success": true,
+     "message": "Configuración eliminada correctamente"
+   }
+
+7. CONTAR CONFIGURACIONES PENDIENTES
+   GET /foco/{focoId}/configuraciones/pendientes/count
+   
+   Response:
+   {
+     "count": 5
+   }
+
+📱 INTEGRACIÓN EN FLUTTER
+-------------------------------------------------------------------------------
+
+1. GUARDAR CONFIGURACIÓN:
+   
+   // El sistema guarda primero en SQLite local, luego intenta sincronizar
+   final configuracion = {
+     'focoId': widget.focoId,
+     'faseId': widget.fase['id'],
+     'tareaId': tareaId,
+     'nombreTarea': 'Proyección con glifosato',
+     'fechaProgramada': fecha.toIso8601String(),
+     'frecuencia': 7, // días
+     'repeticiones': 3,
+     'recordatorio': '1 día antes',
+     'completado': false,
+     'fechaCreacion': DateTime.now().toIso8601String(),
+   };
+   
+   // Guarda localmente
+   await _offlineStorage.guardarConfiguracionAplicacion(configuracion);
+   
+   // Intenta sincronizar con servidor
+   await widget.service.guardarConfiguracionAplicacion(configuracion);
+
+2. CARGAR CONFIGURACIONES AL ABRIR LA PANTALLA:
+   
+   // Cargar desde local o servidor
+   final configuraciones = await _offlineStorage
+     .obtenerConfiguracionesAplicacion(
+       focoId: widget.focoId,
+       faseId: widget.fase['id'],
+     );
+   
+   // Sincronizar con servidor si hay conexión
+   try {
+     final serverConfigs = await widget.service
+       .getConfiguracionesByFocoYFase(widget.focoId, widget.fase['id']);
+     // Merge con configuraciones locales
+   } catch (e) {
+     // Usa datos locales si no hay conexión
+   }
+
+🔄 FLUJO DE SINCRONIZACIÓN
+-------------------------------------------------------------------------------
+
+MODO ONLINE (Con conexión):
+1. Usuario marca tarea y configura aplicación
+2. Se guarda en SQLite local (is_synced = 0)
+3. Se envía al servidor inmediatamente
+4. Si tiene éxito, se marca como sincronizado
+5. Mensaje: "✓ Aplicación guardada y sincronizada"
+
+MODO OFFLINE (Sin conexión):
+1. Usuario marca tarea y configura aplicación
+2. Se guarda en SQLite local (is_synced = 0)
+3. Intento de sincronización falla silenciosamente
+4. Mensaje: "✓ Aplicación guardada localmente"
+         "📱 Se sincronizará cuando haya conexión"
+
+SINCRONIZACIÓN POSTERIOR:
+- Cuando la app detecte conexión, puede sincronizar registros pendientes
+- Consultar registros con is_synced = 0
+- Enviar al servidor
+- Marcar como sincronizados si tiene éxito
+
+📊 CASOS DE USO
+-------------------------------------------------------------------------------
+
+CASO 1: Programar aplicación de herbicida
+- Técnico marca tarea "Proyección con glifosato"
+- Calendario aparece automáticamente
+- Configura: Fecha: 15/03/2026, Frecuencia: 7 días, Repeticiones: 3
+- Sistema crea 3 eventos separados por 7 días cada uno
+- Recordatorio 1 día antes para cada aplicación
+
+CASO 2: Revisar aplicaciones programadas
+- Técnico entra a Fase 2
+- Sistema carga configuraciones guardadas
+- Muestra fechas programadas en cada tarea marcada
+- Puede editar o eliminar configuraciones
+
+CASO 3: Completar aplicación
+- Día de la aplicación, técnico marca como completada
+- Se registra fecha_completado
+- Se puede agregar observaciones del resultado
+
+🔒 SEGURIDAD Y VALIDACIÓN
+-------------------------------------------------------------------------------
+- Unique constraint evita duplicados (foco_id, fase_id, tarea_id)
+- Validación de fechas en el futuro o pasado reciente
+- Frecuencia mínima: 1 día, máxima: 365 días
+- Repeticiones mínimas: 1, máximas: 100
+- UTF-8 habilitado para textos con tildes
+
+💡 MEJORAS FUTURAS
+-------------------------------------------------------------------------------
+- [ ] Notificaciones push para recordatorios
+- [ ] Generación automática de fechas según frecuencia y repeticiones
+- [ ] Calendario visual con todas las aplicaciones programadas
+- [ ] Exportar configuraciones a PDF o Excel
+- [ ] Historial de aplicaciones completadas
+- [ ] Estadísticas de cumplimiento de aplicaciones
+- [ ] Integración con clima para sugerir mejores fechas
+
+📞 SOPORTE
+-------------------------------------------------------------------------------
+Para dudas o problemas con esta funcionalidad:
+- Revisar logs en consola (filtrar por 💾, ✅, ❌, 📂)
+- Verificar tabla existe en MySQL
+- Confirmar endpoints responden correctamente
+- Validar permisos de escritura en SQLite local

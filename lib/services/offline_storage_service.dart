@@ -8,7 +8,7 @@ import 'package:flutter/foundation.dart';
 class OfflineStorageService {
   static Database? _database;
   static const String _databaseName = 'lytiks_offline.db';
-  static const int _databaseVersion = 6;
+  static const int _databaseVersion = 7;
 
   // Singleton
   static final OfflineStorageService _instance =
@@ -133,6 +133,28 @@ class OfflineStorageService {
         )
       ''');
       debugPrint('✅ Tabla pending_plan_moko_updates añadida en upgrade');
+    }
+    if (oldVersion < 7) {
+      // Crear tabla para configuraciones de aplicación
+      await db.execute('''
+        CREATE TABLE IF NOT EXISTS configuraciones_aplicacion (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          foco_id INTEGER NOT NULL,
+          fase_id INTEGER NOT NULL,
+          tarea_id INTEGER NOT NULL,
+          nombre_tarea TEXT NOT NULL,
+          fecha_programada TEXT NOT NULL,
+          frecuencia INTEGER NOT NULL,
+          repeticiones INTEGER NOT NULL,
+          recordatorio TEXT NOT NULL,
+          completado INTEGER DEFAULT 0,
+          fecha_creacion TEXT NOT NULL,
+          fecha_completado TEXT,
+          observaciones TEXT,
+          is_synced INTEGER DEFAULT 0
+        )
+      ''');
+      debugPrint('✅ Tabla configuraciones_aplicacion añadida en upgrade');
     }
   }
 
@@ -271,6 +293,27 @@ class OfflineStorageService {
         )
       ''');
       debugPrint('✅ Tabla pending_audit_photos creada');
+
+      // Tabla para configuraciones de aplicación
+      await db.execute('''
+        CREATE TABLE configuraciones_aplicacion (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          foco_id INTEGER NOT NULL,
+          fase_id INTEGER NOT NULL,
+          tarea_id INTEGER NOT NULL,
+          nombre_tarea TEXT NOT NULL,
+          fecha_programada TEXT NOT NULL,
+          frecuencia INTEGER NOT NULL,
+          repeticiones INTEGER NOT NULL,
+          recordatorio TEXT NOT NULL,
+          completado INTEGER DEFAULT 0,
+          fecha_creacion TEXT NOT NULL,
+          fecha_completado TEXT,
+          observaciones TEXT,
+          is_synced INTEGER DEFAULT 0
+        )
+      ''');
+      debugPrint('✅ Tabla configuraciones_aplicacion creada');
 
       debugPrint('🎉 Todas las tablas creadas exitosamente');
     } catch (e) {
@@ -666,5 +709,148 @@ class OfflineStorageService {
     await db.delete('pending_sigatoka_audits');
     await db.delete('pending_clients');
     await db.delete('pending_audit_photos');
+  }
+
+  // CONFIGURACIONES DE APLICACIÓN
+  Future<int> guardarConfiguracionAplicacion(Map<String, dynamic> configuracion) async {
+    try {
+      final db = await database;
+      
+      debugPrint('💾 Guardando configuración: $configuracion');
+      
+      // Verificar si ya existe una configuración para esta tarea
+      final existente = await db.query(
+        'configuraciones_aplicacion',
+        where: 'foco_id = ? AND fase_id = ? AND tarea_id = ?',
+        whereArgs: [
+          configuracion['focoId'],
+          configuracion['faseId'],
+          configuracion['tareaId'],
+        ],
+      );
+
+      debugPrint('🔍 Configuración existente: ${existente.isNotEmpty ? existente.first : "ninguna"}');
+
+      if (existente.isNotEmpty) {
+        // Actualizar configuración existente
+        final registrosActualizados = await db.update(
+          'configuraciones_aplicacion',
+          {
+            'nombre_tarea': configuracion['nombreTarea'],
+            'fecha_programada': configuracion['fechaProgramada'],
+            'frecuencia': configuracion['frecuencia'],
+            'repeticiones': configuracion['repeticiones'],
+            'recordatorio': configuracion['recordatorio'],
+            'completado': (configuracion['completado'] == true || configuracion['completado'] == 1) ? 1 : 0,
+            'fecha_creacion': configuracion['fechaCreacion'],
+            'observaciones': configuracion['observaciones'],
+            'is_synced': 0,
+          },
+          where: 'id = ?',
+          whereArgs: [existente.first['id']],
+        );
+        debugPrint('✅ Configuración actualizada. Registros afectados: $registrosActualizados, ID: ${existente.first['id']}');
+        return existente.first['id'] as int;
+      } else {
+        // Insertar nueva configuración
+        final id = await db.insert(
+          'configuraciones_aplicacion',
+          {
+            'foco_id': configuracion['focoId'],
+            'fase_id': configuracion['faseId'],
+            'tarea_id': configuracion['tareaId'],
+            'nombre_tarea': configuracion['nombreTarea'],
+            'fecha_programada': configuracion['fechaProgramada'],
+            'frecuencia': configuracion['frecuencia'],
+            'repeticiones': configuracion['repeticiones'],
+            'recordatorio': configuracion['recordatorio'],
+            'completado': (configuracion['completado'] == true || configuracion['completado'] == 1) ? 1 : 0,
+            'fecha_creacion': configuracion['fechaCreacion'],
+            'observaciones': configuracion['observaciones'],
+            'is_synced': 0,
+          },
+        );
+        debugPrint('✅ Nueva configuración insertada con ID: $id');
+        return id;
+      }
+    } catch (e) {
+      debugPrint('❌ Error guardando configuración de aplicación: $e');
+      rethrow;
+    }
+  }
+
+  Future<List<Map<String, dynamic>>> obtenerConfiguracionesAplicacion({
+    int? focoId,
+    int? faseId,
+    bool soloSinCompletar = false,
+  }) async {
+    try {
+      final db = await database;
+      
+      String where = '1=1';
+      List<dynamic> whereArgs = [];
+      
+      if (focoId != null) {
+        where += ' AND foco_id = ?';
+        whereArgs.add(focoId);
+      }
+      
+      if (faseId != null) {
+        where += ' AND fase_id = ?';
+        whereArgs.add(faseId);
+      }
+      
+      if (soloSinCompletar) {
+        where += ' AND completado = 0';
+      }
+      
+      final List<Map<String, dynamic>> configuraciones = await db.query(
+        'configuraciones_aplicacion',
+        where: where,
+        whereArgs: whereArgs.isNotEmpty ? whereArgs : null,
+        orderBy: 'fecha_programada ASC',
+      );
+      
+      debugPrint('📋 Configuraciones encontradas: ${configuraciones.length}');
+      return configuraciones;
+    } catch (e) {
+      debugPrint('❌ Error obteniendo configuraciones de aplicación: $e');
+      return [];
+    }
+  }
+
+  Future<void> marcarConfiguracionCompletada(int id) async {
+    try {
+      final db = await database;
+      await db.update(
+        'configuraciones_aplicacion',
+        {
+          'completado': 1,
+          'fecha_completado': DateTime.now().toIso8601String(),
+          'is_synced': 0,
+        },
+        where: 'id = ?',
+        whereArgs: [id],
+      );
+      debugPrint('✅ Configuración marcada como completada: $id');
+    } catch (e) {
+      debugPrint('❌ Error marcando configuración completada: $e');
+      rethrow;
+    }
+  }
+
+  Future<void> eliminarConfiguracionAplicacion(int id) async {
+    try {
+      final db = await database;
+      await db.delete(
+        'configuraciones_aplicacion',
+        where: 'id = ?',
+        whereArgs: [id],
+      );
+      debugPrint('✅ Configuración eliminada: $id');
+    } catch (e) {
+      debugPrint('❌ Error eliminando configuración: $e');
+      rethrow;
+    }
   }
 }

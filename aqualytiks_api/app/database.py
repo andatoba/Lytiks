@@ -16,14 +16,15 @@ DB_NAME = os.getenv("DB_NAME", "aqualytiks")
 
 # URL de conexión - codificar la contraseña para caracteres especiales
 PASSWORD_ENCODED = quote_plus(DB_PASSWORD)
-DATABASE_URL = f"mysql+pymysql://{DB_USER}:{PASSWORD_ENCODED}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
+DATABASE_URL = f"mysql+pymysql://{DB_USER}:{PASSWORD_ENCODED}@{DB_HOST}:{DB_PORT}/{DB_NAME}?charset=utf8mb4"
 
 # Crear engine
 engine = create_engine(
     DATABASE_URL,
     pool_pre_ping=True,
     pool_recycle=3600,
-    echo=False  # Cambiar a True para ver queries SQL
+    echo=False,  # Cambiar a True para ver queries SQL
+    connect_args={"charset": "utf8mb4"}
 )
 
 # Sesión de base de datos

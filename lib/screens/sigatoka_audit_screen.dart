@@ -120,6 +120,9 @@ class _SigatokaAuditScreenState extends State<SigatokaAuditScreen> {
   
   // Modo cliente: bloquea búsqueda de cliente y seguimiento de ubicación
   bool _isClienteMode = false;
+  
+  // Key para forzar reconstrucción de dropdowns después de limpiar
+  int _dropdownResetKey = 0;
 
   @override
   void initState() {
@@ -487,20 +490,29 @@ class _SigatokaAuditScreenState extends State<SigatokaAuditScreen> {
     setState(() {
       muestrasSesion.add(muestraData);
       muestraNumController.text = nextMuestra.toString();
-      grado3eraController.clear();
-      grado4taController.clear();
-      grado5taController.clear();
-      totalHojas3eraController.clear();
-      totalHojas4taController.clear();
-      totalHojas5taController.clear();
-      hvle0wController.clear();
-      hvlq0wController.clear();
-      hvlq5_0wController.clear();
-      th0wController.clear();
-      hvle10wController.clear();
-      hvlq10wController.clear();
-      hvlq5_10wController.clear();
-      th10wController.clear();
+      
+      // Limpiar completamente todos los campos de la muestra
+      grado3eraController.text = '';
+      grado4taController.text = '';
+      grado5taController.text = '';
+      totalHojas3eraController.text = '';
+      totalHojas4taController.text = '';
+      totalHojas5taController.text = '';
+      hvle0wController.text = '';
+      hvlq0wController.text = '';
+      hvlq5_0wController.text = '';
+      th0wController.text = '';
+      hvle10wController.text = '';
+      hvlq10wController.text = '';
+      hvlq5_10wController.text = '';
+      th10wController.text = '';
+      
+      // Resetear coordenadas GPS para la siguiente muestra
+      _loteLatitud = null;
+      _loteLongitud = null;
+      
+      // Incrementar key para forzar reconstrucción de dropdowns
+      _dropdownResetKey++;
     });
 
     ScaffoldMessenger.of(context).showSnackBar(
@@ -865,6 +877,7 @@ class _SigatokaAuditScreenState extends State<SigatokaAuditScreen> {
     final selectedValue =
         _infectionGradeOptions.contains(currentValue) ? currentValue : null;
     return DropdownButtonFormField<String>(
+      key: ValueKey('${label}_$_dropdownResetKey'), // Key para forzar reconstrucción
       value: selectedValue,
       isExpanded: true,
       decoration: InputDecoration(

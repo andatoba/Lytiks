@@ -259,4 +259,85 @@ public class PlanSeguimientoMokoService {
         
         return progreso;
     }
+
+    // =====================================================
+    // MÉTODOS PARA CONFIGURACIONES DE APLICACIÓN
+    // =====================================================
+
+    @Autowired
+    private ConfiguracionAplicacionRepository configuracionRepository;
+
+    /**
+     * Guarda o actualiza una configuración de aplicación
+     */
+    public ConfiguracionAplicacion guardarConfiguracionAplicacion(ConfiguracionAplicacion configuracion) {
+        // Verificar si ya existe una configuración para esta tarea
+        Optional<ConfiguracionAplicacion> existente = configuracionRepository
+            .findByFocoIdAndFaseIdAndTareaId(
+                configuracion.getFocoId(),
+                configuracion.getFaseId(),
+                configuracion.getTareaId()
+            );
+
+        if (existente.isPresent()) {
+            // Actualizar existente
+            ConfiguracionAplicacion config = existente.get();
+            config.setNombreTarea(configuracion.getNombreTarea());
+            config.setFechaProgramada(configuracion.getFechaProgramada());
+            config.setFrecuencia(configuracion.getFrecuencia());
+            config.setRepeticiones(configuracion.getRepeticiones());
+            config.setRecordatorio(configuracion.getRecordatorio());
+            config.setObservaciones(configuracion.getObservaciones());
+            return configuracionRepository.save(config);
+        } else {
+            // Crear nueva
+            return configuracionRepository.save(configuracion);
+        }
+    }
+
+    /**
+     * Obtiene todas las configuraciones de un foco
+     */
+    public List<ConfiguracionAplicacion> getConfiguracionesByFoco(Long focoId) {
+        return configuracionRepository.findByFocoIdOrderByFechaProgramadaAsc(focoId);
+    }
+
+    /**
+     * Obtiene las configuraciones de un foco y fase específica
+     */
+    public List<ConfiguracionAplicacion> getConfiguracionesByFocoYFase(Long focoId, Long faseId) {
+        return configuracionRepository.findByFocoIdAndFaseIdOrderByFechaProgramadaAsc(focoId, faseId);
+    }
+
+    /**
+     * Obtiene configuraciones pendientes de un foco
+     */
+    public List<ConfiguracionAplicacion> getConfiguracionesPendientes(Long focoId) {
+        return configuracionRepository.findByFocoIdAndCompletadoOrderByFechaProgramadaAsc(focoId, false);
+    }
+
+    /**
+     * Marca una configuración como completada
+     */
+    public ConfiguracionAplicacion marcarConfiguracionCompletada(Long id) {
+        ConfiguracionAplicacion config = configuracionRepository.findById(id)
+            .orElseThrow(() -> new RuntimeException("Configuración no encontrada"));
+        config.setCompletado(true);
+        config.setFechaCompletado(LocalDateTime.now());
+        return configuracionRepository.save(config);
+    }
+
+    /**
+     * Elimina una configuración
+     */
+    public void eliminarConfiguracion(Long id) {
+        configuracionRepository.deleteById(id);
+    }
+
+    /**
+     * Cuenta las configuraciones pendientes de un foco
+     */
+    public Long contarConfiguracionesPendientes(Long focoId) {
+        return configuracionRepository.countPendientesByFoco(focoId);
+    }
 }

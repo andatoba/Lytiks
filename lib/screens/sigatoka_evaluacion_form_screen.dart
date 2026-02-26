@@ -78,6 +78,10 @@ class _SigatokaEvaluacionFormScreenState extends State<SigatokaEvaluacionFormScr
   
   // Datos del reporte
   Map<String, dynamic>? _reporte;
+  
+  // Key para forzar reconstrucción de dropdowns después de limpiar
+  int _dropdownResetKey = 0;
+  
   static const List<String> _infectionGradeOptions = [
     '1a',
     '1b',
@@ -239,6 +243,7 @@ class _SigatokaEvaluacionFormScreenState extends State<SigatokaEvaluacionFormScr
     final selectedValue =
         _infectionGradeOptions.contains(currentValue) ? currentValue : null;
     return DropdownButtonFormField<String>(
+      key: ValueKey('${label}_$_dropdownResetKey'), // Key para forzar reconstrucción
       value: selectedValue,
       isExpanded: true,
       decoration: InputDecoration(
@@ -546,25 +551,31 @@ class _SigatokaEvaluacionFormScreenState extends State<SigatokaEvaluacionFormScr
   }
 
   void _limpiarFormularioMuestra() {
-    _loteController.clear();
-    _hoja3eraController.clear();
-    _hoja4taController.clear();
-    _hoja5taController.clear();
-    _totalHojas3eraController.clear();
-    _totalHojas4taController.clear();
-    _totalHojas5taController.clear();
-    _plantasConLesionesController.clear();
-    _totalLesionesController.clear();
-    _plantas3erEstadioController.clear();
-    _totalLetrasController.clear();
-    _hvle0wController.clear();
-    _hvlq0wController.clear();
-    _hvlq5_0wController.clear();
-    _th0wController.clear();
-    _hvle10wController.clear();
-    _hvlq10wController.clear();
-    _hvlq5_10wController.clear();
-    _th10wController.clear();
+    setState(() {
+      // Limpiar completamente todos los campos de la muestra
+      _loteController.text = '';
+      _hoja3eraController.text = '';
+      _hoja4taController.text = '';
+      _hoja5taController.text = '';
+      _totalHojas3eraController.text = '';
+      _totalHojas4taController.text = '';
+      _totalHojas5taController.text = '';
+      _plantasConLesionesController.text = '';
+      _totalLesionesController.text = '';
+      _plantas3erEstadioController.text = '';
+      _totalLetrasController.text = '';
+      _hvle0wController.text = '';
+      _hvlq0wController.text = '';
+      _hvlq5_0wController.text = '';
+      _th0wController.text = '';
+      _hvle10wController.text = '';
+      _hvlq10wController.text = '';
+      _hvlq5_10wController.text = '';
+      _th10wController.text = '';
+      
+      // Incrementar key para forzar reconstrucción de dropdowns
+      _dropdownResetKey++;
+    });
   }
 
   void _showError(String message) {

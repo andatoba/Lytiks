@@ -307,4 +307,133 @@ class PlanSeguimientoMokoService {
       },
     ];
   }
+
+  // =====================================================
+  // MÉTODOS PARA CONFIGURACIONES DE APLICACIÓN
+  // =====================================================
+
+  /// Guarda o actualiza una configuración de aplicación en el servidor
+  Future<Map<String, dynamic>> guardarConfiguracionAplicacion(Map<String, dynamic> configuracion) async {
+    try {
+      final base = await baseUri;
+      final response = await http.post(
+        base.replace(path: '${base.path}/configuracion-aplicacion'),
+        headers: {'Content-Type': 'application/json; charset=UTF-8'},
+        body: json.encode(configuracion),
+      );
+
+      if (response.statusCode == 200) {
+        final data = json.decode(utf8.decode(response.bodyBytes));
+        print('✅ Configuración guardada en servidor: ${data['configuracion']['id']}');
+        return data;
+      } else {
+        throw Exception('Error al guardar configuración: ${response.statusCode}');
+      }
+    } catch (e) {
+      print('❌ Error al guardar configuración en servidor: $e');
+      rethrow;
+    }
+  }
+
+  /// Obtiene todas las configuraciones de un foco
+  Future<List<Map<String, dynamic>>> getConfiguracionesByFoco(int focoId) async {
+    try {
+      final base = await baseUri;
+      final response = await http.get(
+        base.replace(path: '${base.path}/foco/$focoId/configuraciones'),
+        headers: {'Content-Type': 'application/json'},
+      );
+
+      if (response.statusCode == 200) {
+        final List<dynamic> data = json.decode(utf8.decode(response.bodyBytes));
+        return data.cast<Map<String, dynamic>>();
+      } else {
+        throw Exception('Error al obtener configuraciones: ${response.statusCode}');
+      }
+    } catch (e) {
+      print('❌ Error al obtener configuraciones del servidor: $e');
+      return [];
+    }
+  }
+
+  /// Obtiene las configuraciones de un foco y fase específica
+  Future<List<Map<String, dynamic>>> getConfiguracionesByFocoYFase(int focoId, int faseId) async {
+    try {
+      final base = await baseUri;
+      final response = await http.get(
+        base.replace(path: '${base.path}/foco/$focoId/fase/$faseId/configuraciones'),
+        headers: {'Content-Type': 'application/json'},
+      );
+
+      if (response.statusCode == 200) {
+        final List<dynamic> data = json.decode(utf8.decode(response.bodyBytes));
+        return data.cast<Map<String, dynamic>>();
+      } else {
+        throw Exception('Error al obtener configuraciones: ${response.statusCode}');
+      }
+    } catch (e) {
+      print('❌ Error al obtener configuraciones del servidor: $e');
+      return [];
+    }
+  }
+
+  /// Obtiene configuraciones pendientes de un foco
+  Future<List<Map<String, dynamic>>> getConfiguracionesPendientes(int focoId) async {
+    try {
+      final base = await baseUri;
+      final response = await http.get(
+        base.replace(path: '${base.path}/foco/$focoId/configuraciones/pendientes'),
+        headers: {'Content-Type': 'application/json'},
+      );
+
+      if (response.statusCode == 200) {
+        final List<dynamic> data = json.decode(utf8.decode(response.bodyBytes));
+        return data.cast<Map<String, dynamic>>();
+      } else {
+        throw Exception('Error al obtener configuraciones pendientes: ${response.statusCode}');
+      }
+    } catch (e) {
+      print('❌ Error al obtener configuraciones pendientes del servidor: $e');
+      return [];
+    }
+  }
+
+  /// Marca una configuración como completada
+  Future<Map<String, dynamic>> completarConfiguracion(int id) async {
+    try {
+      final base = await baseUri;
+      final response = await http.put(
+        base.replace(path: '${base.path}/configuracion-aplicacion/$id/completar'),
+        headers: {'Content-Type': 'application/json'},
+      );
+
+      if (response.statusCode == 200) {
+        final data = json.decode(utf8.decode(response.bodyBytes));
+        return data;
+      } else {
+        throw Exception('Error al completar configuración: ${response.statusCode}');
+      }
+    } catch (e) {
+      print('❌ Error al completar configuración: $e');
+      rethrow;
+    }
+  }
+
+  /// Elimina una configuración
+  Future<void> eliminarConfiguracion(int id) async {
+    try {
+      final base = await baseUri;
+      final response = await http.delete(
+        base.replace(path: '${base.path}/configuracion-aplicacion/$id'),
+        headers: {'Content-Type': 'application/json'},
+      );
+
+      if (response.statusCode != 200) {
+        throw Exception('Error al eliminar configuración: ${response.statusCode}');
+      }
+    } catch (e) {
+      print('❌ Error al eliminar configuración: $e');
+      rethrow;
+    }
+  }
 }

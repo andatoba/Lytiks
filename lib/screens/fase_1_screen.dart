@@ -53,7 +53,7 @@ class _Fase1ScreenState extends State<Fase1Screen> {
       child: Scaffold(
         backgroundColor: Colors.grey[100],
         appBar: AppBar(
-          backgroundColor: const Color(0xFF1A365D),
+          backgroundColor: const Color(0xFFC62828),
           foregroundColor: Colors.white,
           elevation: 0,
           title: Text('Fase 1 - ${widget.fase['nombre'] ?? ''}'),

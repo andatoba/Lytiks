@@ -91,7 +91,7 @@ class HaciendaService {
         }),
       ).timeout(const Duration(seconds: 10));
 
-      return json.decode(response.body);
+      return jsonDecode(utf8.decode(response.bodyBytes));
     } catch (e) {
       print('Error creando hacienda: $e');
       return {'success': false, 'message': 'Error: $e'};
@@ -122,7 +122,7 @@ class HaciendaService {
         }),
       ).timeout(const Duration(seconds: 10));
 
-      return json.decode(response.body);
+      return jsonDecode(utf8.decode(response.bodyBytes));
     } catch (e) {
       print('Error actualizando hacienda: $e');
       return {'success': false, 'message': 'Error: $e'};
@@ -137,7 +137,7 @@ class HaciendaService {
         headers: {'Content-Type': 'application/json'},
       ).timeout(const Duration(seconds: 10));
 
-      return json.decode(response.body);
+      return jsonDecode(utf8.decode(response.bodyBytes));
     } catch (e) {
       print('Error eliminando hacienda: $e');
       return {'success': false, 'message': 'Error: $e'};

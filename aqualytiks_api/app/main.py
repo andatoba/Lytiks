@@ -1,5 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import ORJSONResponse
 from app.routes import cubo, destinos, empresas, totales
 from app.database import engine, Base
 import os
@@ -17,6 +18,7 @@ app = FastAPI(
     version="1.0.0",
     docs_url="/docs",
     redoc_url="/redoc",
+    default_response_class=ORJSONResponse,
     servers=[
         {
             "url": f"http://{SERVER_IP}:{SERVER_PORT}",

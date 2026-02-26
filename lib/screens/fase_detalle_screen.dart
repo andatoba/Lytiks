@@ -32,8 +32,28 @@ class _FaseDetalleScreenState extends State<FaseDetalleScreen> {
   Map<int, bool> _tareasCompletadas = {};
   Map<int, TextEditingController> _dosisControllers = {};
   Map<int, String> _dosisEditadas = {};
+  Map<int, DateTime?> _fechasAplicacion = {};
+  Map<int, int> _frecuenciasDias = {};
+  Map<int, int> _repeticiones = {};
+  Map<int, String> _recordatorios = {};
   bool _isLoading = true;
   bool _isSaving = false;
+
+  // Helper para convertir tareaId a int de forma segura
+  int? _convertirATareaIdInt(dynamic value) {
+    if (value == null) return null;
+    if (value is int) return value;
+    if (value is String) {
+      try {
+        return int.parse(value);
+      } catch (e) {
+        print('❌ ERROR: No se pudo convertir tareaId "$value" a int: $e');
+        return null;
+      }
+    }
+    print('❌ ERROR: tareaId tiene tipo inesperado: ${value.runtimeType}');
+    return null;
+  }
 
   @override
   void dispose() {
@@ -47,6 +67,7 @@ class _FaseDetalleScreenState extends State<FaseDetalleScreen> {
   void initState() {
     super.initState();
     _cargarTareas();
+    _cargarConfiguracionesGuardadas();
   }
 
   Future<void> _cargarTareas() async {
@@ -55,10 +76,18 @@ class _FaseDetalleScreenState extends State<FaseDetalleScreen> {
         final ejecucionId = widget.ejecucion!['id'];
         final tareas = await widget.service.getTareasEjecucion(ejecucionId);
 
+        print('🐛 DEBUG: Cargando tareas con ejecución. Total: ${tareas.length}');
         setState(() {
           _tareas = tareas;
           for (var tarea in tareas) {
-            final tareaId = tarea['id'];
+            final tareaIdRaw = tarea['id'] ?? tarea['itemTarea']?['id'];
+            final tareaId = _convertirATareaIdInt(tareaIdRaw);
+            if (tareaId == null) {
+              print('⚠️ ADVERTENCIA: Tarea sin ID válido o no convertible: $tareaIdRaw (tipo: ${tareaIdRaw.runtimeType})');
+              continue;
+            }
+            
+            print('🐛 DEBUG: Tarea ID: $tareaId (tipo: ${tareaId.runtimeType}), Nombre: ${tarea['itemTarea']?['nombre'] ?? tarea['nombre']}');
             _tareasCompletadas[tareaId] = tarea['completado'] ?? false;
 
             // Inicializar controlador de dosis
@@ -72,10 +101,18 @@ class _FaseDetalleScreenState extends State<FaseDetalleScreen> {
         });
       } else {
         final tareas = widget.fase['tareas'] ?? [];
+        print('🐛 DEBUG: Cargando tareas sin ejecución. Total: ${tareas.length}');
         setState(() {
           _tareas = List<Map<String, dynamic>>.from(tareas);
           for (var tarea in _tareas) {
-            final tareaId = tarea['id'];
+            final tareaIdRaw = tarea['id'] ?? tarea['itemTarea']?['id'];
+            final tareaId = _convertirATareaIdInt(tareaIdRaw);
+            if (tareaId == null) {
+              print('⚠️ ADVERTENCIA: Tarea sin ID válido o no convertible: $tareaIdRaw (tipo: ${tareaIdRaw.runtimeType})');
+              continue;
+            }
+            
+            print('🐛 DEBUG: Tarea ID: $tareaId, Nombre: ${tarea['itemTarea']?['nombre'] ?? tarea['nombre']}');
             _tareasCompletadas[tareaId] = false;
 
             // Inicializar controlador de dosis
@@ -94,7 +131,13 @@ class _FaseDetalleScreenState extends State<FaseDetalleScreen> {
       setState(() {
         _tareas = List<Map<String, dynamic>>.from(tareas);
         for (var tarea in _tareas) {
-          final tareaId = tarea['id'];
+          final tareaIdRaw = tarea['id'];
+          final tareaId = _convertirATareaIdInt(tareaIdRaw);
+          if (tareaId == null) {
+            print('⚠️ ADVERTENCIA: Tarea sin ID válido en catch: $tareaIdRaw');
+            continue;
+          }
+          
           _tareasCompletadas[tareaId] = false;
 
           // Inicializar controlador de dosis
@@ -106,6 +149,53 @@ class _FaseDetalleScreenState extends State<FaseDetalleScreen> {
         }
         _isLoading = false;
       });
+    }
+  }
+
+  Future<void> _cargarConfiguracionesGuardadas() async {
+    try {
+      print('📂 Cargando configuraciones guardadas para Foco: ${widget.focoId}, Fase: ${widget.fase['id']}');
+      
+      final configuraciones = await _offlineStorage.obtenerConfiguracionesAplicacion(
+        focoId: widget.focoId,
+        faseId: widget.fase['id'],
+      );
+      
+      print('📂 Configuraciones encontradas: ${configuraciones.length}');
+      
+      for (var config in configuraciones) {
+        print('📂 Config: TareaID=${config['tarea_id']}, Fecha=${config['fecha_programada']}, Frecuencia=${config['frecuencia']}días, Repeticiones=${config['repeticiones']}');
+        
+        final tareaIdRaw = config['tarea_id'];
+        final tareaId = _convertirATareaIdInt(tareaIdRaw);
+        if (tareaId == null) {
+          print('⚠️ ADVERTENCIA: Config sin tareaId válido: $tareaIdRaw');
+          continue;
+        }
+        
+        setState(() {
+          // Cargar fecha
+          if (config['fecha_programada'] != null) {
+            _fechasAplicacion[tareaId] = DateTime.parse(config['fecha_programada']);
+          }
+          // Cargar frecuencia
+          if (config['frecuencia'] != null) {
+            _frecuenciasDias[tareaId] = config['frecuencia'] as int;
+          }
+          // Cargar repeticiones
+          if (config['repeticiones'] != null) {
+            _repeticiones[tareaId] = config['repeticiones'] as int;
+          }
+          // Cargar recordatorio
+          if (config['recordatorio'] != null) {
+            _recordatorios[tareaId] = config['recordatorio'];
+          }
+        });
+      }
+      
+      print('✅ Configuraciones cargadas exitosamente');
+    } catch (e) {
+      print('❌ Error cargando configuraciones guardadas: $e');
     }
   }
 
@@ -225,7 +315,7 @@ class _FaseDetalleScreenState extends State<FaseDetalleScreen> {
     return Scaffold(
       backgroundColor: Colors.grey[100],
       appBar: AppBar(
-        backgroundColor: const Color(0xFF1A365D),
+        backgroundColor: const Color(0xFFC62828),
         title: Text(
           nombre,
           style: const TextStyle(color: Colors.white),
@@ -425,7 +515,7 @@ class _FaseDetalleScreenState extends State<FaseDetalleScreen> {
           child: ElevatedButton(
             onPressed: _isSaving ? null : _guardarYFinalizar,
             style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF1A365D),
+              backgroundColor: const Color(0xFFC62828),
               padding: const EdgeInsets.symmetric(vertical: 16),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(8),
@@ -469,7 +559,17 @@ class _FaseDetalleScreenState extends State<FaseDetalleScreen> {
           ),
         ),
         ..._tareas.map((tarea) {
-          final tareaId = tarea['id'] ?? tarea['itemTarea']?['id'];
+          final tareaIdRaw = tarea['id'] ?? tarea['itemTarea']?['id'];
+          final tareaId = _convertirATareaIdInt(tareaIdRaw);
+          
+          // Si no hay tareaId válido, saltar esta tarea
+          if (tareaId == null) {
+            print('⚠️ ADVERTENCIA: Tarea sin ID válido en render: $tareaIdRaw (tipo: ${tareaIdRaw.runtimeType})');
+            return const SizedBox.shrink();
+          }
+          
+          print('🎨 RENDER: Tarea ID: $tareaId (tipo: ${tareaId.runtimeType})');
+          
           final nombre = _limpiarTexto(
             tarea['itemTarea']?['nombre'] ?? tarea['nombre'] ?? '',
           );
@@ -477,6 +577,7 @@ class _FaseDetalleScreenState extends State<FaseDetalleScreen> {
             tarea['itemTarea']?['dosis'] ?? tarea['dosis'] ?? '',
           );
           final completado = _tareasCompletadas[tareaId] ?? false;
+          print('🎨 RENDER: TareaID $tareaId - Completado: $completado - Map keys: ${_tareasCompletadas.keys.toList()}');
 
           return Card(
             margin: const EdgeInsets.symmetric(vertical: 8),
@@ -491,11 +592,17 @@ class _FaseDetalleScreenState extends State<FaseDetalleScreen> {
                       Checkbox(
                         value: completado,
                         onChanged: (value) {
+                          print('🐛 DEBUG: Checkbox cambiado para tarea $tareaId: $value');
                           setState(() {
                             _tareasCompletadas[tareaId] = value ?? false;
+                            print('🐛 DEBUG: Estados completados: $_tareasCompletadas');
+                            // Si se marca, mostrar selector de fecha
+                            if (value == true) {
+                              _mostrarSelectorFecha(context, tareaId);
+                            }
                           });
                         },
-                        activeColor: const Color(0xFF1A365D),
+                        activeColor: const Color(0xFFC62828),
                       ),
                       const SizedBox(width: 8),
                       Expanded(
@@ -551,6 +658,16 @@ class _FaseDetalleScreenState extends State<FaseDetalleScreen> {
                                 ],
                               ),
                             ],
+                            // Mostrar calendario si está marcado
+                            if (completado) ...[
+                              const SizedBox(height: 12),
+                              Builder(
+                                builder: (context) {
+                                  print('🐛 DEBUG: Mostrando configuración para tarea $tareaId');
+                                  return _buildConfiguracionAplicacion(tareaId);
+                                },
+                              ),
+                            ],
                           ],
                         ),
                       ),
@@ -561,8 +678,432 @@ class _FaseDetalleScreenState extends State<FaseDetalleScreen> {
             ),
           );
         }).toList(),
+        const SizedBox(height: 80),
       ],
     );
+  }
+
+  bool _esProyeccion(String nombre) {
+    final nombreLower = nombre.toLowerCase();
+    return nombreLower.contains('proyección') || 
+           nombreLower.contains('proyeccion') ||
+           nombreLower.contains('glifosato') ||
+           nombreLower.contains('aplicación') ||
+           nombreLower.contains('aplicacion') ||
+           nombreLower.contains('tratamiento') ||
+           nombreLower.contains('control') ||
+           nombreLower.contains('erradicación') ||
+           nombreLower.contains('erradicacion') ||
+           nombreLower.contains('fumigación') ||
+           nombreLower.contains('fumigacion') ||
+           nombreLower.contains('inyección') ||
+           nombreLower.contains('inyeccion') ||
+           nombreLower.contains('herbicida') ||
+           nombreLower.contains('fungicida') ||
+           nombreLower.contains('bactericida') ||
+           nombreLower.contains('aspersión') ||
+           nombreLower.contains('aspersion') ||
+           nombreLower.contains('aplicar') ||
+           nombreLower.contains('producto') ||
+           nombreLower.contains('químico') ||
+           nombreLower.contains('quimico');
+  }
+
+  Future<void> _mostrarSelectorFecha(BuildContext context, int tareaId) async {
+    final fechaActual = _fechasAplicacion[tareaId] ?? DateTime.now();
+    final fechaSeleccionada = await showDatePicker(
+      context: context,
+      initialDate: fechaActual,
+      firstDate: DateTime.now().subtract(const Duration(days: 365)),
+      lastDate: DateTime.now().add(const Duration(days: 365)),
+      locale: const Locale('es', 'ES'),
+      builder: (context, child) {
+        return Theme(
+          data: Theme.of(context).copyWith(
+            colorScheme: const ColorScheme.light(
+              primary: Color(0xFFC62828),
+              onPrimary: Colors.white,
+              surface: Colors.white,
+              onSurface: Colors.black,
+            ),
+          ),
+          child: child!,
+        );
+      },
+    );
+
+    if (fechaSeleccionada != null) {
+      setState(() {
+        _fechasAplicacion[tareaId] = fechaSeleccionada;
+      });
+    }
+  }
+
+  Widget _buildConfiguracionAplicacion(int tareaId) {
+    final fecha = _fechasAplicacion[tareaId];
+    final frecuenciaDias = _frecuenciasDias[tareaId] ?? 7;
+    final repeticiones = _repeticiones[tareaId] ?? 1;
+    final recordatorio = _recordatorios[tareaId] ?? '1 día antes';
+    
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.red[50],
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Colors.red[200]!),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.calendar_today, size: 16, color: Colors.red[700]),
+              const SizedBox(width: 8),
+              Text(
+                'Configuración de Aplicación',
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.red[900],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          InkWell(
+            onTap: () => _mostrarSelectorFecha(context, tareaId),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(6),
+                border: Border.all(color: Colors.grey[300]!),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.event, color: Colors.red[700], size: 20),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      fecha != null
+                          ? 'Fecha programada: ${fecha.day}/${fecha.month}/${fecha.year}'
+                          : 'Seleccionar fecha de aplicación',
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: fecha != null ? Colors.black87 : Colors.grey[600],
+                      ),
+                    ),
+                  ),
+                  Icon(Icons.arrow_forward_ios, size: 14, color: Colors.grey[400]),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
+          // Frecuencia
+          Row(
+            children: [
+              Icon(Icons.repeat, size: 16, color: Colors.red[700]),
+              const SizedBox(width: 8),
+              const Expanded(
+                child: Text(
+                  'Frecuencia (días):',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w500,
+                    color: Colors.black87,
+                  ),
+                ),
+              ),
+              Row(
+                children: [
+                  IconButton(
+                    onPressed: () {
+                      setState(() {
+                        if (frecuenciaDias > 1) {
+                          _frecuenciasDias[tareaId] = frecuenciaDias - 1;
+                        }
+                      });
+                    },
+                    icon: const Icon(Icons.remove_circle_outline),
+                    color: Colors.red[700],
+                    constraints: const BoxConstraints(),
+                    padding: const EdgeInsets.all(8),
+                  ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(6),
+                      border: Border.all(color: Colors.grey[300]!),
+                    ),
+                    child: Text(
+                      '$frecuenciaDias',
+                      style: const TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.black87,
+                      ),
+                    ),
+                  ),
+                  IconButton(
+                    onPressed: () {
+                      setState(() {
+                        if (frecuenciaDias < 365) {
+                          _frecuenciasDias[tareaId] = frecuenciaDias + 1;
+                        }
+                      });
+                    },
+                    icon: const Icon(Icons.add_circle_outline),
+                    color: Colors.red[700],
+                    constraints: const BoxConstraints(),
+                    padding: const EdgeInsets.all(8),
+                  ),
+                ],
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          // Repeticiones
+          Row(
+            children: [
+              Icon(Icons.format_list_numbered, size: 16, color: Colors.red[700]),
+              const SizedBox(width: 8),
+              const Expanded(
+                child: Text(
+                  'Repeticiones:',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w500,
+                    color: Colors.black87,
+                  ),
+                ),
+              ),
+              Row(
+                children: [
+                  IconButton(
+                    onPressed: () {
+                      setState(() {
+                        if (repeticiones > 1) {
+                          _repeticiones[tareaId] = repeticiones - 1;
+                        }
+                      });
+                    },
+                    icon: const Icon(Icons.remove_circle_outline),
+                    color: Colors.red[700],
+                    constraints: const BoxConstraints(),
+                    padding: const EdgeInsets.all(8),
+                  ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(6),
+                      border: Border.all(color: Colors.grey[300]!),
+                    ),
+                    child: Text(
+                      '$repeticiones',
+                      style: const TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.black87,
+                      ),
+                    ),
+                  ),
+                  IconButton(
+                    onPressed: () {
+                      setState(() {
+                        if (repeticiones < 100) {
+                          _repeticiones[tareaId] = repeticiones + 1;
+                        }
+                      });
+                    },
+                    icon: const Icon(Icons.add_circle_outline),
+                    color: Colors.red[700],
+                    constraints: const BoxConstraints(),
+                    padding: const EdgeInsets.all(8),
+                  ),
+                ],
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          // Recordatorio
+          Row(
+            children: [
+              Icon(Icons.alarm, size: 16, color: Colors.red[700]),
+              const SizedBox(width: 8),
+              const Text(
+                'Recordatorio:',
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w500,
+                  color: Colors.black87,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: DropdownButtonFormField<String>(
+                  value: recordatorio,
+                  decoration: InputDecoration(
+                    isDense: true,
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(6),
+                      borderSide: BorderSide(color: Colors.grey[300]!),
+                    ),
+                    fillColor: Colors.white,
+                    filled: true,
+                  ),
+                  items: const [
+                    DropdownMenuItem(value: 'Sin recordatorio', child: Text('Sin recordatorio', style: TextStyle(fontSize: 12))),
+                    DropdownMenuItem(value: '1 hora antes', child: Text('1 hora antes', style: TextStyle(fontSize: 12))),
+                    DropdownMenuItem(value: '3 horas antes', child: Text('3 horas antes', style: TextStyle(fontSize: 12))),
+                    DropdownMenuItem(value: '1 día antes', child: Text('1 día antes', style: TextStyle(fontSize: 12))),
+                    DropdownMenuItem(value: '2 días antes', child: Text('2 días antes', style: TextStyle(fontSize: 12))),
+                    DropdownMenuItem(value: '1 semana antes', child: Text('1 semana antes', style: TextStyle(fontSize: 12))),
+                  ],
+                  onChanged: (value) {
+                    setState(() {
+                      _recordatorios[tareaId] = value ?? '1 día antes';
+                    });
+                  },
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              onPressed: () => _guardarEnPlan(tareaId),
+              icon: const Icon(Icons.save_outlined, size: 18),
+              label: const Text('Guardar en plan'),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: const Color(0xFFC62828),
+                side: const BorderSide(color: Color(0xFFC62828)),
+                padding: const EdgeInsets.symmetric(vertical: 12),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _guardarEnPlan(int tareaId) async {
+    final fecha = _fechasAplicacion[tareaId];
+    if (fecha == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Por favor seleccione una fecha de aplicación'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+
+    try {
+      final frecuenciaDias = _frecuenciasDias[tareaId] ?? 7;
+      final repeticiones = _repeticiones[tareaId] ?? 1;
+      final recordatorio = _recordatorios[tareaId] ?? '1 día antes';
+
+      print('💾 DEBUG Guardar: TareaID=$tareaId, Fecha=$fecha, Frecuencia=$frecuenciaDias, Repeticiones=$repeticiones');
+
+      // Buscar la tarea actual
+      final tarea = _tareas.firstWhere((t) => (t['id'] ?? t['itemTarea']?['id']) == tareaId);
+      final nombreTarea = _limpiarTexto(
+        tarea['itemTarea']?['nombre'] ?? tarea['nombre'] ?? '',
+      );
+
+      print('💾 DEBUG Guardar: Nombre tarea="$nombreTarea", FocoID=${widget.focoId}, FaseID=${widget.fase['id']}');
+
+      // Preparar datos para guardar
+      final configuracion = {
+        'focoId': widget.focoId,
+        'faseId': widget.fase['id'],
+        'tareaId': tareaId,
+        'nombreTarea': nombreTarea,
+        'fechaProgramada': fecha.toIso8601String(),
+        'frecuencia': frecuenciaDias,
+        'repeticiones': repeticiones,
+        'recordatorio': recordatorio,
+        'completado': false,
+        'fechaCreacion': DateTime.now().toIso8601String(),
+      };
+
+      print('💾 DEBUG Guardar: Configuración completa: $configuracion');
+
+      // Guardar en almacenamiento offline primero
+      final idLocal = await _offlineStorage.guardarConfiguracionAplicacion(configuracion);
+      
+      print('✅ DEBUG Guardar: ID guardado en BD local: $idLocal');
+
+      // Intentar sincronizar con el servidor
+      bool sincronizadoConServidor = false;
+      try {
+        final respuestaServidor = await widget.service.guardarConfiguracionAplicacion(configuracion);
+        sincronizadoConServidor = respuestaServidor['success'] == true;
+        print('✅ DEBUG Guardar: Sincronizado con servidor: ${respuestaServidor['configuracion']['id']}');
+      } catch (e) {
+        print('⚠️ DEBUG Guardar: No se pudo sincronizar con servidor (se guardó localmente): $e');
+        // No mostrar error al usuario, la data está guardada localmente
+      }
+      
+      print('✅ DEBUG Guardar: Configuración guardada correctamente con ID local: $idLocal');
+      
+      // Verificar que se guardó
+      final configuraciones = await _offlineStorage.obtenerConfiguracionesAplicacion(
+        focoId: widget.focoId,
+        faseId: widget.fase['id'],
+      );
+      
+      print('📊 DEBUG Verificar: Total configuraciones guardadas para este foco/fase: ${configuraciones.length}');
+      print('📊 DEBUG Verificar: Configuraciones: $configuraciones');
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  sincronizadoConServidor 
+                    ? '✓ Aplicación guardada y sincronizada'
+                    : '✓ Aplicación guardada localmente',
+                  style: const TextStyle(fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 4),
+                Text('Fecha: ${fecha.day}/${fecha.month}/${fecha.year}'),
+                Text('Frecuencia: cada $frecuenciaDias días'),
+                Text('Repeticiones: $repeticiones'),
+                Text('Recordatorio: $recordatorio'),
+                if (!sincronizadoConServidor) ...[
+                  const SizedBox(height: 4),
+                  const Text(
+                    '📱 Se sincronizará cuando haya conexión',
+                    style: TextStyle(fontSize: 11, fontStyle: FontStyle.italic),
+                  ),
+                ],
+
+              ],
+            ),
+            backgroundColor: Colors.green,
+            duration: const Duration(seconds: 4),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error al guardar: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
   }
 
   /// Limpia caracteres mal codificados en los textos

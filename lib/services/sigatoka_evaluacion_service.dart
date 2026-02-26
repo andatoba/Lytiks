@@ -35,9 +35,9 @@ class SigatokaEvaluacionService {
       );
       
       if (response.statusCode == 201 || response.statusCode == 200) {
-        return jsonDecode(response.body);
+        return jsonDecode(utf8.decode(response.bodyBytes));
       } else {
-        throw Exception('Error al crear evaluación: ${response.body}');
+        throw Exception('Error al crear evaluación: ${utf8.decode(response.bodyBytes)}');
       }
     } catch (e) {
       throw Exception('Error de conexión: $e');
@@ -65,9 +65,9 @@ class SigatokaEvaluacionService {
       );
       
       if (response.statusCode == 201 || response.statusCode == 200) {
-        return jsonDecode(response.body);
+        return jsonDecode(utf8.decode(response.bodyBytes));
       } else {
-        throw Exception('Error al crear lote: ${response.body}');
+        throw Exception('Error al crear lote: ${utf8.decode(response.bodyBytes)}');
       }
     } catch (e) {
       throw Exception('Error de conexión: $e');

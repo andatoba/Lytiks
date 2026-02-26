@@ -481,7 +481,69 @@ GET /api/auditorias/cedula/{cedula}
   }
 
 ================================================================================
-📝 NOTAS IMPORTANTES
+�️ MÓDULO DE CONFIGURACIÓN DE APLICACIONES - /api/moko/plan-seguimiento
+================================================================================
+
+POST /api/moko/plan-seguimiento/configuracion-aplicacion
+  Descripción: Guardar o actualizar configuración de aplicación
+  Body: {
+    "focoId": number,
+    "faseId": number,
+    "tareaId": number,
+    "nombreTarea": "string",
+    "fechaProgramada": "ISO8601",
+    "frecuencia": number (días),
+    "repeticiones": number,
+    "recordatorio": "string",
+    "completado": boolean,
+    "fechaCreacion": "ISO8601",
+    "observaciones": "string"
+  }
+  Retorna: {
+    "success": true,
+    "message": "Configuración guardada correctamente",
+    "configuracion": {...}
+  }
+
+GET /api/moko/plan-seguimiento/foco/{focoId}/configuraciones
+  Descripción: Obtener todas las configuraciones de un foco
+  Parámetros: focoId (Long)
+  Retorna: Array de configuraciones
+
+GET /api/moko/plan-seguimiento/foco/{focoId}/fase/{faseId}/configuraciones
+  Descripción: Obtener configuraciones de un foco y fase específica
+  Parámetros: focoId (Long), faseId (Long)
+  Retorna: Array de configuraciones
+
+GET /api/moko/plan-seguimiento/foco/{focoId}/configuraciones/pendientes
+  Descripción: Obtener configuraciones pendientes (no completadas)
+  Parámetros: focoId (Long)
+  Retorna: Array de configuraciones con completado=false
+
+PUT /api/moko/plan-seguimiento/configuracion-aplicacion/{id}/completar
+  Descripción: Marcar configuración como completada
+  Parámetros: id (Long)
+  Retorna: {
+    "success": true,
+    "message": "Configuración marcada como completada",
+    "configuracion": {...}
+  }
+
+DELETE /api/moko/plan-seguimiento/configuracion-aplicacion/{id}
+  Descripción: Eliminar configuración
+  Parámetros: id (Long)
+  Retorna: {
+    "success": true,
+    "message": "Configuración eliminada correctamente"
+  }
+
+GET /api/moko/plan-seguimiento/foco/{focoId}/configuraciones/pendientes/count
+  Descripción: Contar configuraciones pendientes de un foco
+  Parámetros: focoId (Long)
+  Retorna: { "count": number }
+
+================================================================================
+�📝 NOTAS IMPORTANTES
 ================================================================================
 
 AUTENTICACIÓN:

@@ -25,6 +25,7 @@ class _PlanSeguimientoMokoScreenState extends State<PlanSeguimientoMokoScreen> {
   final PlanSeguimientoMokoService _service = PlanSeguimientoMokoService();
 
   bool _isLoading = true;
+  bool _isSaving = false;
   List<Map<String, dynamic>> _fases = [];
   List<Map<String, dynamic>> _ejecuciones = [];
   int _faseActualIndex = 0;
@@ -84,12 +85,56 @@ class _PlanSeguimientoMokoScreenState extends State<PlanSeguimientoMokoScreen> {
     }
   }
 
+  Future<void> _guardarYVolver() async {
+    if (_isSaving) return;
+    
+    setState(() => _isSaving = true);
+    
+    try {
+      // Sincronizar todos los cambios pendientes
+      await _service.inicializarPlan(widget.focoId);
+      final estado = await _service.getEstadoPlan(widget.focoId);
+      
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('✅ Plan guardado correctamente'),
+            backgroundColor: Colors.green,
+            duration: Duration(seconds: 2),
+          ),
+        );
+        
+        // Esperar un momento para que el usuario vea el mensaje
+        await Future.delayed(const Duration(milliseconds: 500));
+        
+        // Volver a la pantalla anterior
+        if (mounted) {
+          Navigator.pop(context, true);
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('⚠️ Error al guardar: $e'),
+            backgroundColor: Colors.orange,
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isSaving = false);
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.grey[100],
       appBar: AppBar(
-        backgroundColor: const Color(0xFF1A365D),
+        backgroundColor: const Color(0xFFC62828),
         elevation: 0,
         title: Row(
           children: [
@@ -109,7 +154,7 @@ class _PlanSeguimientoMokoScreenState extends State<PlanSeguimientoMokoScreen> {
             Container(
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
-                color: const Color(0xFF1A365D),
+                color: const Color(0xFFC62828),
                 borderRadius: BorderRadius.circular(20),
               ),
               child: const Icon(Icons.person, color: Colors.white, size: 20),
@@ -124,6 +169,25 @@ class _PlanSeguimientoMokoScreenState extends State<PlanSeguimientoMokoScreen> {
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : _buildContent(),
+      floatingActionButton: _isLoading ? null : FloatingActionButton.extended(
+        onPressed: _isSaving ? null : _guardarYVolver,
+        backgroundColor: const Color(0xFFC62828),
+        icon: _isSaving
+            ? const SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: Colors.white,
+                ),
+              )
+            : const Icon(Icons.save, color: Colors.white),
+        label: Text(
+          _isSaving ? 'Guardando...' : 'Guardar',
+          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+        ),
+      ),
+      floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
     );
   }
 
@@ -134,7 +198,7 @@ class _PlanSeguimientoMokoScreenState extends State<PlanSeguimientoMokoScreen> {
         Container(
           width: double.infinity,
           padding: const EdgeInsets.all(16),
-          color: const Color(0xFF1A365D),
+          color: const Color(0xFFC62828),
           child: Text(
             'Foco #${widget.numeroFoco}',
             style: const TextStyle(
@@ -193,7 +257,7 @@ class _PlanSeguimientoMokoScreenState extends State<PlanSeguimientoMokoScreen> {
               color: completado
                   ? Colors.green
                   : esActual
-                      ? const Color(0xFF1A365D)
+                      ? const Color(0xFFC62828)
                       : Colors.grey[400],
               borderRadius: BorderRadius.circular(8),
             ),
@@ -223,7 +287,7 @@ class _PlanSeguimientoMokoScreenState extends State<PlanSeguimientoMokoScreen> {
                   color: Colors.white,
                   borderRadius: BorderRadius.circular(12),
                   border: esActual
-                      ? Border.all(color: const Color(0xFF1A365D), width: 2)
+                      ? Border.all(color: const Color(0xFFC62828), width: 2)
                       : null,
                   boxShadow: [
                     BoxShadow(
@@ -269,7 +333,7 @@ class _PlanSeguimientoMokoScreenState extends State<PlanSeguimientoMokoScreen> {
                       Container(
                         height: 4,
                         decoration: BoxDecoration(
-                          color: const Color(0xFF1A365D),
+                          color: const Color(0xFFC62828),
                           borderRadius: BorderRadius.circular(2),
                         ),
                       ),

@@ -254,4 +254,134 @@ public class PlanSeguimientoMokoController {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(error);
         }
     }
+
+    // =====================================================
+    // ENDPOINTS PARA CONFIGURACIONES DE APLICACIÓN
+    // =====================================================
+
+    /**
+     * Guarda o actualiza una configuración de aplicación
+     */
+    @PostMapping("/configuracion-aplicacion")
+    public ResponseEntity<Map<String, Object>> guardarConfiguracionAplicacion(
+            @RequestBody ConfiguracionAplicacion configuracion) {
+        try {
+            ConfiguracionAplicacion saved = planService.guardarConfiguracionAplicacion(configuracion);
+            
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", true);
+            response.put("message", "Configuración guardada correctamente");
+            response.put("configuracion", saved);
+            
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            Map<String, Object> error = new HashMap<>();
+            error.put("success", false);
+            error.put("error", "Error al guardar configuración: " + e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(error);
+        }
+    }
+
+    /**
+     * Obtiene todas las configuraciones de un foco
+     */
+    @GetMapping("/foco/{focoId}/configuraciones")
+    public ResponseEntity<List<ConfiguracionAplicacion>> getConfiguracionesByFoco(@PathVariable Long focoId) {
+        try {
+            List<ConfiguracionAplicacion> configuraciones = planService.getConfiguracionesByFoco(focoId);
+            return ResponseEntity.ok(configuraciones);
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(null);
+        }
+    }
+
+    /**
+     * Obtiene las configuraciones de un foco y fase específica
+     */
+    @GetMapping("/foco/{focoId}/fase/{faseId}/configuraciones")
+    public ResponseEntity<List<ConfiguracionAplicacion>> getConfiguracionesByFocoYFase(
+            @PathVariable Long focoId,
+            @PathVariable Long faseId) {
+        try {
+            List<ConfiguracionAplicacion> configuraciones = planService.getConfiguracionesByFocoYFase(focoId, faseId);
+            return ResponseEntity.ok(configuraciones);
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(null);
+        }
+    }
+
+    /**
+     * Obtiene configuraciones pendientes de un foco
+     */
+    @GetMapping("/foco/{focoId}/configuraciones/pendientes")
+    public ResponseEntity<List<ConfiguracionAplicacion>> getConfiguracionesPendientes(@PathVariable Long focoId) {
+        try {
+            List<ConfiguracionAplicacion> configuraciones = planService.getConfiguracionesPendientes(focoId);
+            return ResponseEntity.ok(configuraciones);
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(null);
+        }
+    }
+
+    /**
+     * Marca una configuración como completada
+     */
+    @PutMapping("/configuracion-aplicacion/{id}/completar")
+    public ResponseEntity<Map<String, Object>> completarConfiguracion(@PathVariable Long id) {
+        try {
+            ConfiguracionAplicacion config = planService.marcarConfiguracionCompletada(id);
+            
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", true);
+            response.put("message", "Configuración marcada como completada");
+            response.put("configuracion", config);
+            
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            Map<String, Object> error = new HashMap<>();
+            error.put("success", false);
+            error.put("error", "Error al completar configuración: " + e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(error);
+        }
+    }
+
+    /**
+     * Elimina una configuración
+     */
+    @DeleteMapping("/configuracion-aplicacion/{id}")
+    public ResponseEntity<Map<String, Object>> eliminarConfiguracion(@PathVariable Long id) {
+        try {
+            planService.eliminarConfiguracion(id);
+            
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", true);
+            response.put("message", "Configuración eliminada correctamente");
+            
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            Map<String, Object> error = new HashMap<>();
+            error.put("success", false);
+            error.put("error", "Error al eliminar configuración: " + e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(error);
+        }
+    }
+
+    /**
+     * Cuenta las configuraciones pendientes de un foco
+     */
+    @GetMapping("/foco/{focoId}/configuraciones/pendientes/count")
+    public ResponseEntity<Map<String, Object>> contarConfiguracionesPendientes(@PathVariable Long focoId) {
+        try {
+            Long count = planService.contarConfiguracionesPendientes(focoId);
+            
+            Map<String, Object> response = new HashMap<>();
+            response.put("count", count);
+            
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            Map<String, Object> error = new HashMap<>();
+            error.put("error", "Error al contar configuraciones: " + e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(error);
+        }
+    }
 }
