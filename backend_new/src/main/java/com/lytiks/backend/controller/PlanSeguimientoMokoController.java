@@ -13,7 +13,6 @@ import java.util.Map;
 
 @RestController
 @RequestMapping("moko/plan-seguimiento")
-@CrossOrigin(origins = "*")
 public class PlanSeguimientoMokoController {
 
     @Autowired

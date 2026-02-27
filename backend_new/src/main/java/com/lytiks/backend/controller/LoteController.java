@@ -15,7 +15,6 @@ import java.util.Map;
 
 @RestController
 @RequestMapping("/api/lotes")
-@CrossOrigin(origins = "*")
 public class LoteController {
     
     private static final Logger log = LoggerFactory.getLogger(LoteController.class);

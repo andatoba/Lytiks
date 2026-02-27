@@ -15,7 +15,6 @@ import java.util.Optional;
 
 @RestController
 @RequestMapping("/seguimiento-moko")
-@CrossOrigin(origins = "*")
 public class SeguimientoMokoController {
 
     @Autowired

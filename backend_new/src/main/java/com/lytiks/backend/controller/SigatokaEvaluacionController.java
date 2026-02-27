@@ -38,7 +38,6 @@ import java.util.List;
  */
 @RestController
 @RequestMapping("/sigatoka")
-@CrossOrigin(origins = "*")
 public class SigatokaEvaluacionController {
     
     private static final Logger log = LoggerFactory.getLogger(SigatokaEvaluacionController.class);

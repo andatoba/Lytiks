@@ -36,7 +36,6 @@ import java.util.UUID;
 
 @RestController
 @RequestMapping("moko")
-@CrossOrigin(origins = "*")
 public class RegistroMokoController {
 
     @Autowired

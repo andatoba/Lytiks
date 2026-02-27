@@ -17,7 +17,6 @@ import java.util.Map;
 
 @RestController
 @RequestMapping("/location-tracking")
-@CrossOrigin(origins = "*")
 @Tag(name = "Seguimiento de ubicacion", description = "Endpoints para seguimiento de ubicacion de tecnicos")
 public class LocationTrackingController {
     

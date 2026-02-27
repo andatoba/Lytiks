@@ -15,7 +15,6 @@ import java.util.Map;
 
 @RestController
 @RequestMapping("/api/haciendas")
-@CrossOrigin(origins = "*")
 public class HaciendaController {
     
     private static final Logger log = LoggerFactory.getLogger(HaciendaController.class);

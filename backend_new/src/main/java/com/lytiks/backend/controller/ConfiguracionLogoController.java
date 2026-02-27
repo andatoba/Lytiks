@@ -15,7 +15,7 @@ import java.util.Map;
 
 @RestController
 @RequestMapping("/api/logo")
-@CrossOrigin(origins = "*")
+
 public class ConfiguracionLogoController {
     
     private static final Logger log = LoggerFactory.getLogger(ConfiguracionLogoController.class);

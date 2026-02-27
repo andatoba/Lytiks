@@ -11,7 +11,6 @@ import java.time.LocalDateTime;
 
 @RestController
 @RequestMapping("/moko")
-@CrossOrigin(origins = "*")
 public class AplicacionController {
 
     @Autowired

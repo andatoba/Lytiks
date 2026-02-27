@@ -346,23 +346,27 @@ class _ResumenSigatokaScreenState extends State<ResumenSigatokaScreen> {
   }
 
   Widget _buildVariablesTable() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
+    return Card(
+      elevation: 2,
+      child: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Icon(Icons.table_chart, color: Colors.blue[700], size: 24),
-            const SizedBox(width: 8),
-            Text(
-              '📋 VARIABLES DE EVALUACIÓN',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-                color: Colors.blue[700],
-              ),
+            Row(
+              children: [
+                Icon(Icons.table_chart, color: Colors.blue[700], size: 24),
+                const SizedBox(width: 8),
+                Text(
+                  '📋 VARIABLES DE EVALUACIÓN',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.blue[700],
+                  ),
+                ),
+              ],
             ),
-          ],
-        ),
         const SizedBox(height: 12),
         Container(
           decoration: BoxDecoration(
@@ -455,6 +459,8 @@ class _ResumenSigatokaScreenState extends State<ResumenSigatokaScreen> {
           ),
         ),
       ],
+    ),
+      ),
     );
   }
 

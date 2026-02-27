@@ -27,7 +27,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 
 @RestController
 @RequestMapping("/audits")
-@CrossOrigin(origins = "*")
+
 public class AuditController {
     private static final ObjectMapper MAPPER = new ObjectMapper();
 

@@ -13,7 +13,7 @@ import java.util.Map;
 
 @RestController
 @RequestMapping("/api/audit-categorias")
-@CrossOrigin(origins = "*")
+
 public class AuditCategoriaController {
     
     @Autowired
