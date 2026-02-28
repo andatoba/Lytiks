@@ -1,11 +1,12 @@
 import 'dart:async';
+
 import 'package:flutter/material.dart';
-import '../services/sigatoka_evaluacion_service.dart';
-import '../services/client_service.dart';
-import '../services/auth_service.dart';
-import '../services/hacienda_service.dart';
-import '../services/lote_service.dart';
-import '../utils/sigatoka_date_util.dart';
+import 'package:lytiks/services/auth_service.dart';
+import 'package:lytiks/services/client_service.dart';
+import 'package:lytiks/services/hacienda_service.dart';
+import 'package:lytiks/services/lote_service.dart';
+import 'package:lytiks/services/sigatoka_evaluacion_service.dart';
+import 'package:lytiks/utils/sigatoka_date_util.dart';
 
 class SigatokaEvaluacionFormScreen extends StatefulWidget {
   const SigatokaEvaluacionFormScreen({Key? key}) : super(key: key);
@@ -356,7 +357,7 @@ class _SigatokaEvaluacionFormScreenState extends State<SigatokaEvaluacionFormScr
         });
       }
     } catch (e) {
-      print('Error cargando haciendas: $e');
+      debugPrint('Error cargando haciendas: $e');
     } finally {
       if (mounted) {
         setState(() => _isLoading = false);
@@ -376,29 +377,11 @@ class _SigatokaEvaluacionFormScreenState extends State<SigatokaEvaluacionFormScr
         });
       }
     } catch (e) {
-      print('Error cargando lotes: $e');
+      debugPrint('Error cargando lotes: $e');
     } finally {
       if (mounted) {
         setState(() => _isLoading = false);
       }
-    }
-  }
-
-  /// Calcula automáticamente la semana ISO y el período cuando se selecciona una fecha
-  void _onFechaChanged(String fechaStr) {
-    if (fechaStr.isEmpty) return;
-    
-    try {
-      final fecha = DateTime.parse(fechaStr);
-      final semanaISO = SigatokaDateUtil.getSemanaEpidemiologicaISO(fecha);
-      final periodo = SigatokaDateUtil.getPeriodoSemanaDelMes(fecha);
-      
-      setState(() {
-        _semanaController.text = semanaISO.toString();
-        _periodoController.text = periodo;
-      });
-    } catch (e) {
-      print('Error calculando semana ISO: $e');
     }
   }
 
@@ -1399,7 +1382,7 @@ class _SigatokaEvaluacionFormScreenState extends State<SigatokaEvaluacionFormScr
               subtitle: Text(
                 'Emitidas: ${m['hojasEmitidas']}, Erectas: ${m['hojasErectas']}, Síntomas: ${m['hojasConSintomas']}'
               ),
-            )).toList(),
+            )),
           ],
         ),
       ),

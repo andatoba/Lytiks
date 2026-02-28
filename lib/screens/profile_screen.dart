@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import '../services/auth_service.dart';
-import 'login_screen.dart';
+import 'new_login.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -89,12 +89,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
     try {
       final data = await _authService.getUserData();
       final storedUser = _extractUserMap(data);
-      String? username = _readField(storedUser, ['usuario', 'username']);
+      var username = _readField(storedUser, ['usuario', 'username']);
       if (username.isEmpty) {
-        username = await _authService.getUsername();
+        username = await _authService.getUsername() ?? '';
       }
       print('[Perfil] Username usado para perfil: $username');
-      if (username != null) {
+      if (username.isNotEmpty) {
         final profile = await _authService.getProfile(username);
         print('[Perfil] Respuesta del backend para perfil: $profile');
         if (mounted) {
@@ -105,12 +105,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
             isLoading = false;
           });
         }
-      } else {
-        if (mounted) {
-          setState(() {
-            isLoading = false;
-          });
-        }
+      } else if (mounted) {
+        setState(() {
+          isLoading = false;
+        });
       }
     } catch (e) {
       print('[Perfil] Error al cargar datos de usuario: $e');
@@ -146,7 +144,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       await _authService.logout();
       if (mounted) {
         Navigator.of(context).pushAndRemoveUntil(
-          MaterialPageRoute(builder: (context) => const LoginScreen()),
+          MaterialPageRoute(builder: (context) => const NewLoginScreen()),
           (route) => false,
         );
       }

@@ -1397,7 +1397,7 @@ class _SigatokaAuditScreenState extends State<SigatokaAuditScreen> {
                   child: _buildInfectionGradeDropdown(
                     controller: grado3eraController,
                     label: '3era hoja',
-                    hint: '2a',
+                    hint: '-',
                   ),
                 ),
                 const SizedBox(width: 8),
@@ -1405,7 +1405,7 @@ class _SigatokaAuditScreenState extends State<SigatokaAuditScreen> {
                   child: _buildInfectionGradeDropdown(
                     controller: grado4taController,
                     label: '4ta hoja',
-                    hint: '3c',
+                    hint: '-',
                   ),
                 ),
                 const SizedBox(width: 8),
@@ -1413,7 +1413,7 @@ class _SigatokaAuditScreenState extends State<SigatokaAuditScreen> {
                   child: _buildInfectionGradeDropdown(
                     controller: grado5taController,
                     label: '5ta hoja',
-                    hint: '1b',
+                    hint: '-',
                   ),
                 ),
               ],
