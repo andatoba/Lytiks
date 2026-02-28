@@ -101,7 +101,9 @@ class _SigatokaAuditScreenState extends State<SigatokaAuditScreen> {
   // Lista de muestras de la sesión actual (en memoria)
   List<Map<String, dynamic>> muestrasSesion = [];
   final List<int> _muestraOptions = List<int>.generate(100, (index) => index + 1);
+  static const String _defaultInfectionGrade = '-';
   static const List<String> _infectionGradeOptions = [
+    _defaultInfectionGrade,
     '1a',
     '1b',
     '1c',
@@ -141,6 +143,7 @@ class _SigatokaAuditScreenState extends State<SigatokaAuditScreen> {
     if (muestraNumController.text.trim().isEmpty) {
       muestraNumController.text = '1';
     }
+    _resetInfectionGrades();
     _initializeDefaultDate();
     _prefillEvaluador();
   }
@@ -461,14 +464,17 @@ class _SigatokaAuditScreenState extends State<SigatokaAuditScreen> {
     }
 
     // Guardar muestra en memoria (sesión actual)
+    final hoja3era = _normalizeInfectionGrade(grado3eraController.text);
+    final hoja4ta = _normalizeInfectionGrade(grado4taController.text);
+    final hoja5ta = _normalizeInfectionGrade(grado5taController.text);
     final muestraData = {
       'numeroMuestra': int.tryParse(muestraNumController.text) ?? 1,
       'lote': loteCodigoController.text,
       'loteLatitud': _loteLatitud,
       'loteLongitud': _loteLongitud,
-      'hoja3era': grado3eraController.text.isEmpty ? null : grado3eraController.text,
-      'hoja4ta': grado4taController.text.isEmpty ? null : grado4taController.text,
-      'hoja5ta': grado5taController.text.isEmpty ? null : grado5taController.text,
+      'hoja3era': hoja3era,
+      'hoja4ta': hoja4ta,
+      'hoja5ta': hoja5ta,
       'totalHojas3era': int.tryParse(totalHojas3eraController.text) ?? 0,
       'totalHojas4ta': int.tryParse(totalHojas4taController.text) ?? 0,
       'totalHojas5ta': int.tryParse(totalHojas5taController.text) ?? 0,
@@ -492,9 +498,7 @@ class _SigatokaAuditScreenState extends State<SigatokaAuditScreen> {
       muestraNumController.text = nextMuestra.toString();
       
       // Limpiar completamente todos los campos de la muestra
-      grado3eraController.text = '';
-      grado4taController.text = '';
-      grado5taController.text = '';
+      _resetInfectionGrades();
       totalHojas3eraController.text = '';
       totalHojas4taController.text = '';
       totalHojas5taController.text = '';
@@ -874,8 +878,9 @@ class _SigatokaAuditScreenState extends State<SigatokaAuditScreen> {
     required String hint,
   }) {
     final currentValue = controller.text.trim();
-    final selectedValue =
-        _infectionGradeOptions.contains(currentValue) ? currentValue : null;
+    final selectedValue = _infectionGradeOptions.contains(currentValue)
+        ? currentValue
+        : _defaultInfectionGrade;
     return DropdownButtonFormField<String>(
       key: ValueKey('${label}_$_dropdownResetKey'), // Key para forzar reconstrucción
       value: selectedValue,
@@ -897,6 +902,20 @@ class _SigatokaAuditScreenState extends State<SigatokaAuditScreen> {
         controller.text = value ?? '';
       },
     );
+  }
+
+  String? _normalizeInfectionGrade(String value) {
+    final trimmed = value.trim();
+    if (trimmed.isEmpty || trimmed == _defaultInfectionGrade) {
+      return null;
+    }
+    return trimmed;
+  }
+
+  void _resetInfectionGrades() {
+    grado3eraController.text = _defaultInfectionGrade;
+    grado4taController.text = _defaultInfectionGrade;
+    grado5taController.text = _defaultInfectionGrade;
   }
 
   Future<void> _prefillEvaluador() async {

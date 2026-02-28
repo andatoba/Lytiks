@@ -154,6 +154,59 @@ class ClientService {
     }
   }
 
+  Future<Map<String, dynamic>?> searchClientByEmail(String email) async {
+    try {
+      print('\n🔍 Iniciando búsqueda de cliente por email: $email');
+
+      final headers = await _getHeaders();
+      final encodedEmail = Uri.encodeComponent(email.trim());
+      final uri = (await baseUri).replace(
+        path: '$_basePath/clients/search/email/$encodedEmail',
+      );
+
+      print('🌐 URL completa de búsqueda: ${uri.toString()}');
+
+      final response = await http
+          .get(uri, headers: headers)
+          .timeout(
+            const Duration(seconds: 30),
+            onTimeout: () {
+              throw Exception(
+                'La conexión está tomando demasiado tiempo. Verifica tu conexión a internet.',
+              );
+            },
+          );
+
+      print('📡 Response status: ${response.statusCode}');
+      print('📡 Response body: ${response.body}');
+
+      if (response.statusCode == 200) {
+        final responseData = json.decode(response.body);
+        if (responseData is Map && responseData.containsKey('error')) {
+          return null;
+        }
+        return Map<String, dynamic>.from(responseData as Map);
+      } else if (response.statusCode == 401) {
+        throw Exception('Token expirado. Por favor, inicia sesión nuevamente.');
+      } else if (response.statusCode == 404) {
+        return null;
+      } else {
+        throw Exception('Error al buscar cliente: ${response.body}');
+      }
+    } catch (e) {
+      if (e.toString().contains('TimeoutException')) {
+        throw Exception(
+          'Tiempo de espera agotado. Por favor, inténtelo nuevamente.',
+        );
+      } else if (e.toString().contains('SocketException')) {
+        throw Exception(
+          'No se puede conectar al servidor. Verifica tu conexión a internet y que el servidor esté disponible.',
+        );
+      }
+      throw Exception('Error de conexión: $e');
+    }
+  }
+
   Future<List<Map<String, dynamic>>> searchClientsByName(String nombre) async {
     try {
       print('\n🔍 Iniciando búsqueda de clientes por nombre: $nombre');

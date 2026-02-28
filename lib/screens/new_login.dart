@@ -27,6 +27,7 @@ class _NewLoginScreenState extends State<NewLoginScreen>
   final _passwordController = TextEditingController();
 
   bool _isLoading = false;
+  bool _isClientLogin = false;
 
   final _authService = AuthService();
   final _locationTrackingService = LocationTrackingService();
@@ -74,21 +75,39 @@ class _NewLoginScreenState extends State<NewLoginScreen>
     );
   }
 
+  void _setClientLogin(bool value) {
+    setState(() {
+      _isClientLogin = value;
+    });
+    if (value) {
+      _passwordController.clear();
+    }
+  }
+
   Future<void> _login() async {
     final username = _usernameController.text.trim();
-    final password = _passwordController.text;
+    final password = _isClientLogin ? '12345' : _passwordController.text;
 
     if (username.isEmpty) {
-      _showMessage('Por favor ingresa tu usuario');
+      _showMessage(
+        _isClientLogin ? 'Por favor ingresa tu correo' : 'Por favor ingresa tu usuario',
+      );
       return;
     }
-    if (password.isEmpty) {
-      _showMessage('Por favor ingresa tu contraseña');
-      return;
-    }
-    if (password.length < 6) {
-      _showMessage('La contraseña debe tener al menos 6 caracteres');
-      return;
+    if (_isClientLogin) {
+      if (!username.contains('@')) {
+        _showMessage('Ingresa un correo valido');
+        return;
+      }
+    } else {
+      if (password.isEmpty) {
+        _showMessage('Por favor ingresa tu contraseña');
+        return;
+      }
+      if (password.length < 6) {
+        _showMessage('La contraseña debe tener al menos 6 caracteres');
+        return;
+      }
     }
 
     FocusScope.of(context).unfocus();
@@ -224,8 +243,10 @@ class _NewLoginScreenState extends State<NewLoginScreen>
                                       passwordController: _passwordController,
                                       isMobile: isMobile,
                                       isLoading: _isLoading,
+                                      isClientLogin: _isClientLogin,
                                       onLogin: _login,
                                       onForgotPassword: _showRecoveryMessage,
+                                      onClientModeChanged: _setClientLogin,
                                     ),
                                   )
                                 else
@@ -240,8 +261,10 @@ class _NewLoginScreenState extends State<NewLoginScreen>
                                             _passwordController,
                                         isMobile: isMobile,
                                         isLoading: _isLoading,
+                                        isClientLogin: _isClientLogin,
                                         onLogin: _login,
                                         onForgotPassword: _showRecoveryMessage,
+                                        onClientModeChanged: _setClientLogin,
                                       ),
                                     ),
                                   ),
@@ -272,16 +295,20 @@ class _LeftLogin extends StatefulWidget {
   final TextEditingController passwordController;
   final bool isMobile;
   final bool isLoading;
+  final bool isClientLogin;
   final VoidCallback onLogin;
   final VoidCallback onForgotPassword;
+  final ValueChanged<bool> onClientModeChanged;
 
   const _LeftLogin({
     required this.usernameController,
     required this.passwordController,
     required this.isMobile,
     required this.isLoading,
+    required this.isClientLogin,
     required this.onLogin,
     required this.onForgotPassword,
+    required this.onClientModeChanged,
   });
 
   @override
@@ -293,6 +320,15 @@ class _LeftLoginState extends State<_LeftLogin> {
 
   @override
   Widget build(BuildContext context) {
+    final usernameLabel = widget.isClientLogin ? 'Correo' : 'Usuario';
+    final usernameHint =
+        widget.isClientLogin ? 'cliente@dominio.com' : 'usuario@agrotech.com';
+    final usernameIcon = widget.isClientLogin
+        ? Icons.alternate_email_rounded
+        : Icons.person_outline_rounded;
+    final passwordHint = widget.isClientLogin ? '12345' : '••••••••';
+    final passwordEnabled = !widget.isLoading && !widget.isClientLogin;
+
     return Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -364,11 +400,67 @@ class _LeftLoginState extends State<_LeftLogin> {
             height: 1.35,
           ),
         ),
+        const SizedBox(height: 18),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          decoration: BoxDecoration(
+            color: Colors.white.withOpacity(0.06),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: Colors.white.withOpacity(0.12)),
+          ),
+          child: Row(
+            children: [
+              Icon(
+                widget.isClientLogin
+                    ? Icons.person_pin_circle_rounded
+                    : Icons.badge_rounded,
+                color: Colors.white70,
+                size: 20,
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      widget.isClientLogin
+                          ? 'Acceso cliente'
+                          : 'Acceso operador',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w700,
+                        fontSize: 12,
+                      ),
+                    ),
+                    Text(
+                      widget.isClientLogin
+                          ? 'Correo + clave 12345'
+                          : 'Usuario y contrasena',
+                      style: TextStyle(
+                        color: Colors.white.withOpacity(0.65),
+                        fontSize: 11,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Switch.adaptive(
+                value: widget.isClientLogin,
+                onChanged:
+                    widget.isLoading ? null : widget.onClientModeChanged,
+                activeColor: const Color(0xFF5CFF87),
+                activeTrackColor: const Color(0xFF2BE7FF),
+                inactiveThumbColor: Colors.white70,
+                inactiveTrackColor: Colors.white.withOpacity(0.2),
+              ),
+            ],
+          ),
+        ),
         const SizedBox(height: 26),
         _GlowField(
-          label: 'Usuario',
-          hint: 'usuario@agrotech.com',
-          icon: Icons.person_outline_rounded,
+          label: usernameLabel,
+          hint: usernameHint,
+          icon: usernameIcon,
           controller: widget.usernameController,
           keyboardType: TextInputType.emailAddress,
           enabled: !widget.isLoading,
@@ -376,13 +468,15 @@ class _LeftLoginState extends State<_LeftLogin> {
         const SizedBox(height: 16),
         _GlowField(
           label: 'Contrasena',
-          hint: '••••••••',
+          hint: passwordHint,
           icon: Icons.lock_outline_rounded,
           controller: widget.passwordController,
           obscureText: _hide,
-          enabled: !widget.isLoading,
+          enabled: passwordEnabled,
           suffix: IconButton(
-            onPressed: () => setState(() => _hide = !_hide),
+            onPressed: passwordEnabled
+                ? () => setState(() => _hide = !_hide)
+                : null,
             icon: Icon(
               _hide ? Icons.visibility_rounded : Icons.visibility_off_rounded,
             ),

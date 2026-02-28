@@ -82,7 +82,9 @@ class _SigatokaEvaluacionFormScreenState extends State<SigatokaEvaluacionFormScr
   // Key para forzar reconstrucción de dropdowns después de limpiar
   int _dropdownResetKey = 0;
   
+  static const String _defaultInfectionGrade = '-';
   static const List<String> _infectionGradeOptions = [
+    _defaultInfectionGrade,
     '1a',
     '1b',
     '1c',
@@ -100,6 +102,7 @@ class _SigatokaEvaluacionFormScreenState extends State<SigatokaEvaluacionFormScr
     _initializeDefaultDate();
     _prefillEvaluador();
     _loadStoredClient();
+    _resetInfectionGrades();
   }
 
   /// Inicializa la fecha actual y calcula automáticamente semana epidemiológica y período
@@ -240,10 +243,9 @@ class _SigatokaEvaluacionFormScreenState extends State<SigatokaEvaluacionFormScr
     required String hint,
   }) {
     final currentValue = controller.text.trim();
-    // Si el texto está vacío, el dropdown debe mostrar null (sin selección)
-    final selectedValue = (currentValue.isEmpty) 
-        ? null 
-        : (_infectionGradeOptions.contains(currentValue) ? currentValue : null);
+    final selectedValue = _infectionGradeOptions.contains(currentValue)
+        ? currentValue
+        : _defaultInfectionGrade;
     return DropdownButtonFormField<String>(
       key: ValueKey('${label}_$_dropdownResetKey'), // Key para forzar reconstrucción
       value: selectedValue,
@@ -267,6 +269,20 @@ class _SigatokaEvaluacionFormScreenState extends State<SigatokaEvaluacionFormScr
         });
       },
     );
+  }
+
+  String? _normalizeInfectionGrade(String value) {
+    final trimmed = value.trim();
+    if (trimmed.isEmpty || trimmed == _defaultInfectionGrade) {
+      return null;
+    }
+    return trimmed;
+  }
+
+  void _resetInfectionGrades() {
+    _hoja3eraController.text = _defaultInfectionGrade;
+    _hoja4taController.text = _defaultInfectionGrade;
+    _hoja5taController.text = _defaultInfectionGrade;
   }
 
   void _onClientSearchChanged(String value) {
@@ -467,9 +483,9 @@ class _SigatokaEvaluacionFormScreenState extends State<SigatokaEvaluacionFormScr
         numeroMuestra: _numeroMuestra,
         lote: _loteController.text,
         // Grados de infección
-        hoja3era: _hoja3eraController.text.isNotEmpty ? _hoja3eraController.text : null,
-        hoja4ta: _hoja4taController.text.isNotEmpty ? _hoja4taController.text : null,
-        hoja5ta: _hoja5taController.text.isNotEmpty ? _hoja5taController.text : null,
+        hoja3era: _normalizeInfectionGrade(_hoja3eraController.text),
+        hoja4ta: _normalizeInfectionGrade(_hoja4taController.text),
+        hoja5ta: _normalizeInfectionGrade(_hoja5taController.text),
         // Total hojas
         totalHojas3era: _totalHojas3eraController.text.isNotEmpty ? int.parse(_totalHojas3eraController.text) : null,
         totalHojas4ta: _totalHojas4taController.text.isNotEmpty ? int.parse(_totalHojas4taController.text) : null,
@@ -539,9 +555,7 @@ class _SigatokaEvaluacionFormScreenState extends State<SigatokaEvaluacionFormScr
   void _limpiarFormularioMuestra() {
     // Limpiar completamente todos los campos de la muestra
     _loteController.clear();
-    _hoja3eraController.clear();
-    _hoja4taController.clear();
-    _hoja5taController.clear();
+    _resetInfectionGrades();
     _totalHojas3eraController.clear();
     _totalHojas4taController.clear();
     _totalHojas5taController.clear();

@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
@@ -46,42 +48,165 @@ class _ClienteHomeScreenState extends State<ClienteHomeScreen> {
     super.initState();
     _cargarDatos();
   }
+
+  Map<String, dynamic>? _extractUserMap(Map<String, dynamic>? data) {
+    if (data == null) {
+      return null;
+    }
+    final rawUser = data['user'];
+    if (rawUser is Map<String, dynamic>) {
+      return rawUser;
+    }
+    if (rawUser is Map) {
+      return Map<String, dynamic>.from(rawUser);
+    }
+    return data;
+  }
+
+  String _readField(Map<String, dynamic>? source, List<String> keys) {
+    if (source == null) return '';
+    for (final key in keys) {
+      final value = source[key];
+      if (value != null && value.toString().trim().isNotEmpty) {
+        return value.toString();
+      }
+    }
+    return '';
+  }
+
+  int? _toInt(dynamic value) {
+    if (value == null) return null;
+    if (value is int) return value;
+    return int.tryParse(value.toString());
+  }
+
+  double? _toDouble(dynamic value) {
+    if (value == null) return null;
+    if (value is double) return value;
+    if (value is int) return value.toDouble();
+    return double.tryParse(value.toString());
+  }
+
+  LatLng? _buildLatLng(dynamic latValue, dynamic lngValue) {
+    final lat = _toDouble(latValue);
+    final lng = _toDouble(lngValue);
+    if (lat == null || lng == null) {
+      return null;
+    }
+    return LatLng(lat, lng);
+  }
+
+  LatLng? _parseLatLngFromString(dynamic value) {
+    if (value == null) return null;
+    final raw = value.toString().trim();
+    if (raw.isEmpty) return null;
+    final parts = raw.split(',');
+    if (parts.length != 2) return null;
+    return _buildLatLng(parts[0].trim(), parts[1].trim());
+  }
+
+  List<LatLng> _parseTrayectoUbicaciones(dynamic raw) {
+    if (raw == null) return [];
+    dynamic decoded = raw;
+    if (raw is String) {
+      final text = raw.trim();
+      if (text.isEmpty) return [];
+      try {
+        decoded = jsonDecode(text);
+      } catch (_) {
+        return [];
+      }
+    }
+    if (decoded is! List) return [];
+    final points = <LatLng>[];
+    for (final item in decoded) {
+      if (item is Map) {
+        final lat = item['latitud'] ?? item['lat'] ?? item['latitude'];
+        final lng = item['longitud'] ?? item['lng'] ?? item['longitude'];
+        final point = _buildLatLng(lat, lng);
+        if (point != null) {
+          points.add(point);
+        }
+      }
+    }
+    return points;
+  }
+
+  Future<Map<String, dynamic>?> _resolveClientData() async {
+    final userMap = _extractUserMap(widget.userData);
+    final clienteId = _toInt(userMap?['clienteId'] ?? userMap?['clientId']);
+    if (clienteId != null) {
+      try {
+        return await _clientService.getClientById(clienteId);
+      } catch (e) {
+        debugPrint('Error obteniendo cliente por id: $e');
+      }
+    }
+
+    final emailFromUser = _readField(userMap, ['correo', 'email']);
+    if (emailFromUser.isNotEmpty) {
+      final client = await _clientService.searchClientByEmail(emailFromUser);
+      if (client != null) {
+        return client;
+      }
+    }
+
+    final username = _readField(userMap, ['usuario', 'username']);
+    Map<String, dynamic>? profile;
+    if (username.isNotEmpty) {
+      profile = await _authService.getProfile(username);
+    }
+
+    final profileEmail = _readField(profile, ['correo', 'email']);
+    final fallbackEmail = profileEmail.isNotEmpty
+        ? profileEmail
+        : (username.contains('@') ? username : '');
+    if (fallbackEmail.isNotEmpty) {
+      final client = await _clientService.searchClientByEmail(fallbackEmail);
+      if (client != null) {
+        return client;
+      }
+    }
+
+    final cedula = _readField(profile, ['cedula']);
+    if (cedula.isNotEmpty) {
+      final client = await _clientService.searchClientByCedula(cedula);
+      if (client != null) {
+        return client;
+      }
+    }
+    return null;
+  }
   
   Future<void> _cargarDatos() async {
     setState(() => _isLoading = true);
+    _clientData = null;
+    _haciendas = [];
+    _lotes = [];
+    _evaluaciones = [];
     
     try {
-      // Obtener datos del cliente basado en el user_id
-      final clienteId = widget.userData['user']?['clienteId'];
-      
-      if (clienteId != null) {
-        // Buscar cliente por ID
-        try {
-          _clientData = await _clientService.getClientById(clienteId);
-        } catch (e) {
-          debugPrint('Error obteniendo cliente: $e');
-          _clientData = null;
-        }
-        
-        if (_clientData != null) {
-          final clientId = _clientData!['id'] as int;
-          
-          // Cargar haciendas del cliente
+      final clientData = await _resolveClientData();
+      if (clientData != null) {
+        _clientData = clientData;
+        final clientId = _toInt(_clientData!['id']);
+        if (clientId == null) {
+          debugPrint('No se pudo obtener el id del cliente');
+        } else {
           _haciendas = await _haciendaService.getHaciendasByCliente(clientId);
-          
-          // Cargar lotes de cada hacienda
+
           for (var hacienda in _haciendas) {
-            final haciendaId = hacienda['id'] as int;
+            final haciendaId = _toInt(hacienda['id']);
+            if (haciendaId == null) continue;
             final lotesHacienda = await _loteService.getLotesByHacienda(haciendaId);
             _lotes.addAll(lotesHacienda);
           }
-          
-          // Cargar evaluaciones del cliente
+
           await _cargarEvaluaciones(clientId);
-          
-          // Centrar mapa en la primera hacienda/lote con coordenadas
           _centrarMapa();
         }
+      } else {
+        debugPrint('No se pudo resolver el cliente desde el usuario autenticado');
       }
     } catch (e) {
       debugPrint('Error cargando datos del cliente: $e');
@@ -93,55 +218,127 @@ class _ClienteHomeScreenState extends State<ClienteHomeScreen> {
   }
   
   Future<void> _cargarEvaluaciones(int clienteId) async {
+    _evaluaciones.clear();
     try {
-      // Cargar evaluaciones Sigatoka
-      final sigatokaResponse = await _clientService.getEvaluacionesSigatokaByCliente(clienteId);
-      for (var eval in sigatokaResponse) {
-        _evaluaciones.add({
-          'tipo': 'SIGATOKA',
-          'color': colorSigatoka,
-          'data': eval,
-          'latitud': eval['latitud'],
-          'longitud': eval['longitud'],
-        });
+      final sigatokaResponse =
+          await _clientService.getEvaluacionesSigatokaByCliente(clienteId);
+      for (final eval in sigatokaResponse) {
+        _agregarEvaluacionesSigatoka(eval);
       }
-      
-      // Cargar evaluaciones Moko
-      final mokoResponse = await _clientService.getEvaluacionesMokoByCliente(clienteId);
-      for (var eval in mokoResponse) {
-        // Parsear coordenadas del GPS
-        final gps = eval['gpsCoordinates']?.toString() ?? '';
-        double? lat, lng;
-        if (gps.isNotEmpty) {
-          final parts = gps.split(',');
-          if (parts.length == 2) {
-            lat = double.tryParse(parts[0].trim());
-            lng = double.tryParse(parts[1].trim());
-          }
-        }
-        _evaluaciones.add({
-          'tipo': 'MOKO',
-          'color': colorMoko,
-          'data': eval,
-          'latitud': lat,
-          'longitud': lng,
-        });
+
+      final mokoResponse =
+          await _clientService.getEvaluacionesMokoByCliente(clienteId);
+      for (final eval in mokoResponse) {
+        final latLng = _resolveMokoLatLng(eval);
+        _addEvaluacionEntry('MOKO', colorMoko, eval, latLng);
       }
-      
-      // Cargar auditorías de campo
-      final auditoriaResponse = await _clientService.getAuditoriasByCliente(clienteId);
-      for (var eval in auditoriaResponse) {
-        _evaluaciones.add({
-          'tipo': 'AUDITORIA',
-          'color': colorAuditoria,
-          'data': eval,
-          'latitud': eval['latitud'],
-          'longitud': eval['longitud'],
-        });
+
+      final auditoriaResponse =
+          await _clientService.getAuditoriasByCliente(clienteId);
+      for (final eval in auditoriaResponse) {
+        final trayecto = _parseTrayectoUbicaciones(eval['trayectoUbicaciones']);
+        final latLng = trayecto.isNotEmpty
+            ? trayecto.last
+            : _extractLatLngFromMap(eval);
+        _addEvaluacionEntry('AUDITORIA', colorAuditoria, eval, latLng);
       }
     } catch (e) {
       debugPrint('Error cargando evaluaciones: $e');
     }
+  }
+
+  void _addEvaluacionEntry(
+    String tipo,
+    Color color,
+    Map<String, dynamic> data,
+    LatLng? latLng,
+  ) {
+    if (latLng == null) {
+      return;
+    }
+    _evaluaciones.add({
+      'tipo': tipo,
+      'color': color,
+      'data': data,
+      'latitud': latLng.latitude,
+      'longitud': latLng.longitude,
+    });
+  }
+
+  LatLng? _extractLatLngFromMap(Map<String, dynamic> data) {
+    final lat = data['latitud'] ?? data['latitude'] ?? data['lat'];
+    final lng = data['longitud'] ?? data['longitude'] ?? data['lng'];
+    return _buildLatLng(lat, lng);
+  }
+
+  LatLng? _resolveMokoLatLng(Map<String, dynamic> eval) {
+    final gpsLatLng = _parseLatLngFromString(eval['gpsCoordinates']);
+    if (gpsLatLng != null) {
+      return gpsLatLng;
+    }
+    final lat = eval['loteLatitud'] ?? eval['latitud'];
+    final lng = eval['loteLongitud'] ?? eval['longitud'];
+    return _buildLatLng(lat, lng);
+  }
+
+  void _agregarEvaluacionesSigatoka(Map<String, dynamic> eval) {
+    bool added = false;
+    final lotes = eval['lotes'];
+    if (lotes is List) {
+      for (final rawLote in lotes) {
+        if (rawLote is! Map) continue;
+        final latLng = _extractLatLngFromMap(
+          Map<String, dynamic>.from(rawLote as Map),
+        );
+        if (latLng == null) continue;
+        final data = Map<String, dynamic>.from(eval);
+        data['loteCodigo'] =
+            rawLote['loteCodigo'] ?? rawLote['codigo'] ?? data['loteCodigo'];
+        data['loteNombre'] =
+            rawLote['nombre'] ?? rawLote['loteNombre'] ?? data['loteNombre'];
+        _addEvaluacionEntry('SIGATOKA', colorSigatoka, data, latLng);
+        added = true;
+      }
+    }
+
+    if (added) {
+      return;
+    }
+
+    final fallbackLatLng = _extractLatLngFromMap(eval);
+    if (fallbackLatLng != null) {
+      _addEvaluacionEntry('SIGATOKA', colorSigatoka, eval, fallbackLatLng);
+      return;
+    }
+
+    final loteCodigo =
+        eval['loteCodigo']?.toString() ?? eval['lote']?.toString() ?? '';
+    if (loteCodigo.isEmpty) {
+      return;
+    }
+    final match = _findLoteByCodigo(loteCodigo);
+    if (match == null) {
+      return;
+    }
+    final matchLatLng = _extractLatLngFromMap(match);
+    if (matchLatLng == null) {
+      return;
+    }
+    final data = Map<String, dynamic>.from(eval);
+    data['loteCodigo'] = loteCodigo;
+    data['loteNombre'] = match['nombre'] ?? data['loteNombre'];
+    _addEvaluacionEntry('SIGATOKA', colorSigatoka, data, matchLatLng);
+  }
+
+  Map<String, dynamic>? _findLoteByCodigo(String codigo) {
+    for (final lote in _lotes) {
+      final loteCodigo =
+          lote['codigo']?.toString() ?? lote['loteCodigo']?.toString();
+      if (loteCodigo == codigo) {
+        return lote;
+      }
+    }
+    return null;
   }
   
   void _centrarMapa() {
