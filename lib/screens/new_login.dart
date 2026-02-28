@@ -29,6 +29,8 @@ class _NewLoginScreenState extends State<NewLoginScreen>
   bool _isLoading = false;
   bool _isClientLogin = false;
 
+  static const String _clientPassword = '12345';
+
   final _authService = AuthService();
   final _locationTrackingService = LocationTrackingService();
   final _storage = const FlutterSecureStorage();
@@ -54,11 +56,13 @@ class _NewLoginScreenState extends State<NewLoginScreen>
     );
 
     _controller.forward();
+    _usernameController.addListener(_handleUsernameChange);
   }
 
   @override
   void dispose() {
     _controller.dispose();
+    _usernameController.removeListener(_handleUsernameChange);
     _usernameController.dispose();
     _passwordController.dispose();
     super.dispose();
@@ -75,18 +79,26 @@ class _NewLoginScreenState extends State<NewLoginScreen>
     );
   }
 
-  void _setClientLogin(bool value) {
-    setState(() {
-      _isClientLogin = value;
-    });
-    if (value) {
-      _passwordController.clear();
+  void _handleUsernameChange() {
+    final next = _looksLikeEmail(_usernameController.text.trim());
+    if (next == _isClientLogin) {
+      return;
     }
+    setState(() {
+      _isClientLogin = next;
+      if (_isClientLogin) {
+        _passwordController.clear();
+      }
+    });
+  }
+
+  bool _looksLikeEmail(String value) {
+    return value.contains('@');
   }
 
   Future<void> _login() async {
     final username = _usernameController.text.trim();
-    final password = _isClientLogin ? '12345' : _passwordController.text;
+    final password = _isClientLogin ? _clientPassword : _passwordController.text;
 
     if (username.isEmpty) {
       _showMessage(
@@ -246,7 +258,6 @@ class _NewLoginScreenState extends State<NewLoginScreen>
                                       isClientLogin: _isClientLogin,
                                       onLogin: _login,
                                       onForgotPassword: _showRecoveryMessage,
-                                      onClientModeChanged: _setClientLogin,
                                     ),
                                   )
                                 else
@@ -264,7 +275,6 @@ class _NewLoginScreenState extends State<NewLoginScreen>
                                         isClientLogin: _isClientLogin,
                                         onLogin: _login,
                                         onForgotPassword: _showRecoveryMessage,
-                                        onClientModeChanged: _setClientLogin,
                                       ),
                                     ),
                                   ),
@@ -298,7 +308,6 @@ class _LeftLogin extends StatefulWidget {
   final bool isClientLogin;
   final VoidCallback onLogin;
   final VoidCallback onForgotPassword;
-  final ValueChanged<bool> onClientModeChanged;
 
   const _LeftLogin({
     required this.usernameController,
@@ -308,7 +317,6 @@ class _LeftLogin extends StatefulWidget {
     required this.isClientLogin,
     required this.onLogin,
     required this.onForgotPassword,
-    required this.onClientModeChanged,
   });
 
   @override
@@ -322,12 +330,11 @@ class _LeftLoginState extends State<_LeftLogin> {
   Widget build(BuildContext context) {
     final usernameLabel = widget.isClientLogin ? 'Correo' : 'Usuario';
     final usernameHint =
-        widget.isClientLogin ? 'cliente@dominio.com' : 'usuario@agrotech.com';
+        widget.isClientLogin ? 'cliente@dominio.com' : 'usuario';
     final usernameIcon = widget.isClientLogin
         ? Icons.alternate_email_rounded
         : Icons.person_outline_rounded;
-    final passwordHint = widget.isClientLogin ? '12345' : '••••••••';
-    final passwordEnabled = !widget.isLoading && !widget.isClientLogin;
+    final passwordHint = '••••••••';
 
     return Column(
       mainAxisSize: MainAxisSize.min,
@@ -412,7 +419,7 @@ class _LeftLoginState extends State<_LeftLogin> {
             children: [
               Icon(
                 widget.isClientLogin
-                    ? Icons.person_pin_circle_rounded
+                    ? Icons.alternate_email_rounded
                     : Icons.badge_rounded,
                 color: Colors.white70,
                 size: 20,
@@ -424,8 +431,8 @@ class _LeftLoginState extends State<_LeftLogin> {
                   children: [
                     Text(
                       widget.isClientLogin
-                          ? 'Acceso cliente'
-                          : 'Acceso operador',
+                          ? 'Acceso cliente detectado'
+                          : 'Acceso operador detectado',
                       style: const TextStyle(
                         color: Colors.white,
                         fontWeight: FontWeight.w700,
@@ -434,8 +441,8 @@ class _LeftLoginState extends State<_LeftLogin> {
                     ),
                     Text(
                       widget.isClientLogin
-                          ? 'Correo + clave 12345'
-                          : 'Usuario y contrasena',
+                          ? 'Solo ingresa tu correo para continuar.'
+                          : 'Ingresa tu usuario y contrasena para continuar.',
                       style: TextStyle(
                         color: Colors.white.withOpacity(0.65),
                         fontSize: 11,
@@ -443,15 +450,6 @@ class _LeftLoginState extends State<_LeftLogin> {
                     ),
                   ],
                 ),
-              ),
-              Switch.adaptive(
-                value: widget.isClientLogin,
-                onChanged:
-                    widget.isLoading ? null : widget.onClientModeChanged,
-                activeColor: const Color(0xFF5CFF87),
-                activeTrackColor: const Color(0xFF2BE7FF),
-                inactiveThumbColor: Colors.white70,
-                inactiveTrackColor: Colors.white.withOpacity(0.2),
               ),
             ],
           ),
@@ -462,38 +460,42 @@ class _LeftLoginState extends State<_LeftLogin> {
           hint: usernameHint,
           icon: usernameIcon,
           controller: widget.usernameController,
-          keyboardType: TextInputType.emailAddress,
+          keyboardType: widget.isClientLogin
+              ? TextInputType.emailAddress
+              : TextInputType.text,
           enabled: !widget.isLoading,
         ),
         const SizedBox(height: 16),
-        _GlowField(
-          label: 'Contrasena',
-          hint: passwordHint,
-          icon: Icons.lock_outline_rounded,
-          controller: widget.passwordController,
-          obscureText: _hide,
-          enabled: passwordEnabled,
-          suffix: IconButton(
-            onPressed: passwordEnabled
-                ? () => setState(() => _hide = !_hide)
-                : null,
-            icon: Icon(
-              _hide ? Icons.visibility_rounded : Icons.visibility_off_rounded,
-            ),
-            color: Colors.white60,
-          ),
-        ),
-        const SizedBox(height: 12),
-        Align(
-          alignment: Alignment.centerRight,
-          child: TextButton(
-            onPressed: widget.isLoading ? null : widget.onForgotPassword,
-            child: const Text(
-              'Olvidaste tu contrasena?',
-              style: TextStyle(color: Color(0xFF8BFFC1)),
+        if (!widget.isClientLogin) ...[
+          _GlowField(
+            label: 'Contrasena',
+            hint: passwordHint,
+            icon: Icons.lock_outline_rounded,
+            controller: widget.passwordController,
+            obscureText: _hide,
+            enabled: !widget.isLoading,
+            suffix: IconButton(
+              onPressed: widget.isLoading
+                  ? null
+                  : () => setState(() => _hide = !_hide),
+              icon: Icon(
+                _hide ? Icons.visibility_rounded : Icons.visibility_off_rounded,
+              ),
+              color: Colors.white60,
             ),
           ),
-        ),
+          const SizedBox(height: 12),
+          Align(
+            alignment: Alignment.centerRight,
+            child: TextButton(
+              onPressed: widget.isLoading ? null : widget.onForgotPassword,
+              child: const Text(
+                'Olvidaste tu contrasena?',
+                style: TextStyle(color: Color(0xFF8BFFC1)),
+              ),
+            ),
+          ),
+        ],
         const SizedBox(height: 12),
         _PrimaryNeonButton(
           text: widget.isLoading ? 'Verificando...' : 'Continuar',
