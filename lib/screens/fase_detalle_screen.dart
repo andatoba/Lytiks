@@ -1110,36 +1110,99 @@ class _FaseDetalleScreenState extends State<FaseDetalleScreen> {
   String _limpiarTexto(String texto) {
     if (texto.isEmpty) return texto;
 
-    var limpio = texto;
-    if (limpio.contains('Ã') || limpio.contains('Â')) {
-      try {
-        limpio = utf8.decode(latin1.encode(limpio));
-      } catch (_) {}
+    String fixWord(String input, RegExp pattern, String replacement) {
+      return input.replaceAllMapped(pattern, (match) {
+        final original = match.group(0) ?? '';
+        if (original.isEmpty) return replacement;
+        if (original.toUpperCase() == original) {
+          return replacement.toUpperCase();
+        }
+        if (original.toLowerCase() == original) {
+          return replacement.toLowerCase();
+        }
+        return '${replacement[0].toUpperCase()}${replacement.substring(1)}';
+      });
     }
 
-    return limpio
-        .replaceAll('Ã³', 'ó')
-        .replaceAll('Ã¡', 'á')
-        .replaceAll('Ã©', 'é')
-        .replaceAll('Ã­', 'í')
-        .replaceAll('Ãº', 'ú')
-        .replaceAll('Ã±', 'ñ')
-        .replaceAll('Ã', 'Í')
-        .replaceAll('ÃN', 'IÓN')
-        .replaceAll('INYECCIÃ"N', 'INYECCIÓN')
-        .replaceAll('ACELERACIÃ"N', 'ACELERACIÓN')
-        .replaceAll('APLICACIÃ"N', 'APLICACIÓN')
-        .replaceAll('COMPOSICIÃ"N', 'COMPOSICIÓN')
-        .replaceAll('REDUCCIÃ"N', 'REDUCCIÓN')
-        .replaceAll('ELIMINACIÃ"N', 'ELIMINACIÓN')
-        .replaceAll('ACTIVACIÃ"N', 'ACTIVACIÓN')
-        .replaceAll('Ã"N', 'ÓN')
-        .replaceAll('Ã ', 'Á')
-        .replaceAll('RÃ¡PIDA', 'RÁPIDA')
-        .replaceAll('rÃ¡pida', 'rápida')
-        .replaceAll('BIOLÃ³GICA', 'BIOLÓGICA')
-        .replaceAll('biolÃ³gica', 'biológica')
-        .replaceAll('PATÃ³GENO', 'PATÓGENO')
-        .replaceAll('patÃ³geno', 'patógeno');
+    var limpio = texto;
+
+    for (var i = 0; i < 2; i++) {
+      if (limpio.contains('Ã') || limpio.contains('Â') || limpio.contains('�')) {
+        try {
+          limpio = utf8.decode(latin1.encode(limpio));
+          continue;
+        } catch (_) {}
+      }
+      break;
+    }
+
+    const mojibake = {
+      'Ã¡': 'á',
+      'Ã©': 'é',
+      'Ã­': 'í',
+      'Ã³': 'ó',
+      'Ãº': 'ú',
+      'Ã±': 'ñ',
+    };
+
+    for (final entry in mojibake.entries) {
+      limpio = limpio.replaceAll(entry.key, entry.value);
+    }
+
+    limpio = limpio.replaceAllMapped(
+      RegExp(r'\bvac[ií]o\s+biolog[ií]co\b', caseSensitive: false),
+      (match) {
+        final original = match.group(0) ?? '';
+        if (original.toUpperCase() == original) {
+          return 'VACÍO BIOLÓGICO';
+        }
+        if (original.toLowerCase() == original) {
+          return 'vacío biológico';
+        }
+        return 'Vacío biológico';
+      },
+    );
+
+    limpio = limpio.replaceAllMapped(
+      RegExp(r'\bactivaci[oó]n\s+sar\b', caseSensitive: false),
+      (match) {
+        final original = match.group(0) ?? '';
+        if (original.toUpperCase() == original) {
+          return 'ACTIVACIÓN SAR';
+        }
+        if (original.toLowerCase() == original) {
+          return 'activación SAR';
+        }
+        return 'Activación SAR';
+      },
+    );
+
+    limpio = fixWord(
+      limpio,
+      RegExp(r'\baplicacion\b', caseSensitive: false),
+      'aplicación',
+    );
+    limpio = fixWord(
+      limpio,
+      RegExp(r'\baplicaion\b', caseSensitive: false),
+      'aplicación',
+    );
+    limpio = fixWord(
+      limpio,
+      RegExp(r'\baplicaión\b', caseSensitive: false),
+      'aplicación',
+    );
+    limpio = fixWord(
+      limpio,
+      RegExp(r'\binyeccion\b', caseSensitive: false),
+      'inyección',
+    );
+    limpio = fixWord(
+      limpio,
+      RegExp(r'\bdescomposicion\b', caseSensitive: false),
+      'descomposición',
+    );
+
+    return limpio;
   }
 }

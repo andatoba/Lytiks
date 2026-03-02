@@ -14,7 +14,7 @@ import java.util.List;
 import java.util.Map;
 
 @RestController
-@RequestMapping("/api/lotes")
+@RequestMapping("/lotes")
 public class LoteController {
     
     private static final Logger log = LoggerFactory.getLogger(LoteController.class);

@@ -14,7 +14,7 @@ import java.util.List;
 import java.util.Map;
 
 @RestController
-@RequestMapping("/api/logo")
+@RequestMapping("/logo")
 
 public class ConfiguracionLogoController {
     

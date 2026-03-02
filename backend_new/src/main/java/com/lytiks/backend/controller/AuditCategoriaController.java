@@ -12,7 +12,7 @@ import java.util.List;
 import java.util.Map;
 
 @RestController
-@RequestMapping("/api/audit-categorias")
+@RequestMapping("/audit-categorias")
 
 public class AuditCategoriaController {
     

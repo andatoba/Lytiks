@@ -14,7 +14,7 @@ import java.util.List;
 import java.util.Map;
 
 @RestController
-@RequestMapping("/api/haciendas")
+@RequestMapping("/haciendas")
 public class HaciendaController {
     
     private static final Logger log = LoggerFactory.getLogger(HaciendaController.class);

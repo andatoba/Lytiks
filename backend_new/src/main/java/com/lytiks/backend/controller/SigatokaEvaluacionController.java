@@ -197,12 +197,26 @@ public class SigatokaEvaluacionController {
 
     /**
      * Calcular TODO de una vez (resumen, indicadores, estado evolutivo, stover)
+     * NOTA: Este endpoint ya no se usa, el frontend calcula todo
      */
     @PostMapping("/{evaluacionId}/calcular-todo")
     public ResponseEntity<SigatokaReporteCompletoDTO> calcularTodo(@PathVariable Long evaluacionId) {
         log.info("Calculando TODO para evaluación {}", evaluacionId);
         SigatokaReporteCompletoDTO reporte = evaluacionService.calcularTodo(evaluacionId);
         return ResponseEntity.ok(reporte);
+    }
+    
+    /**
+     * Guardar resumen completo desde el frontend (UN SOLO POST)
+     * El frontend calcula todo y envía: resumen, indicadores, stover
+     */
+    @PostMapping("/{evaluacionId}/guardar-resumen")
+    public ResponseEntity<java.util.Map<String, Object>> guardarResumenCompleto(
+            @PathVariable Long evaluacionId,
+            @RequestBody SigatokaResumenCompletoInputDTO dto) {
+        log.info("Guardando resumen completo desde frontend para evaluación {}", evaluacionId);
+        java.util.Map<String, Object> result = evaluacionService.guardarResumenCompletoDesdeApp(evaluacionId, dto);
+        return ResponseEntity.ok(result);
     }
 
     /**

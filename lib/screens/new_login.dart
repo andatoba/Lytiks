@@ -2,38 +2,30 @@ import 'dart:math';
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
-import '../services/auth_service.dart';
-import '../services/location_tracking_service.dart';
-import 'cliente_home_screen.dart';
-import 'home_screen.dart';
-
-class NewLoginScreen extends StatefulWidget {
-  const NewLoginScreen({super.key});
-
-  @override
-  State<NewLoginScreen> createState() => _NewLoginScreenState();
+void main() {
+  runApp(const MaterialApp(
+    home: AgronomyLoginPage(),
+    debugShowCheckedModeBanner: false,
+  ));
 }
 
-class _NewLoginScreenState extends State<NewLoginScreen>
+class AgronomyLoginPage extends StatefulWidget {
+  const AgronomyLoginPage({super.key});
+
+  @override
+  State<AgronomyLoginPage> createState() => _AgronomyLoginPageState();
+}
+
+class _AgronomyLoginPageState extends State<AgronomyLoginPage>
     with SingleTickerProviderStateMixin {
-  late final AnimationController _controller;
-  late final Animation<double> _fade;
-  late final Animation<Offset> _slide;
-  late final Animation<double> _scale;
+  late AnimationController _controller;
+  late Animation<double> _fade;
+  late Animation<Offset> _slide;
+  late Animation<double> _scale;
 
-  final _usernameController = TextEditingController();
-  final _passwordController = TextEditingController();
-
-  bool _isLoading = false;
-  bool _isClientLogin = false;
-
-  static const String _clientPassword = '12345';
-
-  final _authService = AuthService();
-  final _locationTrackingService = LocationTrackingService();
-  final _storage = const FlutterSecureStorage();
+  final _emailCtrl = TextEditingController();
+  final _passCtrl = TextEditingController();
 
   @override
   void initState() {
@@ -45,10 +37,7 @@ class _NewLoginScreenState extends State<NewLoginScreen>
     );
 
     _fade = CurvedAnimation(parent: _controller, curve: Curves.easeOutCubic);
-    _slide = Tween<Offset>(
-      begin: const Offset(0, 0.06),
-      end: Offset.zero,
-    ).animate(
+    _slide = Tween<Offset>(begin: const Offset(0, 0.06), end: Offset.zero).animate(
       CurvedAnimation(parent: _controller, curve: Curves.easeOutCubic),
     );
     _scale = Tween<double>(begin: 0.98, end: 1.0).animate(
@@ -56,158 +45,14 @@ class _NewLoginScreenState extends State<NewLoginScreen>
     );
 
     _controller.forward();
-    _usernameController.addListener(_handleUsernameChange);
   }
 
   @override
   void dispose() {
     _controller.dispose();
-    _usernameController.removeListener(_handleUsernameChange);
-    _usernameController.dispose();
-    _passwordController.dispose();
+    _emailCtrl.dispose();
+    _passCtrl.dispose();
     super.dispose();
-  }
-
-  void _showMessage(String message, {bool isError = true}) {
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        backgroundColor: isError ? Colors.red : const Color(0xFF2BE7FF),
-        behavior: SnackBarBehavior.floating,
-      ),
-    );
-  }
-
-  void _handleUsernameChange() {
-    final next = _looksLikeEmail(_usernameController.text.trim());
-    if (next == _isClientLogin) {
-      return;
-    }
-    setState(() {
-      _isClientLogin = next;
-      if (_isClientLogin) {
-        _passwordController.clear();
-      }
-    });
-  }
-
-  bool _looksLikeEmail(String value) {
-    return value.contains('@');
-  }
-
-  Future<void> _login() async {
-    final username = _usernameController.text.trim();
-    final password = _isClientLogin ? _clientPassword : _passwordController.text;
-
-    if (username.isEmpty) {
-      _showMessage(
-        _isClientLogin ? 'Por favor ingresa tu correo' : 'Por favor ingresa tu usuario',
-      );
-      return;
-    }
-    if (_isClientLogin) {
-      if (!username.contains('@')) {
-        _showMessage('Ingresa un correo valido');
-        return;
-      }
-    } else {
-      if (password.isEmpty) {
-        _showMessage('Por favor ingresa tu contraseña');
-        return;
-      }
-      if (password.length < 6) {
-        _showMessage('La contraseña debe tener al menos 6 caracteres');
-        return;
-      }
-    }
-
-    FocusScope.of(context).unfocus();
-    setState(() {
-      _isLoading = true;
-    });
-
-    try {
-      final loginResponse = await _authService.login(username, password);
-      if (!mounted) return;
-
-      final rawUser = loginResponse['user'];
-      final user =
-          rawUser is Map ? Map<String, dynamic>.from(rawUser) : <String, dynamic>{};
-
-      final userRole =
-          (user['rol'] ?? user['role'])?.toString().toUpperCase() ?? '';
-      final userId = user['id']?.toString() ?? '';
-
-      final firstName =
-          (user['firstName'] ?? user['nombres'])?.toString() ?? '';
-      final lastName =
-          (user['lastName'] ?? user['apellidos'])?.toString() ?? '';
-      final userName = '$firstName $lastName'.trim();
-      final displayName = userName.isNotEmpty
-          ? userName
-          : (user['username'] ?? user['usuario'])?.toString() ?? '';
-
-      print('🔍 Rol del usuario recibido: $userRole');
-      print('👤 Nombre del usuario: $displayName');
-
-      if (userRole == 'OPERADOR') {
-        await _storage.write(key: 'user_id', value: userId);
-        await _storage.write(key: 'user_name', value: displayName);
-        await _storage.write(key: 'user_role', value: userRole);
-
-        final idEmpresa = user['idEmpresa']?.toString() ?? '0';
-        await _storage.write(key: 'id_empresa', value: idEmpresa);
-        print('🏢 ID Empresa guardado: $idEmpresa');
-
-        await _locationTrackingService.startTracking(
-          userId: userId,
-          userName: displayName,
-        );
-
-        print('✅ Seguimiento de ubicación iniciado para $displayName');
-
-        if (mounted) {
-          Navigator.pushReplacement(
-            context,
-            MaterialPageRoute(builder: (context) => const HomeScreen()),
-          );
-        }
-      } else if (userRole == 'CLIENTE') {
-        await _storage.write(key: 'user_id', value: userId);
-        await _storage.write(key: 'user_name', value: displayName);
-        await _storage.write(key: 'user_role', value: userRole);
-
-        final idEmpresa = user['idEmpresa']?.toString() ?? '0';
-        await _storage.write(key: 'id_empresa', value: idEmpresa);
-        print('🏢 ID Empresa guardado: $idEmpresa');
-
-        print('👤 Cliente autenticado: $displayName');
-
-        if (mounted) {
-          Navigator.pushReplacement(
-            context,
-            MaterialPageRoute(
-              builder: (context) => ClienteHomeScreen(userData: loginResponse),
-            ),
-          );
-        }
-      } else {
-        _showMessage('Rol de usuario no autorizado para esta aplicación');
-      }
-    } catch (e) {
-      _showMessage(e.toString().replaceAll('Exception: ', ''));
-    } finally {
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-        });
-      }
-    }
-  }
-
-  void _showRecoveryMessage() {
-    _showMessage('Función de recuperación en desarrollo', isError: false);
   }
 
   @override
@@ -219,6 +64,7 @@ class _NewLoginScreenState extends State<NewLoginScreen>
       body: Stack(
         children: [
           const _AuroraBackground(),
+          // Noise overlay (muy sutil, da “premium texture”)
           IgnorePointer(
             child: Opacity(
               opacity: 0.06,
@@ -228,12 +74,12 @@ class _NewLoginScreenState extends State<NewLoginScreen>
               ),
             ),
           ),
+
           SafeArea(
             child: SingleChildScrollView(
               child: Center(
                 child: Padding(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 18, vertical: 32),
+                  padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 32),
                   child: ConstrainedBox(
                     constraints: const BoxConstraints(maxWidth: 1120),
                     child: FadeTransition(
@@ -244,40 +90,19 @@ class _NewLoginScreenState extends State<NewLoginScreen>
                           scale: _scale,
                           child: _GlassShell(
                             child: Flex(
-                              direction:
-                                  isMobile ? Axis.vertical : Axis.horizontal,
+                              direction: isMobile ? Axis.vertical : Axis.horizontal,
                               children: [
-                                if (isMobile)
-                                  Padding(
+                                Expanded(
+                                  flex: isMobile ? 0 : 5,
+                                  child: Padding(
                                     padding: const EdgeInsets.all(36),
                                     child: _LeftLogin(
-                                      usernameController: _usernameController,
-                                      passwordController: _passwordController,
+                                      emailCtrl: _emailCtrl,
+                                      passCtrl: _passCtrl,
                                       isMobile: isMobile,
-                                      isLoading: _isLoading,
-                                      isClientLogin: _isClientLogin,
-                                      onLogin: _login,
-                                      onForgotPassword: _showRecoveryMessage,
-                                    ),
-                                  )
-                                else
-                                  Expanded(
-                                    flex: 5,
-                                    child: Padding(
-                                      padding: const EdgeInsets.all(36),
-                                      child: _LeftLogin(
-                                        usernameController:
-                                            _usernameController,
-                                        passwordController:
-                                            _passwordController,
-                                        isMobile: isMobile,
-                                        isLoading: _isLoading,
-                                        isClientLogin: _isClientLogin,
-                                        onLogin: _login,
-                                        onForgotPassword: _showRecoveryMessage,
-                                      ),
                                     ),
                                   ),
+                                ),
                                 if (!isMobile)
                                   Expanded(
                                     flex: 6,
@@ -301,22 +126,14 @@ class _NewLoginScreenState extends State<NewLoginScreen>
 }
 
 class _LeftLogin extends StatefulWidget {
-  final TextEditingController usernameController;
-  final TextEditingController passwordController;
+  final TextEditingController emailCtrl;
+  final TextEditingController passCtrl;
   final bool isMobile;
-  final bool isLoading;
-  final bool isClientLogin;
-  final VoidCallback onLogin;
-  final VoidCallback onForgotPassword;
 
   const _LeftLogin({
-    required this.usernameController,
-    required this.passwordController,
+    required this.emailCtrl,
+    required this.passCtrl,
     required this.isMobile,
-    required this.isLoading,
-    required this.isClientLogin,
-    required this.onLogin,
-    required this.onForgotPassword,
   });
 
   @override
@@ -328,24 +145,16 @@ class _LeftLoginState extends State<_LeftLogin> {
 
   @override
   Widget build(BuildContext context) {
-    final usernameLabel = widget.isClientLogin ? 'Correo' : 'Usuario';
-    final usernameHint =
-        widget.isClientLogin ? 'cliente@dominio.com' : 'usuario';
-    final usernameIcon = widget.isClientLogin
-        ? Icons.alternate_email_rounded
-        : Icons.person_outline_rounded;
-    final passwordHint = '••••••••';
-
     return Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        // “Logo” moderno (icono + glow)
         Row(
           children: [
             Container(
               width: 52,
               height: 52,
-              padding: const EdgeInsets.all(6),
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(16),
                 gradient: const LinearGradient(
@@ -361,18 +170,14 @@ class _LeftLoginState extends State<_LeftLogin> {
                   ),
                 ],
               ),
-              child: Image.asset(
-                'assets/images/LOGO COLOR.png',
-                fit: BoxFit.contain,
-                filterQuality: FilterQuality.high,
-              ),
+              child: const Icon(Icons.eco_rounded, color: Colors.black, size: 28),
             ),
             const SizedBox(width: 14),
             const Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'AgroAnalytiks',
+                  "AgroAnalytics",
                   style: TextStyle(
                     color: Colors.white,
                     fontSize: 22,
@@ -381,16 +186,18 @@ class _LeftLoginState extends State<_LeftLogin> {
                   ),
                 ),
                 Text(
-                  'Analitica agronomica para decisiones rapidas',
+                  "AI agronómica para decisiones rápidas",
                   style: TextStyle(color: Colors.white70, fontSize: 13),
                 ),
               ],
             ),
           ],
         ),
+
         const SizedBox(height: 28),
+
         const Text(
-          'Inicia sesion',
+          "Inicia sesión",
           style: TextStyle(
             color: Colors.white,
             fontSize: 30,
@@ -400,165 +207,113 @@ class _LeftLoginState extends State<_LeftLogin> {
         ),
         const SizedBox(height: 8),
         Text(
-          'Accede a pronosticos, clima y monitoreo satelital en una sola vista.',
+          "Accede a pronósticos, clima y monitoreo satelital en una sola vista.",
           style: TextStyle(
             color: Colors.white.withOpacity(0.72),
             fontSize: 14,
             height: 1.35,
           ),
         ),
-        const SizedBox(height: 18),
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-          decoration: BoxDecoration(
-            color: Colors.white.withOpacity(0.06),
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: Colors.white.withOpacity(0.12)),
-          ),
-          child: Row(
-            children: [
-              Icon(
-                widget.isClientLogin
-                    ? Icons.alternate_email_rounded
-                    : Icons.badge_rounded,
-                color: Colors.white70,
-                size: 20,
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      widget.isClientLogin
-                          ? 'Acceso cliente detectado'
-                          : 'Acceso operador detectado',
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.w700,
-                        fontSize: 12,
-                      ),
-                    ),
-                    Text(
-                      widget.isClientLogin
-                          ? 'Solo ingresa tu correo para continuar.'
-                          : 'Ingresa tu usuario y contrasena para continuar.',
-                      style: TextStyle(
-                        color: Colors.white.withOpacity(0.65),
-                        fontSize: 11,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
+
         const SizedBox(height: 26),
+
         _GlowField(
-          label: usernameLabel,
-          hint: usernameHint,
-          icon: usernameIcon,
-          controller: widget.usernameController,
-          keyboardType: widget.isClientLogin
-              ? TextInputType.emailAddress
-              : TextInputType.text,
-          enabled: !widget.isLoading,
+          label: "Email",
+          hint: "usuario@agrotech.com",
+          icon: Icons.alternate_email_rounded,
+          controller: widget.emailCtrl,
+          keyboardType: TextInputType.emailAddress,
         ),
         const SizedBox(height: 16),
-        if (!widget.isClientLogin) ...[
-          _GlowField(
-            label: 'Contrasena',
-            hint: passwordHint,
-            icon: Icons.lock_outline_rounded,
-            controller: widget.passwordController,
-            obscureText: _hide,
-            enabled: !widget.isLoading,
-            suffix: IconButton(
-              onPressed: widget.isLoading
-                  ? null
-                  : () => setState(() => _hide = !_hide),
-              icon: Icon(
-                _hide ? Icons.visibility_rounded : Icons.visibility_off_rounded,
-              ),
-              color: Colors.white60,
-            ),
+
+        _GlowField(
+          label: "Contraseña",
+          hint: "••••••••",
+          icon: Icons.lock_outline_rounded,
+          controller: widget.passCtrl,
+          obscureText: _hide,
+          suffix: IconButton(
+            onPressed: () => setState(() => _hide = !_hide),
+            icon: Icon(_hide ? Icons.visibility_rounded : Icons.visibility_off_rounded),
+            color: Colors.white60,
           ),
-          const SizedBox(height: 12),
-          Align(
-            alignment: Alignment.centerRight,
-            child: TextButton(
-              onPressed: widget.isLoading ? null : widget.onForgotPassword,
-              child: const Text(
-                'Olvidaste tu contrasena?',
-                style: TextStyle(color: Color(0xFF8BFFC1)),
-              ),
-            ),
-          ),
-        ],
-        const SizedBox(height: 12),
-        _PrimaryNeonButton(
-          text: widget.isLoading ? 'Verificando...' : 'Continuar',
-          isLoading: widget.isLoading,
-          onPressed: widget.isLoading ? null : widget.onLogin,
         ),
+
+        const SizedBox(height: 12),
+        Align(
+          alignment: Alignment.centerRight,
+          child: TextButton(
+            onPressed: () {},
+            child: const Text(
+              "¿Olvidaste tu contraseña?",
+              style: TextStyle(color: Color(0xFF8BFFC1)),
+            ),
+          ),
+        ),
+
+        const SizedBox(height: 12),
+
+        _PrimaryNeonButton(
+          text: "Continuar",
+          onPressed: () {},
+        ),
+
         const SizedBox(height: 18),
+
+        // Divider “premium”
         Row(
           children: [
             Expanded(child: Divider(color: Colors.white.withOpacity(0.12))),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 12),
-              child: Text(
-                'o',
-                style: TextStyle(color: Colors.white.withOpacity(0.55)),
-              ),
+              child: Text("o", style: TextStyle(color: Colors.white.withOpacity(0.55))),
             ),
             Expanded(child: Divider(color: Colors.white.withOpacity(0.12))),
           ],
         ),
+
         const SizedBox(height: 16),
+
+        // Social / SSO placeholders (modern UX)
         Wrap(
           spacing: 12,
           runSpacing: 12,
           children: [
             _GhostButton(
               icon: Icons.g_mobiledata_rounded,
-              text: 'Google',
+              text: "Google",
               onPressed: () {},
             ),
             _GhostButton(
               icon: Icons.business_rounded,
-              text: 'SSO',
+              text: "SSO",
               onPressed: () {},
             ),
           ],
         ),
+
         const SizedBox(height: 18),
+
         Center(
           child: Wrap(
             crossAxisAlignment: WrapCrossAlignment.center,
             children: [
-              const Text(
-                'Nuevo aqui? ',
-                style: TextStyle(color: Colors.white60),
-              ),
+              const Text("¿Nuevo aquí? ", style: TextStyle(color: Colors.white60)),
               TextButton(
                 onPressed: () {},
                 child: const Text(
-                  'Solicitar demo',
-                  style: TextStyle(
-                    color: Color(0xFF8BFFC1),
-                    fontWeight: FontWeight.w700,
-                  ),
+                  "Solicitar demo",
+                  style: TextStyle(color: Color(0xFF8BFFC1), fontWeight: FontWeight.w700),
                 ),
               ),
             ],
           ),
         ),
+
         if (widget.isMobile) ...[
           const SizedBox(height: 18),
           Text(
-            'Tip: habilita geolocalizacion para alertas de riesgo y clima hiper-local.',
+            "Tip: habilita geolocalización para alertas de riesgo y clima hiper-local.",
             style: TextStyle(color: Colors.white.withOpacity(0.55), fontSize: 12),
           ),
         ],
@@ -587,7 +342,7 @@ class _RightShowcase extends StatelessWidget {
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           const Text(
-            'Inteligencia agronomica\ncon estetica de producto premium',
+            "Inteligencia agronómica\ncon estética de producto premium",
             style: TextStyle(
               color: Colors.white,
               fontSize: 26,
@@ -597,7 +352,7 @@ class _RightShowcase extends StatelessWidget {
           ),
           const SizedBox(height: 12),
           Text(
-            'Monitorea salud del cultivo, clima y riesgo fitosanitario con senales claras.\nMenos friccion, mas decision.',
+            "Monitorea salud del cultivo, clima y riesgo fitosanitario con señales claras.\nMenos fricción, más decisión.",
             style: TextStyle(
               color: Colors.white.withOpacity(0.72),
               fontSize: 14,
@@ -611,32 +366,32 @@ class _RightShowcase extends StatelessWidget {
             children: const [
               _FeaturePill(
                 icon: Icons.psychology_rounded,
-                title: 'IA predictiva',
-                desc: 'Alertas tempranas de rendimiento y eventos criticos.',
+                title: "IA Predictiva",
+                desc: "Alertas tempranas de rendimiento y eventos críticos.",
                 accent: Color(0xFF2BE7FF),
               ),
               _FeaturePill(
                 icon: Icons.wb_sunny_rounded,
-                title: 'Clima hiper-local',
-                desc: 'Satelite + estaciones para decisiones diarias.',
+                title: "Clima Hiper-local",
+                desc: "Satélite + estaciones para decisiones diarias.",
                 accent: Color(0xFFFFC857),
               ),
               _FeaturePill(
                 icon: Icons.layers_rounded,
-                title: 'Indices de vegetacion',
-                desc: 'NDVI / NDRE con lectura ejecutiva.',
+                title: "Índices de Vegetación",
+                desc: "NDVI / NDRE con lectura ejecutiva.",
                 accent: Color(0xFFB18CFF),
               ),
               _FeaturePill(
                 icon: Icons.science_rounded,
-                title: 'Suelo y foliar',
-                desc: 'Nutricion variable basada en datos.',
+                title: "Suelo & Foliar",
+                desc: "Nutrición variable basada en datos.",
                 accent: Color(0xFF5CFF87),
               ),
             ],
           ),
           const SizedBox(height: 26),
-          const _MiniStatsCard(),
+          _MiniStatsCard(),
         ],
       ),
     );
@@ -681,7 +436,6 @@ class _GlowField extends StatefulWidget {
   final bool obscureText;
   final Widget? suffix;
   final TextInputType? keyboardType;
-  final bool enabled;
 
   const _GlowField({
     required this.label,
@@ -691,7 +445,6 @@ class _GlowField extends StatefulWidget {
     this.obscureText = false,
     this.suffix,
     this.keyboardType,
-    this.enabled = true,
   });
 
   @override
@@ -736,9 +489,7 @@ class _GlowFieldState extends State<_GlowField> {
               controller: widget.controller,
               obscureText: widget.obscureText,
               keyboardType: widget.keyboardType,
-              enabled: widget.enabled,
-              style:
-                  const TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
+              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
               decoration: InputDecoration(
                 hintText: widget.hint,
                 hintStyle: TextStyle(color: Colors.white.withOpacity(0.28)),
@@ -752,12 +503,7 @@ class _GlowFieldState extends State<_GlowField> {
                 ),
                 focusedBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(16),
-                  borderSide:
-                      const BorderSide(color: Color(0xFF2BE7FF), width: 1.2),
-                ),
-                disabledBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(16),
-                  borderSide: BorderSide(color: Colors.white.withOpacity(0.08)),
+                  borderSide: const BorderSide(color: Color(0xFF2BE7FF), width: 1.2),
                 ),
               ),
             ),
@@ -770,14 +516,9 @@ class _GlowFieldState extends State<_GlowField> {
 
 class _PrimaryNeonButton extends StatelessWidget {
   final String text;
-  final VoidCallback? onPressed;
-  final bool isLoading;
+  final VoidCallback onPressed;
 
-  const _PrimaryNeonButton({
-    required this.text,
-    required this.onPressed,
-    required this.isLoading,
-  });
+  const _PrimaryNeonButton({required this.text, required this.onPressed});
 
   @override
   Widget build(BuildContext context) {
@@ -787,10 +528,8 @@ class _PrimaryNeonButton extends StatelessWidget {
       child: DecoratedBox(
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(16),
-          gradient: LinearGradient(
-            colors: isLoading
-                ? [const Color(0xFF5CFF87), const Color(0xFF5CFF87)]
-                : [const Color(0xFF5CFF87), const Color(0xFF2BE7FF)],
+          gradient: const LinearGradient(
+            colors: [Color(0xFF5CFF87), Color(0xFF2BE7FF)],
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
           ),
@@ -809,39 +548,15 @@ class _PrimaryNeonButton extends StatelessWidget {
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
           ),
           onPressed: onPressed,
-          child: isLoading
-              ? Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    SizedBox(
-                      width: 20,
-                      height: 20,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        color: Colors.black,
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    const Text(
-                      'Verificando...',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w900,
-                        letterSpacing: 0.3,
-                        color: Colors.black,
-                      ),
-                    ),
-                  ],
-                )
-              : Text(
-                  text,
-                  style: const TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w900,
-                    letterSpacing: 0.3,
-                    color: Colors.black,
-                  ),
-                ),
+          child: Text(
+            text,
+            style: const TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w900,
+              letterSpacing: 0.3,
+              color: Colors.black,
+            ),
+          ),
         ),
       ),
     );
@@ -867,10 +582,7 @@ class _GhostButton extends StatelessWidget {
       child: OutlinedButton.icon(
         onPressed: onPressed,
         icon: Icon(icon, color: Colors.white70),
-        label: Text(
-          text,
-          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
-        ),
+        label: Text(text, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
         style: OutlinedButton.styleFrom(
           side: BorderSide(color: Colors.white.withOpacity(0.14)),
           backgroundColor: Colors.white.withOpacity(0.04),
@@ -928,22 +640,16 @@ class _FeaturePill extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  title,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w900,
-                    fontSize: 14,
-                  ),
-                ),
+                Text(title,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w900,
+                      fontSize: 14,
+                    )),
                 const SizedBox(height: 6),
                 Text(
                   desc,
-                  style: TextStyle(
-                    color: Colors.white.withOpacity(0.70),
-                    fontSize: 12,
-                    height: 1.3,
-                  ),
+                  style: TextStyle(color: Colors.white.withOpacity(0.70), fontSize: 12, height: 1.3),
                 ),
               ],
             ),
@@ -968,11 +674,11 @@ class _MiniStatsCard extends StatelessWidget {
       ),
       child: Row(
         children: [
-          _stat('Cobertura', 'Satelite + estacion'),
+          _stat("Cobertura", "Satélite + estación"),
           const SizedBox(width: 14),
-          _stat('Alertas', 'Riesgo / clima'),
+          _stat("Alertas", "Riesgo / clima"),
           const SizedBox(width: 14),
-          _stat('Indices', 'NDVI / NDRE'),
+          _stat("Índices", "NDVI / NDRE"),
         ],
       ),
     );
@@ -1020,7 +726,7 @@ class _AuroraBackgroundState extends State<_AuroraBackground>
   Widget build(BuildContext context) {
     return AnimatedBuilder(
       animation: _c,
-      builder: (context, _) {
+      builder: (, _) {
         final t = _c.value;
         return Container(
           decoration: const BoxDecoration(
@@ -1061,28 +767,15 @@ class _OrbsPainter extends CustomPainter {
 
     final w = size.width;
     final h = size.height;
-    final radius = min(w, h);
 
-    orb(
-      Offset(w * (0.22 + 0.05 * sin(t * 2 * pi)),
-          h * (0.28 + 0.06 * cos(t * 2 * pi))),
-      radius * 0.55,
-      const Color(0xFF2BE7FF),
-    );
+    orb(Offset(w * (0.22 + 0.05 * sin(t * 2 * pi)), h * (0.28 + 0.06 * cos(t * 2 * pi))),
+        min(w, h) * 0.55, const Color(0xFF2BE7FF));
 
-    orb(
-      Offset(w * (0.78 + 0.06 * cos(t * 2 * pi)),
-          h * (0.30 + 0.05 * sin(t * 2 * pi))),
-      radius * 0.48,
-      const Color(0xFF5CFF87),
-    );
+    orb(Offset(w * (0.78 + 0.06 * cos(t * 2 * pi)), h * (0.30 + 0.05 * sin(t * 2 * pi))),
+        min(w, h) * 0.48, const Color(0xFF5CFF87));
 
-    orb(
-      Offset(w * (0.55 + 0.04 * sin(t * 2 * pi)),
-          h * (0.78 + 0.05 * cos(t * 2 * pi))),
-      radius * 0.60,
-      const Color(0xFFB18CFF),
-    );
+    orb(Offset(w * (0.55 + 0.04 * sin(t * 2 * pi)), h * (0.78 + 0.05 * cos(t * 2 * pi))),
+        min(w, h) * 0.60, const Color(0xFFB18CFF));
   }
 
   @override
@@ -1095,6 +788,7 @@ class _NoisePainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final paint = Paint()..color = Colors.white;
+    // Ruido rápido (puntitos)
     for (int i = 0; i < 12000; i++) {
       final dx = _rand.nextDouble() * size.width;
       final dy = _rand.nextDouble() * size.height;

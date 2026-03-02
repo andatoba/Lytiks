@@ -380,7 +380,7 @@ class SigatokaEvaluacionService {
   }
   
   /**
-   * Guarda el resumen completo (resumen, indicadores, stover)
+   * Guarda el resumen completo en UN SOLO POST (resumen, indicadores, stover)
    */
   Future<Map<String, dynamic>> guardarResumenCompleto(
     int evaluacionId,
@@ -389,56 +389,33 @@ class SigatokaEvaluacionService {
     Map<String, dynamic> stoverData,
   ) async {
     try {
-      print('📊 Guardando resumen calculado en FRONTEND (no recalcular en backend)');
+      print('📊 Guardando resumen calculado en FRONTEND');
       
-      // Guardar resumen
-      final resumenResponse = await http.post(
-        Uri.parse('$baseUrl/evaluaciones/$evaluacionId/resumen'),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode(resumenData),
+      // Combinar todo en un solo objeto
+      final datosCompletos = {
+        'resumen': resumenData,
+        'indicadores': indicadoresData,
+        'stover': stoverData,
+      };
+      
+      // UN SOLO POST con todos los datos
+      final response = await http.post(
+        Uri.parse('$baseUrl/$evaluacionId/guardar-resumen'),
+        headers: {'Content-Type': 'application/json; charset=UTF-8'},
+        body: jsonEncode(datosCompletos),
       );
       
-      if (resumenResponse.statusCode != 200 && resumenResponse.statusCode != 201) {
+      if (response.statusCode != 200 && response.statusCode != 201) {
         return {
           'success': false,
-          'message': 'Error al guardar resumen: ${resumenResponse.body}',
+          'message': 'Error al guardar resumen: ${response.body}',
         };
       }
-      print('✅ Resumen guardado');
       
-      // Guardar indicadores (Estado Evolutivo)
-      final indicadoresResponse = await http.post(
-        Uri.parse('$baseUrl/evaluaciones/$evaluacionId/indicadores'),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode(indicadoresData),
-      );
-      
-      if (indicadoresResponse.statusCode != 200 && indicadoresResponse.statusCode != 201) {
-        return {
-          'success': false,
-          'message': 'Error al guardar indicadores: ${indicadoresResponse.body}',
-        };
-      }
-      print('✅ Indicadores guardados');
-      
-      // Guardar Stover promedio
-      final stoverResponse = await http.post(
-        Uri.parse('$baseUrl/evaluaciones/$evaluacionId/stover-promedio'),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode(stoverData),
-      );
-      
-      if (stoverResponse.statusCode != 200 && stoverResponse.statusCode != 201) {
-        return {
-          'success': false,
-          'message': 'Error al guardar Stover: ${stoverResponse.body}',
-        };
-      }
-      print('✅ Stover guardado');
-      
+      print('✅ Resumen completo guardado');
       return {
         'success': true,
-        'message': 'Resumen guardado correctamente (calculado en app)',
+        'message': 'Resumen guardado correctamente',
       };
     } catch (e) {
       return {
@@ -454,12 +431,15 @@ class SigatokaEvaluacionService {
   Future<Map<String, dynamic>> eliminarEvaluacion(int evaluacionId) async {
     try {
       final response = await http.delete(
-        Uri.parse('$baseUrl/evaluaciones/$evaluacionId'),
-        headers: {'Content-Type': 'application/json'},
+        Uri.parse('$baseUrl/$evaluacionId'),
+        headers: {'Content-Type': 'application/json; charset=UTF-8'},
       );
       
-      if (response.statusCode == 200) {
-        return jsonDecode(response.body);
+      if (response.statusCode == 200 || response.statusCode == 204) {
+        if (response.body.isNotEmpty) {
+          return jsonDecode(response.body);
+        }
+        return {'success': true, 'message': 'Evaluación eliminada'};
       } else {
         throw Exception('Error al eliminar evaluación: ${response.body}');
       }

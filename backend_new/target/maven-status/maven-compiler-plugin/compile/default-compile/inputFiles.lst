@@ -1,7 +1,9 @@
 /home/atobar/Lytiks/backend_new/src/main/java/com/lytiks/backend/LytiksBackendApplication.java
 /home/atobar/Lytiks/backend_new/src/main/java/com/lytiks/backend/config/DataInitializer.java
+/home/atobar/Lytiks/backend_new/src/main/java/com/lytiks/backend/config/FlywayConfig.java
 /home/atobar/Lytiks/backend_new/src/main/java/com/lytiks/backend/config/SecurityConfig.java
 /home/atobar/Lytiks/backend_new/src/main/java/com/lytiks/backend/config/SwaggerConfig.java
+/home/atobar/Lytiks/backend_new/src/main/java/com/lytiks/backend/config/WebConfig.java
 /home/atobar/Lytiks/backend_new/src/main/java/com/lytiks/backend/controller/AplicacionController.java
 /home/atobar/Lytiks/backend_new/src/main/java/com/lytiks/backend/controller/AuditCategoriaController.java
 /home/atobar/Lytiks/backend_new/src/main/java/com/lytiks/backend/controller/AuditController.java
@@ -23,6 +25,7 @@
 /home/atobar/Lytiks/backend_new/src/main/java/com/lytiks/backend/dto/SigatokaLoteDTO.java
 /home/atobar/Lytiks/backend_new/src/main/java/com/lytiks/backend/dto/SigatokaMuestraCompletaDTO.java
 /home/atobar/Lytiks/backend_new/src/main/java/com/lytiks/backend/dto/SigatokaReporteCompletoDTO.java
+/home/atobar/Lytiks/backend_new/src/main/java/com/lytiks/backend/dto/SigatokaResumenCompletoInputDTO.java
 /home/atobar/Lytiks/backend_new/src/main/java/com/lytiks/backend/entity/Aplicacion.java
 /home/atobar/Lytiks/backend_new/src/main/java/com/lytiks/backend/entity/Audit.java
 /home/atobar/Lytiks/backend_new/src/main/java/com/lytiks/backend/entity/AuditCategoria.java
@@ -30,6 +33,7 @@
 /home/atobar/Lytiks/backend_new/src/main/java/com/lytiks/backend/entity/AuditPhoto.java
 /home/atobar/Lytiks/backend_new/src/main/java/com/lytiks/backend/entity/AuditScore.java
 /home/atobar/Lytiks/backend_new/src/main/java/com/lytiks/backend/entity/Client.java
+/home/atobar/Lytiks/backend_new/src/main/java/com/lytiks/backend/entity/ConfiguracionAplicacion.java
 /home/atobar/Lytiks/backend_new/src/main/java/com/lytiks/backend/entity/ConfiguracionLogo.java
 /home/atobar/Lytiks/backend_new/src/main/java/com/lytiks/backend/entity/EjecucionPlanMoko.java
 /home/atobar/Lytiks/backend_new/src/main/java/com/lytiks/backend/entity/EjecucionTareasMoko.java
@@ -63,6 +67,7 @@
 /home/atobar/Lytiks/backend_new/src/main/java/com/lytiks/backend/repository/AuditRepository.java
 /home/atobar/Lytiks/backend_new/src/main/java/com/lytiks/backend/repository/AuditScoreRepository.java
 /home/atobar/Lytiks/backend_new/src/main/java/com/lytiks/backend/repository/ClientRepository.java
+/home/atobar/Lytiks/backend_new/src/main/java/com/lytiks/backend/repository/ConfiguracionAplicacionRepository.java
 /home/atobar/Lytiks/backend_new/src/main/java/com/lytiks/backend/repository/ConfiguracionLogoRepository.java
 /home/atobar/Lytiks/backend_new/src/main/java/com/lytiks/backend/repository/EjecucionPlanMokoRepository.java
 /home/atobar/Lytiks/backend_new/src/main/java/com/lytiks/backend/repository/EjecucionTareasMokoRepository.java

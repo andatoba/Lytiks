@@ -374,4 +374,89 @@ public class SigatokaEvaluacionServiceCompleto {
         log.info("Eliminando muestra {}", muestraId);
         muestraRepository.deleteById(muestraId);
     }
+    
+    // ========== GUARDADO DESDE FRONTEND (UN SOLO MÉTODO) ==========
+    
+    /**
+     * Guardar TODO el resumen calculado desde el frontend en UN SOLO POST
+     */
+    public Map<String, Object> guardarResumenCompletoDesdeApp(Long evaluacionId, SigatokaResumenCompletoInputDTO dto) {
+        log.info("Guardando resumen completo desde frontend para evaluación {}", evaluacionId);
+        
+        SigatokaEvaluacion evaluacion = obtenerEvaluacionCompleta(evaluacionId);
+        
+        // 1. Guardar Estado Evolutivo (indicadores)
+        if (dto.getIndicadores() != null && !dto.getIndicadores().isEmpty()) {
+            SigatokaEstadoEvolutivo estado = estadoEvolutivoRepository.findByEvaluacionId(evaluacionId)
+                .orElse(new SigatokaEstadoEvolutivo());
+            estado.setEvaluacion(evaluacion);
+            estado.setEe3eraHoja(dto.getIndicadorBigDecimal("ee3era"));
+            estado.setEe4taHoja(dto.getIndicadorBigDecimal("ee4ta"));
+            estado.setEe5taHoja(dto.getIndicadorBigDecimal("ee5ta"));
+            
+            // Determinar nivel de infección
+            java.math.BigDecimal maxEe = java.math.BigDecimal.ZERO;
+            java.math.BigDecimal ee3 = dto.getIndicadorBigDecimal("ee3era");
+            java.math.BigDecimal ee4 = dto.getIndicadorBigDecimal("ee4ta");
+            java.math.BigDecimal ee5 = dto.getIndicadorBigDecimal("ee5ta");
+            if (ee3 != null && ee3.compareTo(maxEe) > 0) maxEe = ee3;
+            if (ee4 != null && ee4.compareTo(maxEe) > 0) maxEe = ee4;
+            if (ee5 != null && ee5.compareTo(maxEe) > 0) maxEe = ee5;
+            
+            String nivel = "BAJO";
+            if (maxEe.compareTo(new java.math.BigDecimal("500")) > 0) nivel = "ALTO";
+            else if (maxEe.compareTo(new java.math.BigDecimal("250")) > 0) nivel = "MODERADO";
+            estado.setNivelInfeccion(nivel);
+            
+            estadoEvolutivoRepository.save(estado);
+            log.info("✅ Estado evolutivo guardado");
+        }
+        
+        // 2. Guardar Stover
+        if (dto.getStover() != null && !dto.getStover().isEmpty()) {
+            SigatokaStoverPromedio stover = stoverPromedioRepository.findByEvaluacionId(evaluacionId)
+                .orElse(new SigatokaStoverPromedio());
+            stover.setEvaluacion(evaluacion);
+            stover.setStover3eraHoja(dto.getStoverBigDecimal("hvle0w"));
+            stover.setStover4taHoja(dto.getStoverBigDecimal("hvlq0w"));
+            stover.setStover5taHoja(dto.getStoverBigDecimal("th0w"));
+            
+            // Calcular promedio
+            java.math.BigDecimal promedio = java.math.BigDecimal.ZERO;
+            int count = 0;
+            java.math.BigDecimal v1 = dto.getStoverBigDecimal("hvle0w");
+            java.math.BigDecimal v2 = dto.getStoverBigDecimal("hvlq0w");
+            java.math.BigDecimal v3 = dto.getStoverBigDecimal("th0w");
+            if (v1 != null) { promedio = promedio.add(v1); count++; }
+            if (v2 != null) { promedio = promedio.add(v2); count++; }
+            if (v3 != null) { promedio = promedio.add(v3); count++; }
+            if (count > 0) {
+                stover.setStoverPromedio(promedio.divide(new java.math.BigDecimal(count), 2, java.math.RoundingMode.HALF_UP));
+            }
+            
+            stoverPromedioRepository.save(stover);
+            log.info("✅ Stover guardado");
+        }
+        
+        // 3. Guardar Resumen básico (opcional, si hay campos mapeables)
+        if (dto.getResumen() != null && !dto.getResumen().isEmpty()) {
+            SigatokaResumen resumen = resumenRepository.findByEvaluacionId(evaluacionId)
+                .orElse(new SigatokaResumen());
+            resumen.setEvaluacion(evaluacion);
+            resumen.setPromedioHojasEmitidas(dto.getResumenBigDecimal("promedioHojasFuncionales3era"));
+            resumen.setPromedioHojasErectas(dto.getResumenBigDecimal("promedioHojasFuncionales4ta"));
+            resumen.setPromedioHojasSintomas(dto.getResumenBigDecimal("promedioLesiones3era"));
+            resumen.setPromedioHojaJovenEnferma(dto.getResumenBigDecimal("promedioLesiones4ta"));
+            resumen.setPromedioHojaJovenNecrosada(dto.getResumenBigDecimal("promedioLesiones5ta"));
+            
+            resumenRepository.save(resumen);
+            log.info("✅ Resumen guardado");
+        }
+        
+        Map<String, Object> result = new HashMap<>();
+        result.put("success", true);
+        result.put("message", "Resumen completo guardado correctamente");
+        result.put("evaluacionId", evaluacionId);
+        return result;
+    }
 }
