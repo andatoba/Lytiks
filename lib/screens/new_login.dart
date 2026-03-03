@@ -2,6 +2,12 @@ import 'dart:math';
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+
+import '../services/auth_service.dart';
+import '../services/location_tracking_service.dart';
+import 'cliente_home_screen.dart';
+import 'home_screen.dart';
 
 void main() {
   runApp(const MaterialApp(
@@ -26,6 +32,10 @@ class _AgronomyLoginPageState extends State<AgronomyLoginPage>
 
   final _emailCtrl = TextEditingController();
   final _passCtrl = TextEditingController();
+  final _authService = AuthService();
+  final _locationTrackingService = LocationTrackingService();
+  final _storage = const FlutterSecureStorage();
+  bool _isLoading = false;
 
   @override
   void initState() {
@@ -53,6 +63,97 @@ class _AgronomyLoginPageState extends State<AgronomyLoginPage>
     _emailCtrl.dispose();
     _passCtrl.dispose();
     super.dispose();
+  }
+
+  Future<void> _login() async {
+    final username = _emailCtrl.text.trim();
+    final password = _passCtrl.text;
+
+    if (username.isEmpty || password.isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Ingresa tu usuario y contraseña'),
+            backgroundColor: Colors.red,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+      return;
+    }
+
+    FocusScope.of(context).unfocus();
+
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      final loginResponse = await _authService.login(username, password);
+      if (!mounted) return;
+
+      final userRole = loginResponse['user']['rol']?.toString().toUpperCase() ?? '';
+      final userId = loginResponse['user']['id']?.toString() ?? '';
+      final firstName = loginResponse['user']['firstName']?.toString() ?? '';
+      final lastName = loginResponse['user']['lastName']?.toString() ?? '';
+      final userName = '$firstName $lastName'.trim();
+      final displayName =
+          userName.isNotEmpty ? userName : loginResponse['user']['username']?.toString() ?? '';
+
+      if (userRole == 'OPERADOR') {
+        await _storage.write(key: 'user_id', value: userId);
+        await _storage.write(key: 'user_name', value: displayName);
+        await _storage.write(key: 'user_role', value: userRole);
+        final idEmpresa = loginResponse['user']['idEmpresa']?.toString() ?? '0';
+        await _storage.write(key: 'id_empresa', value: idEmpresa);
+        await _locationTrackingService.startTracking(
+          userId: userId,
+          userName: displayName,
+        );
+        if (!mounted) return;
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (context) => const HomeScreen()),
+        );
+      } else if (userRole == 'CLIENTE') {
+        await _storage.write(key: 'user_id', value: userId);
+        await _storage.write(key: 'user_name', value: displayName);
+        await _storage.write(key: 'user_role', value: userRole);
+        final idEmpresa = loginResponse['user']['idEmpresa']?.toString() ?? '0';
+        await _storage.write(key: 'id_empresa', value: idEmpresa);
+        if (!mounted) return;
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(
+            builder: (context) => ClienteHomeScreen(userData: loginResponse),
+          ),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Rol de usuario no autorizado para esta aplicación'),
+            backgroundColor: Colors.red,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(e.toString().replaceAll('Exception: ', '')),
+            backgroundColor: Colors.red,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    }
   }
 
   @override
@@ -100,6 +201,8 @@ class _AgronomyLoginPageState extends State<AgronomyLoginPage>
                                       emailCtrl: _emailCtrl,
                                       passCtrl: _passCtrl,
                                       isMobile: isMobile,
+                                      isLoading: _isLoading,
+                                      onLogin: _login,
                                     ),
                                   ),
                                 ),
@@ -129,11 +232,15 @@ class _LeftLogin extends StatefulWidget {
   final TextEditingController emailCtrl;
   final TextEditingController passCtrl;
   final bool isMobile;
+  final bool isLoading;
+  final VoidCallback onLogin;
 
   const _LeftLogin({
     required this.emailCtrl,
     required this.passCtrl,
     required this.isMobile,
+    required this.isLoading,
+    required this.onLogin,
   });
 
   @override
@@ -255,58 +362,17 @@ class _LeftLoginState extends State<_LeftLogin> {
 
         _PrimaryNeonButton(
           text: "Continuar",
-          onPressed: () {},
-        ),
-
-        const SizedBox(height: 18),
-
-        // Divider “premium”
-        Row(
-          children: [
-            Expanded(child: Divider(color: Colors.white.withOpacity(0.12))),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 12),
-              child: Text("o", style: TextStyle(color: Colors.white.withOpacity(0.55))),
-            ),
-            Expanded(child: Divider(color: Colors.white.withOpacity(0.12))),
-          ],
-        ),
-
-        const SizedBox(height: 16),
-
-        // Social / SSO placeholders (modern UX)
-        Wrap(
-          spacing: 12,
-          runSpacing: 12,
-          children: [
-            _GhostButton(
-              icon: Icons.g_mobiledata_rounded,
-              text: "Google",
-              onPressed: () {},
-            ),
-            _GhostButton(
-              icon: Icons.business_rounded,
-              text: "SSO",
-              onPressed: () {},
-            ),
-          ],
+          onPressed: widget.onLogin,
+          isLoading: widget.isLoading,
         ),
 
         const SizedBox(height: 18),
 
         Center(
-          child: Wrap(
-            crossAxisAlignment: WrapCrossAlignment.center,
-            children: [
-              const Text("¿Nuevo aquí? ", style: TextStyle(color: Colors.white60)),
-              TextButton(
-                onPressed: () {},
-                child: const Text(
-                  "Solicitar demo",
-                  style: TextStyle(color: Color(0xFF8BFFC1), fontWeight: FontWeight.w700),
-                ),
-              ),
-            ],
+          child: Text(
+            "¿Necesitas ayuda? contactar con soporte",
+            style: TextStyle(color: Colors.white60),
+            textAlign: TextAlign.center,
           ),
         ),
 
@@ -517,8 +583,15 @@ class _GlowFieldState extends State<_GlowField> {
 class _PrimaryNeonButton extends StatelessWidget {
   final String text;
   final VoidCallback onPressed;
+  final bool isLoading;
+  final String loadingText;
 
-  const _PrimaryNeonButton({required this.text, required this.onPressed});
+  const _PrimaryNeonButton({
+    required this.text,
+    required this.onPressed,
+    this.isLoading = false,
+    this.loadingText = 'Verificando...',
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -547,16 +620,40 @@ class _PrimaryNeonButton extends StatelessWidget {
             shadowColor: Colors.transparent,
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
           ),
-          onPressed: onPressed,
-          child: Text(
-            text,
-            style: const TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.w900,
-              letterSpacing: 0.3,
-              color: Colors.black,
-            ),
-          ),
+          onPressed: isLoading ? null : onPressed,
+          child: isLoading
+              ? Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        valueColor: AlwaysStoppedAnimation<Color>(Colors.black),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Text(
+                      loadingText,
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: 0.3,
+                        color: Colors.black,
+                      ),
+                    ),
+                  ],
+                )
+              : Text(
+                  text,
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: 0.3,
+                    color: Colors.black,
+                  ),
+                ),
         ),
       ),
     );
@@ -726,7 +823,7 @@ class _AuroraBackgroundState extends State<_AuroraBackground>
   Widget build(BuildContext context) {
     return AnimatedBuilder(
       animation: _c,
-      builder: (, _) {
+      builder: (_, __) {
         final t = _c.value;
         return Container(
           decoration: const BoxDecoration(
@@ -799,4 +896,13 @@ class _NoisePainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
+
+class NewLoginScreen extends StatelessWidget {
+  const NewLoginScreen({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return const AgronomyLoginPage();
+  }
 }

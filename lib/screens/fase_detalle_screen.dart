@@ -1136,18 +1136,52 @@ class _FaseDetalleScreenState extends State<FaseDetalleScreen> {
       break;
     }
 
-    const mojibake = {
-      'Ã¡': 'á',
-      'Ã©': 'é',
-      'Ã­': 'í',
-      'Ã³': 'ó',
-      'Ãº': 'ú',
-      'Ã±': 'ñ',
-    };
+    // Correcciones de mojibake - reemplazos directos
+    limpio = limpio.replaceAll('\u00c3\u00a1', 'á'); // Ã¡ -> á
+    limpio = limpio.replaceAll('\u00c3\u00a9', 'é'); // Ã© -> é
+    limpio = limpio.replaceAll('\u00c3\u00ad', 'í'); // Ã­ -> í
+    limpio = limpio.replaceAll('\u00c3\u00b3', 'ó'); // Ã³ -> ó
+    limpio = limpio.replaceAll('\u00c3\u00ba', 'ú'); // Ãº -> ú
+    limpio = limpio.replaceAll('\u00c3\u00b1', 'ñ'); // Ã± -> ñ
+    limpio = limpio.replaceAll('\u00c3\u0093', 'Ó'); // Ã" -> Ó
+    limpio = limpio.replaceAll('\u00c3\u008d', 'Í'); // Ã -> Í
+    limpio = limpio.replaceAll('\u00c3\u0089', 'É'); // Ã‰ -> É
+    limpio = limpio.replaceAll('\u00c3\u0081', 'Á'); // Ã -> Á
+    limpio = limpio.replaceAll('\u00c3\u009a', 'Ú'); // Ãš -> Ú
+    limpio = limpio.replaceAll('\u00c3\u0091', 'Ñ'); // Ã' -> Ñ
+    // Windows-1252 mojibake (usando comillas tipográficas)
+    limpio = limpio.replaceAll('Ã"', 'Ó'); // Ã" -> Ó (Windows-1252)
+    limpio = limpio.replaceAll('Ã\u201c', 'Ó'); // Ã" -> Ó (left double quote)
+    limpio = limpio.replaceAll('Ã\u0022', 'Ó'); // Ã" -> Ó (straight quote)
 
-    for (final entry in mojibake.entries) {
-      limpio = limpio.replaceAll(entry.key, entry.value);
-    }
+    // Reemplazos directos de patrones conocidos con regex flexible
+    // Detectar "Vacío" mal codificado (Vac + cualquier caracter + o)
+    limpio = limpio.replaceAllMapped(
+      RegExp(r'\bVac[^\s]{1,3}o\b', caseSensitive: true),
+      (match) => 'Vacío',
+    );
+    limpio = limpio.replaceAllMapped(
+      RegExp(r'\bVAC[^\s]{1,3}O\b', caseSensitive: true),
+      (match) => 'VACÍO',
+    );
+    // Detectar "Biológico" mal codificado (Biol + caracteres + gico)
+    limpio = limpio.replaceAllMapped(
+      RegExp(r'\bBiol[^\s]{1,3}gico\b', caseSensitive: true),
+      (match) => 'Biológico',
+    );
+    limpio = limpio.replaceAllMapped(
+      RegExp(r'\bBIOL[^\s]{1,3}GICO\b', caseSensitive: true),
+      (match) => 'BIOLÓGICO',
+    );
+    // Detectar "Activación" mal codificado
+    limpio = limpio.replaceAllMapped(
+      RegExp(r'\bActivaci[^\s]{1,3}n\b', caseSensitive: true),
+      (match) => 'Activación',
+    );
+    limpio = limpio.replaceAllMapped(
+      RegExp(r'\bACTIVACI[^\s]{1,3}N\b', caseSensitive: true),
+      (match) => 'ACTIVACIÓN',
+    );
 
     limpio = limpio.replaceAllMapped(
       RegExp(r'\bvac[ií]o\s+biolog[ií]co\b', caseSensitive: false),
@@ -1201,6 +1235,78 @@ class _FaseDetalleScreenState extends State<FaseDetalleScreen> {
       limpio,
       RegExp(r'\bdescomposicion\b', caseSensitive: false),
       'descomposición',
+    );
+
+    // Corrección de tildes que aparecen como apóstrofos (')
+    limpio = fixWord(
+      limpio,
+      RegExp(r"\binyecci'n\b", caseSensitive: false),
+      'inyección',
+    );
+    limpio = fixWord(
+      limpio,
+      RegExp(r"\baceleraci'n\b", caseSensitive: false),
+      'aceleración',
+    );
+    limpio = fixWord(
+      limpio,
+      RegExp(r"\bdescomposici'n\b", caseSensitive: false),
+      'descomposición',
+    );
+    limpio = fixWord(
+      limpio,
+      RegExp(r"\baplicaci'n\b", caseSensitive: false),
+      'aplicación',
+    );
+    limpio = fixWord(
+      limpio,
+      RegExp(r"\bbiola'gica\b", caseSensitive: false),
+      'biológica',
+    );
+    limpio = fixWord(
+      limpio,
+      RegExp(r"\bbiolo'gico\b", caseSensitive: false),
+      'biológico',
+    );
+    limpio = fixWord(
+      limpio,
+      RegExp(r"\bvac'o\b", caseSensitive: false),
+      'vacío',
+    );
+    limpio = fixWord(
+      limpio,
+      RegExp(r"\bactivaci'n\b", caseSensitive: false),
+      'activación',
+    );
+
+    // Corrección de "vacío biológico" con apóstrofos
+    limpio = limpio.replaceAllMapped(
+      RegExp(r"\bvac'o\s+biolo'gico\b", caseSensitive: false),
+      (match) {
+        final original = match.group(0) ?? '';
+        if (original.toUpperCase() == original) {
+          return 'VACÍO BIOLÓGICO';
+        }
+        if (original.toLowerCase() == original) {
+          return 'vacío biológico';
+        }
+        return 'Vacío biológico';
+      },
+    );
+
+    // Corrección de "activación SAR" con apóstrofos
+    limpio = limpio.replaceAllMapped(
+      RegExp(r"\bactivaci'n\s+sar\b", caseSensitive: false),
+      (match) {
+        final original = match.group(0) ?? '';
+        if (original.toUpperCase() == original) {
+          return 'ACTIVACIÓN SAR';
+        }
+        if (original.toLowerCase() == original) {
+          return 'activación SAR';
+        }
+        return 'Activación SAR';
+      },
     );
 
     return limpio;

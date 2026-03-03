@@ -1,8 +1,10 @@
-import 'package:flutter/material.dart';
+import 'dart:io';
+
 import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
-import 'dart:io';
+
 import 'screens/new_login.dart';
 
 void main() {
@@ -11,7 +13,7 @@ void main() {
     sqfliteFfiInit();
     databaseFactory = databaseFactoryFfi;
   }
-  
+
   runApp(const LytiksApp());
 }
 
@@ -33,9 +35,12 @@ class LytiksApp extends StatelessWidget {
         Locale('en', 'US'),
       ],
       locale: const Locale('es', 'ES'),
+      routes: {
+        '/login': (context) => const AgronomyLoginPage(),
+      },
       theme: ThemeData(
         primarySwatch: Colors.teal,
-        primaryColor: const Color(0xFF004B63), // Nuevo color azul oscuro
+        primaryColor: const Color(0xFF004B63),
         colorScheme: ColorScheme.fromSeed(
           seedColor: const Color(0xFF004B63),
           brightness: Brightness.light,
@@ -64,7 +69,7 @@ class LytiksApp extends StatelessWidget {
         ),
         useMaterial3: true,
       ),
-      home: const NewLoginScreen(),
+      home: const AgronomyLoginPage(),
     );
   }
 }

@@ -404,6 +404,35 @@ class _PlanSeguimientoMokoScreenState extends State<PlanSeguimientoMokoScreen> {
       limpio = limpio.replaceAll(entry.key, entry.value);
     }
 
+    // Reemplazos directos de patrones conocidos con regex flexible
+    // Detectar "Vacío" mal codificado (Vac + cualquier caracter + o)
+    limpio = limpio.replaceAllMapped(
+      RegExp(r'\bVac[^\s]{1,3}o\b', caseSensitive: true),
+      (match) => 'Vacío',
+    );
+    limpio = limpio.replaceAllMapped(
+      RegExp(r'\bVAC[^\s]{1,3}O\b', caseSensitive: true),
+      (match) => 'VACÍO',
+    );
+    // Detectar "Biológico" mal codificado (Biol + caracteres + gico)
+    limpio = limpio.replaceAllMapped(
+      RegExp(r'\bBiol[^\s]{1,3}gico\b', caseSensitive: true),
+      (match) => 'Biológico',
+    );
+    limpio = limpio.replaceAllMapped(
+      RegExp(r'\bBIOL[^\s]{1,3}GICO\b', caseSensitive: true),
+      (match) => 'BIOLÓGICO',
+    );
+    // Detectar "Activación" mal codificado
+    limpio = limpio.replaceAllMapped(
+      RegExp(r'\bActivaci[^\s]{1,3}n\b', caseSensitive: true),
+      (match) => 'Activación',
+    );
+    limpio = limpio.replaceAllMapped(
+      RegExp(r'\bACTIVACI[^\s]{1,3}N\b', caseSensitive: true),
+      (match) => 'ACTIVACIÓN',
+    );
+
     limpio = limpio.replaceAllMapped(
       RegExp(r'\bvac[ií]o\s+biolog[ií]co\b', caseSensitive: false),
       (match) {

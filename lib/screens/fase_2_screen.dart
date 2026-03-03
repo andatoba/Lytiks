@@ -48,6 +48,16 @@ class _Fase2ScreenState extends State<Fase2Screen> {
     final planSeguimientoId = parseInt(widget.fase['id']) ?? 0;
     final ejecucionPlanId = parseInt(widget.ejecucion?['id']);
 
+    String limpiarNombre(String texto) {
+      var limpio = texto;
+      limpio = limpio.replaceAllMapped(RegExp(r'\bVAC[^\s]{1,3}O\b'), (m) => 'VACÍO');
+      limpio = limpio.replaceAllMapped(RegExp(r'\bBIOL[^\s]{1,3}GICO\b'), (m) => 'BIOLÓGICO');
+      limpio = limpio.replaceAllMapped(RegExp(r'\bINYECC[^\s]{1,3}N\b'), (m) => 'INYECCIÓN');
+      limpio = limpio.replaceAllMapped(RegExp(r'\bAPLICAC[^\s]{1,3}N\b'), (m) => 'APLICACIÓN');
+      limpio = limpio.replaceAllMapped(RegExp(r'\bACTIVAC[^\s]{1,3}N\b'), (m) => 'ACTIVACIÓN');
+      return limpio;
+    }
+
     return DefaultTabController(
       length: 1,
       child: Scaffold(
@@ -56,7 +66,7 @@ class _Fase2ScreenState extends State<Fase2Screen> {
           backgroundColor: const Color(0xFFC62828),
           foregroundColor: Colors.white,
           elevation: 0,
-          title: Text('Fase 2 - ${widget.fase['nombre'] ?? ''}'),
+          title: Text('Fase 2 - ${limpiarNombre(widget.fase['nombre'] ?? '')}'),
           bottom: const TabBar(
             labelColor: Colors.white,
             unselectedLabelColor: Colors.white70,
