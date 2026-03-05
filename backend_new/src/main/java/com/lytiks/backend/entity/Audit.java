@@ -39,6 +39,9 @@ public class Audit {
     
     @Column(name = "observaciones", columnDefinition = "TEXT")
     private String observaciones;
+
+    @Column(name = "trayecto_ubicaciones", columnDefinition = "TEXT")
+    private String trayectoUbicaciones;
     
     @OneToMany(mappedBy = "audit", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
     @JsonManagedReference
@@ -121,6 +124,14 @@ public class Audit {
     
     public void setObservaciones(String observaciones) {
         this.observaciones = observaciones;
+    }
+
+    public String getTrayectoUbicaciones() {
+        return trayectoUbicaciones;
+    }
+
+    public void setTrayectoUbicaciones(String trayectoUbicaciones) {
+        this.trayectoUbicaciones = trayectoUbicaciones;
     }
     
     public List<AuditScore> getScores() {

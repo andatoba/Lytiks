@@ -1,8 +1,12 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import 'package:geolocator/geolocator.dart';
 import '../services/client_service.dart';
+import '../services/auth_service.dart';
 import '../services/sigatoka_evaluacion_service.dart';
+import '../utils/sigatoka_date_util.dart';
 import 'resumen_sigatoka_screen.dart';
 
 // Estructura de datos para una muestra
@@ -52,8 +56,13 @@ class SigatokaAuditScreen extends StatefulWidget {
 class _SigatokaAuditScreenState extends State<SigatokaAuditScreen> {
   // Cliente seleccionado
   Map<String, dynamic>? _selectedClient;
-  final TextEditingController _cedulaController = TextEditingController();
+  final TextEditingController _nombreController = TextEditingController();
+  final FocusNode _nombreFocusNode = FocusNode();
+  List<Map<String, dynamic>> _clientSuggestions = [];
+  Timer? _searchDebounce;
+  String _lastQuery = '';
   final ClientService _clientService = ClientService();
+  final AuthService _authService = AuthService();
 
   // 1. Encabezado
   final TextEditingController haciendaController = TextEditingController();
@@ -65,7 +74,6 @@ class _SigatokaAuditScreenState extends State<SigatokaAuditScreen> {
   // 2. Controladores para agregar muestras
   final TextEditingController muestraNumController = TextEditingController();
   final TextEditingController loteCodigoController = TextEditingController();
-  final TextEditingController plantasMuestreadasController = TextEditingController();
   final TextEditingController grado3eraController = TextEditingController();
   final TextEditingController grado4taController = TextEditingController();
   final TextEditingController grado5taController = TextEditingController();
@@ -92,13 +100,80 @@ class _SigatokaAuditScreenState extends State<SigatokaAuditScreen> {
   
   // Lista de muestras de la sesión actual (en memoria)
   List<Map<String, dynamic>> muestrasSesion = [];
+  final List<int> _muestraOptions = List<int>.generate(100, (index) => index + 1);
+  static const String _defaultInfectionGrade = '-';
+  static const List<String> _infectionGradeOptions = [
+    _defaultInfectionGrade,
+    '1a',
+    '1b',
+    '1c',
+    '2a',
+    '2b',
+    '2c',
+    '3a',
+    '3b',
+    '3c',
+  ];
+
+  // Coordenadas GPS del lote
+  double? _loteLatitud;
+  double? _loteLongitud;
+  bool _obteniendoUbicacion = false;
+  
+  // Modo cliente: bloquea búsqueda de cliente y seguimiento de ubicación
+  bool _isClienteMode = false;
+  
+  // Key para forzar reconstrucción de dropdowns después de limpiar
+  int _dropdownResetKey = 0;
 
   @override
   void initState() {
     super.initState();
     if (widget.clientData != null) {
       _selectedClient = widget.clientData;
+      _nombreController.text = _formatClientName(widget.clientData!);
+      haciendaController.text = _formatFincaName(widget.clientData!);
+      _clientService.saveSelectedClient(widget.clientData!);
+      
+      // Verificar si es modo cliente (usuario con rol CLIENTE)
+      _isClienteMode = widget.clientData!['isCliente'] == true;
+    } else {
+      _loadStoredClient();
     }
+    if (muestraNumController.text.trim().isEmpty) {
+      muestraNumController.text = '1';
+    }
+    _resetInfectionGrades();
+    _initializeDefaultDate();
+    _prefillEvaluador();
+  }
+
+  /// Inicializa la fecha actual y calcula automáticamente semana epidemiológica y período
+  void _initializeDefaultDate() {
+    final now = DateTime.now();
+    fechaController.text = '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
+    _applyDateDerivedFields(now);
+  }
+
+  /// Calcula y aplica la semana epidemiológica y período basado en una fecha
+  void _applyDateDerivedFields(DateTime date) {
+    final semanaISO = SigatokaDateUtil.getSemanaEpidemiologicaISO(date);
+    semanaController.text = semanaISO.toString();
+    
+    final periodo = SigatokaDateUtil.getPeriodoSemanaDelMes(date);
+    periodoController.text = periodo;
+  }
+
+  Future<void> _loadStoredClient() async {
+    final stored = await _clientService.getSelectedClient();
+    if (!mounted || stored == null) {
+      return;
+    }
+    setState(() {
+      _selectedClient = stored;
+      _nombreController.text = _formatClientName(stored);
+      haciendaController.text = _formatFincaName(stored);
+    });
   }
 
   Future<void> _fetchReporte(int evaluacionId) async {
@@ -129,13 +204,14 @@ class _SigatokaAuditScreenState extends State<SigatokaAuditScreen> {
           evaluacionId: evaluacionId,
           lote: muestra['lote'],
           numeroMuestra: muestra['numeroMuestra'],
+          loteLatitud: muestra['loteLatitud'],
+          loteLongitud: muestra['loteLongitud'],
           hoja3era: muestra['hoja3era'],
           hoja4ta: muestra['hoja4ta'],
           hoja5ta: muestra['hoja5ta'],
           totalHojas3era: muestra['totalHojas3era'],
           totalHojas4ta: muestra['totalHojas4ta'],
           totalHojas5ta: muestra['totalHojas5ta'],
-          plantasMuestreadas: muestra['plantasMuestreadas'] ?? 0,
           plantasConLesiones: 0,
           totalLesiones: 0,
           plantas3erEstadio: 0,
@@ -300,6 +376,70 @@ class _SigatokaAuditScreenState extends State<SigatokaAuditScreen> {
     }
   }
 
+  Future<void> _obtenerUbicacionLote() async {
+    setState(() {
+      _obteniendoUbicacion = true;
+    });
+
+    try {
+      // Verificar permisos de ubicación
+      LocationPermission permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+        if (permission == LocationPermission.denied) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Permiso de ubicación denegado'),
+              backgroundColor: Colors.red,
+            ),
+          );
+          return;
+        }
+      }
+
+      if (permission == LocationPermission.deniedForever) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Los permisos de ubicación están permanentemente denegados'),
+            backgroundColor: Colors.red,
+          ),
+        );
+        return;
+      }
+
+      // Obtener posición actual
+      Position position = await Geolocator.getCurrentPosition(
+        desiredAccuracy: LocationAccuracy.high,
+      );
+
+      setState(() {
+        _loteLatitud = position.latitude;
+        _loteLongitud = position.longitude;
+      });
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Ubicación capturada exitosamente'),
+            backgroundColor: Colors.green,
+            duration: Duration(seconds: 2),
+          ),
+        );
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error al obtener ubicación: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    } finally {
+      setState(() {
+        _obteniendoUbicacion = false;
+      });
+    }
+  }
+
   void _onAgregarMuestra() async {
     if (evaluacionId == null) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -313,11 +453,10 @@ class _SigatokaAuditScreenState extends State<SigatokaAuditScreen> {
 
     // Validar campos requeridos
     if (muestraNumController.text.isEmpty ||
-        loteCodigoController.text.isEmpty ||
-        plantasMuestreadasController.text.isEmpty) {
+        loteCodigoController.text.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Debe completar Muestra #, Lote # y Plantas Muestreadas'),
+          content: Text('Debe completar Muestra # y Lote #'),
           backgroundColor: Colors.orange,
         ),
       );
@@ -325,13 +464,17 @@ class _SigatokaAuditScreenState extends State<SigatokaAuditScreen> {
     }
 
     // Guardar muestra en memoria (sesión actual)
+    final hoja3era = _normalizeInfectionGrade(grado3eraController.text);
+    final hoja4ta = _normalizeInfectionGrade(grado4taController.text);
+    final hoja5ta = _normalizeInfectionGrade(grado5taController.text);
     final muestraData = {
       'numeroMuestra': int.tryParse(muestraNumController.text) ?? 1,
       'lote': loteCodigoController.text,
-      'plantasMuestreadas': int.tryParse(plantasMuestreadasController.text) ?? 0,
-      'hoja3era': grado3eraController.text.isEmpty ? null : grado3eraController.text,
-      'hoja4ta': grado4taController.text.isEmpty ? null : grado4taController.text,
-      'hoja5ta': grado5taController.text.isEmpty ? null : grado5taController.text,
+      'loteLatitud': _loteLatitud,
+      'loteLongitud': _loteLongitud,
+      'hoja3era': hoja3era,
+      'hoja4ta': hoja4ta,
+      'hoja5ta': hoja5ta,
       'totalHojas3era': int.tryParse(totalHojas3eraController.text) ?? 0,
       'totalHojas4ta': int.tryParse(totalHojas4taController.text) ?? 0,
       'totalHojas5ta': int.tryParse(totalHojas5taController.text) ?? 0,
@@ -345,8 +488,35 @@ class _SigatokaAuditScreenState extends State<SigatokaAuditScreen> {
       'th10w': double.tryParse(th10wController.text) ?? 0.0,
     };
 
+    int nextMuestra = (int.tryParse(muestraNumController.text) ?? 0) + 1;
+    if (nextMuestra > _muestraOptions.last) {
+      nextMuestra = _muestraOptions.last;
+    }
+
     setState(() {
       muestrasSesion.add(muestraData);
+      muestraNumController.text = nextMuestra.toString();
+      
+      // Limpiar completamente todos los campos de la muestra
+      _resetInfectionGrades();
+      totalHojas3eraController.text = '';
+      totalHojas4taController.text = '';
+      totalHojas5taController.text = '';
+      hvle0wController.text = '';
+      hvlq0wController.text = '';
+      hvlq5_0wController.text = '';
+      th0wController.text = '';
+      hvle10wController.text = '';
+      hvlq10wController.text = '';
+      hvlq5_10wController.text = '';
+      th10wController.text = '';
+      
+      // Resetear coordenadas GPS para la siguiente muestra
+      _loteLatitud = null;
+      _loteLongitud = null;
+      
+      // Incrementar key para forzar reconstrucción de dropdowns
+      _dropdownResetKey++;
     });
 
     ScaffoldMessenger.of(context).showSnackBar(
@@ -357,30 +527,14 @@ class _SigatokaAuditScreenState extends State<SigatokaAuditScreen> {
       ),
     );
 
-    // Limpiar solo los campos de la muestra, mantener lote para siguiente
-    int nextMuestra = (int.tryParse(muestraNumController.text) ?? 0) + 1;
-    muestraNumController.text = nextMuestra.toString();
     // NO limpiar lote para facilitar ingreso múltiple
-    plantasMuestreadasController.clear();
-    grado3eraController.clear();
-    grado4taController.clear();
-    grado5taController.clear();
-    totalHojas3eraController.clear();
-    totalHojas4taController.clear();
-    totalHojas5taController.clear();
-    hvle0wController.clear();
-    hvlq0wController.clear();
-    hvlq5_0wController.clear();
-    th0wController.clear();
-    hvle10wController.clear();
-    hvlq10wController.clear();
-    hvlq5_10wController.clear();
-    th10wController.clear();
   }
 
   @override
   void dispose() {
-    _cedulaController.dispose();
+    _searchDebounce?.cancel();
+    _nombreController.dispose();
+    _nombreFocusNode.dispose();
     haciendaController.dispose();
     fechaController.dispose();
     semanaController.dispose();
@@ -388,7 +542,6 @@ class _SigatokaAuditScreenState extends State<SigatokaAuditScreen> {
     evaluadorController.dispose();
     muestraNumController.dispose();
     loteCodigoController.dispose();
-    plantasMuestreadasController.dispose();
     grado3eraController.dispose();
     grado4taController.dispose();
     grado5taController.dispose();
@@ -430,10 +583,37 @@ class _SigatokaAuditScreenState extends State<SigatokaAuditScreen> {
                 SizedBox(height: 16),
                 _buildClientSearchSection(),
                 SizedBox(height: 24),
-                _buildEncabezadoSection(),
-                SizedBox(height: 24),
+                if (_selectedClient == null) ...[
+                  _buildClientRequiredNotice(),
+                ] else ...[
+                  _buildEncabezadoSection(),
+                  SizedBox(height: 24),
+                ],
               ],
             ),
+    );
+  }
+
+  Widget _buildClientRequiredNotice() {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.amber.shade50,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.amber.shade200),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.warning_amber_rounded, color: Colors.amber.shade700),
+          const SizedBox(width: 12),
+          const Expanded(
+            child: Text(
+              'Seleccione un cliente para continuar con la evaluación.',
+              style: TextStyle(fontWeight: FontWeight.w600),
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -535,19 +715,101 @@ class _SigatokaAuditScreenState extends State<SigatokaAuditScreen> {
           Row(
             children: [
               Expanded(
-                child: TextField(
-                  controller: _cedulaController,
-                  keyboardType: TextInputType.number,
-                  decoration: InputDecoration(
-                    labelText: 'Cédula del Cliente',
-                    hintText: 'Ingrese la cédula',
-                    prefixIcon: const Icon(Icons.badge),
-                    border: const OutlineInputBorder(),
-                    suffixIcon: IconButton(
-                      icon: const Icon(Icons.search),
-                      onPressed: _searchClientByCedula,
-                    ),
-                  ),
+                child: RawAutocomplete<Map<String, dynamic>>(
+                  textEditingController: _nombreController,
+                  focusNode: _nombreFocusNode,
+                  displayStringForOption: _formatClientName,
+                  optionsBuilder: (TextEditingValue value) {
+                    final query = value.text.trim();
+                    if (query.length < 2 || query != _lastQuery) {
+                      return const Iterable<Map<String, dynamic>>.empty();
+                    }
+                    return _clientSuggestions;
+                  },
+                  onSelected: (client) {
+                    if (!mounted) {
+                      return;
+                    }
+                    setState(() {
+                      _selectedClient = client;
+                      _clientSuggestions = [];
+                    });
+                    _clientService.saveSelectedClient(client);
+                  },
+                  fieldViewBuilder: (
+                    BuildContext context,
+                    TextEditingController controller,
+                    FocusNode focusNode,
+                    VoidCallback onFieldSubmitted,
+                  ) {
+                    return TextField(
+                      controller: controller,
+                      focusNode: focusNode,
+                      keyboardType: TextInputType.text,
+                      onChanged: _isClienteMode ? null : _onNameChanged,
+                      readOnly: _isClienteMode,
+                      enabled: !_isClienteMode,
+                      decoration: InputDecoration(
+                        labelText: 'Nombre y Apellido del Cliente',
+                        hintText: _isClienteMode ? 'Cliente autenticado' : 'Ingrese nombre y apellido',
+                        prefixIcon: Icon(
+                          Icons.person,
+                          color: _isClienteMode ? Colors.grey : null,
+                        ),
+                        border: const OutlineInputBorder(),
+                        filled: _isClienteMode,
+                        fillColor: _isClienteMode ? Colors.grey.withOpacity(0.1) : null,
+                        suffixIcon: _isClienteMode 
+                          ? const Icon(Icons.lock, color: Colors.grey)
+                          : IconButton(
+                              icon: const Icon(Icons.search),
+                              onPressed: _triggerSearch,
+                            ),
+                      ),
+                    );
+                  },
+                  optionsViewBuilder: (
+                    BuildContext context,
+                    AutocompleteOnSelected<Map<String, dynamic>> onSelected,
+                    Iterable<Map<String, dynamic>> options,
+                  ) {
+                    final optionList = options.toList();
+                    return Align(
+                      alignment: Alignment.topLeft,
+                      child: Material(
+                        elevation: 4.0,
+                        child: ConstrainedBox(
+                          constraints: const BoxConstraints(maxHeight: 240),
+                          child: ListView.separated(
+                            padding: EdgeInsets.zero,
+                            shrinkWrap: true,
+                            itemCount: optionList.length,
+                            separatorBuilder: (_, __) => const Divider(height: 1),
+                            itemBuilder: (context, index) {
+                              final client = optionList[index];
+                              final nombre = _formatClientName(client);
+                              final cedula = client['cedula']?.toString() ?? '';
+                              final finca = _formatFincaName(client);
+                              final subtitleParts = <String>[];
+                              if (cedula.isNotEmpty) {
+                                subtitleParts.add('Cédula: $cedula');
+                              }
+                              if (finca.isNotEmpty) {
+                                subtitleParts.add('Finca: $finca');
+                              }
+                              return ListTile(
+                                title: Text(nombre.isEmpty ? 'Cliente sin nombre' : nombre),
+                                subtitle: subtitleParts.isEmpty
+                                    ? null
+                                    : Text(subtitleParts.join(' | ')),
+                                onTap: () => onSelected(client),
+                              );
+                            },
+                          ),
+                        ),
+                      ),
+                    );
+                  },
                 ),
               ),
             ],
@@ -600,65 +862,198 @@ class _SigatokaAuditScreenState extends State<SigatokaAuditScreen> {
     );
   }
 
-  Future<void> _searchClientByCedula() async {
-    final cedula = _cedulaController.text.trim();
-    if (cedula.isEmpty) {
+  String _formatClientName(Map<String, dynamic> client) {
+    final nombre = client['nombre']?.toString() ?? '';
+    final apellidos = client['apellidos']?.toString() ?? '';
+    return '$nombre $apellidos'.trim();
+  }
+
+  String _formatFincaName(Map<String, dynamic> client) {
+    return (client['fincaNombre'] ?? client['nombreFinca'] ?? '').toString();
+  }
+
+  Widget _buildInfectionGradeDropdown({
+    required TextEditingController controller,
+    required String label,
+    required String hint,
+  }) {
+    final currentValue = controller.text.trim();
+    final selectedValue = _infectionGradeOptions.contains(currentValue)
+        ? currentValue
+        : _defaultInfectionGrade;
+    return DropdownButtonFormField<String>(
+      key: ValueKey('${label}_$_dropdownResetKey'), // Key para forzar reconstrucción
+      value: selectedValue,
+      isExpanded: true,
+      decoration: InputDecoration(
+        labelText: label,
+        hintText: hint,
+        border: const OutlineInputBorder(),
+      ),
+      items: _infectionGradeOptions
+          .map(
+            (option) => DropdownMenuItem<String>(
+              value: option,
+              child: Text(option),
+            ),
+          )
+          .toList(),
+      onChanged: (value) {
+        controller.text = value ?? '';
+      },
+    );
+  }
+
+  String? _normalizeInfectionGrade(String value) {
+    final trimmed = value.trim();
+    if (trimmed.isEmpty || trimmed == _defaultInfectionGrade) {
+      return null;
+    }
+    return trimmed;
+  }
+
+  void _resetInfectionGrades() {
+    grado3eraController.text = _defaultInfectionGrade;
+    grado4taController.text = _defaultInfectionGrade;
+    grado5taController.text = _defaultInfectionGrade;
+  }
+
+  Future<void> _prefillEvaluador() async {
+    if (evaluadorController.text.trim().isNotEmpty) {
+      return;
+    }
+
+    try {
+      final userData = await _authService.getUserData();
+      if (!mounted) {
+        return;
+      }
+      final dynamic rawUser = userData?['user'];
+      final Map<String, dynamic>? userMap = rawUser is Map
+          ? Map<String, dynamic>.from(rawUser)
+          : (userData is Map<String, dynamic> ? userData : null);
+      final username =
+          userMap?['username']?.toString() ?? userData?['username']?.toString();
+
+      Map<String, dynamic>? profile;
+      if (username != null && username.isNotEmpty) {
+        profile = await _authService.getProfile(username);
+      }
+      if (!mounted) {
+        return;
+      }
+
+      final firstName = profile?['firstName']?.toString() ??
+          userMap?['firstName']?.toString() ??
+          userMap?['nombre']?.toString() ??
+          userData?['firstName']?.toString();
+      final lastName = profile?['lastName']?.toString() ??
+          userMap?['lastName']?.toString() ??
+          userMap?['apellidos']?.toString() ??
+          userData?['lastName']?.toString();
+
+      final fullName = [
+        if (firstName != null && firstName.isNotEmpty) firstName,
+        if (lastName != null && lastName.isNotEmpty) lastName,
+      ].join(' ').trim();
+
+      if (fullName.isNotEmpty) {
+        evaluadorController.text = fullName;
+      } else if (username != null && username.isNotEmpty) {
+        evaluadorController.text = username;
+      }
+    } catch (_) {
+      // Si falla, no bloquear la edición manual
+    }
+  }
+
+  void _onNameChanged(String value) {
+    final query = value.trim();
+    _searchDebounce?.cancel();
+    final queryChanged = query != _lastQuery;
+    _lastQuery = query;
+
+    if (_selectedClient != null) {
+      final selectedName = _formatClientName(_selectedClient!).toLowerCase();
+      if (selectedName != query.toLowerCase()) {
+        setState(() {
+          _selectedClient = null;
+        });
+        _clientService.clearSelectedClient();
+      }
+    }
+
+    if (query.length < 2) {
+      if (_clientSuggestions.isNotEmpty) {
+        setState(() {
+          _clientSuggestions = [];
+        });
+      }
+      return;
+    }
+
+    if (queryChanged && _clientSuggestions.isNotEmpty) {
+      setState(() {
+        _clientSuggestions = [];
+      });
+    }
+
+    _searchDebounce = Timer(
+      const Duration(milliseconds: 350),
+      () => _fetchClientSuggestions(query),
+    );
+  }
+
+  Future<void> _fetchClientSuggestions(String query) async {
+    try {
+      final clients = await _clientService.searchClientsByName(query);
+      if (!mounted || query != _lastQuery) {
+        return;
+      }
+      setState(() {
+        _clientSuggestions = clients;
+      });
+    } catch (e) {
+      if (!mounted || query != _lastQuery) {
+        return;
+      }
+      setState(() {
+        _clientSuggestions = [];
+      });
+    }
+  }
+
+  Future<void> _triggerSearch() async {
+    final query = _nombreController.text.trim();
+    _lastQuery = query;
+    if (query.length < 2) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Ingrese una cédula para buscar.'),
+          content: Text('Ingrese al menos 2 letras para buscar'),
           backgroundColor: Colors.orange,
         ),
       );
       return;
     }
 
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => const AlertDialog(
-        content: Row(
-          children: [
-            CircularProgressIndicator(),
-            SizedBox(width: 16),
-            Text('Buscando cliente...'),
-          ],
-        ),
-      ),
-    );
-
-    try {
-      final client = await _clientService.searchClientByCedula(cedula);
-      Navigator.of(context).pop();
-
-      if (client != null) {
-        setState(() {
-          _selectedClient = client;
-        });
-
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Cliente encontrado y seleccionado.'),
-            backgroundColor: Colors.green,
-            duration: Duration(seconds: 2),
-          ),
-        );
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('No se encontró cliente con esa cédula.'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    } catch (e) {
-      Navigator.of(context).pop();
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Error al buscar cliente: $e'),
-          backgroundColor: Colors.red,
-        ),
-      );
+    await _fetchClientSuggestions(query);
+    if (!mounted) {
+      return;
     }
+
+    if (_clientSuggestions.length == 1) {
+      final client = _clientSuggestions.first;
+      setState(() {
+        _selectedClient = client;
+        _clientSuggestions = [];
+      });
+      _clientService.saveSelectedClient(client);
+      _nombreController.text = _formatClientName(client);
+      _nombreFocusNode.unfocus();
+      return;
+    }
+
+    _nombreFocusNode.requestFocus();
   }
 
   // 1. Encabezado
@@ -734,6 +1129,7 @@ class _SigatokaAuditScreenState extends State<SigatokaAuditScreen> {
                 if (picked != null) {
                   setState(() {
                     fechaController.text = '${picked.year}-${picked.month.toString().padLeft(2, '0')}-${picked.day.toString().padLeft(2, '0')}';
+                    _applyDateDerivedFields(picked);
                   });
                 }
               },
@@ -915,50 +1311,100 @@ class _SigatokaAuditScreenState extends State<SigatokaAuditScreen> {
             Row(
               children: [
                 Expanded(
-                  child: TextField(
-                    controller: muestraNumController,
-                    keyboardType: TextInputType.number,
+                  child: DropdownButtonFormField<int>(
+                    value: _muestraOptions.contains(
+                      int.tryParse(muestraNumController.text) ?? 1,
+                    )
+                        ? int.tryParse(muestraNumController.text) ?? 1
+                        : _muestraOptions.first,
                     decoration: const InputDecoration(
                       labelText: '🌿 Muestra # *',
-                      hintText: '1',
                       border: OutlineInputBorder(),
                       prefixIcon: Icon(Icons.tag),
                     ),
+                    items: _muestraOptions
+                        .map(
+                          (value) => DropdownMenuItem<int>(
+                            value: value,
+                            child: Text(value.toString()),
+                          ),
+                        )
+                        .toList(),
+                    onChanged: (value) {
+                      if (value == null) {
+                        return;
+                      }
+                      muestraNumController.text = value.toString();
+                    },
                   ),
                 ),
                 const SizedBox(width: 16),
                 Expanded(
-                  child: TextField(
-                    controller: loteCodigoController,
-                    decoration: const InputDecoration(
-                      labelText: '🧭 Lote # *',
-                      hintText: 'A1',
-                      border: OutlineInputBorder(),
-                      prefixIcon: Icon(Icons.location_on),
-                    ),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: TextField(
+                          controller: loteCodigoController,
+                          decoration: InputDecoration(
+                            labelText: '🧭 Lote # *',
+                            hintText: 'A1',
+                            border: const OutlineInputBorder(),
+                            prefixIcon: const Icon(Icons.location_on),
+                            suffixIcon: _loteLatitud != null && _loteLongitud != null
+                                ? const Icon(Icons.check_circle, color: Colors.green)
+                                : null,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Container(
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF4CAF50),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: IconButton(
+                          onPressed: _obteniendoUbicacion ? null : _obtenerUbicacionLote,
+                          icon: _obteniendoUbicacion
+                              ? const SizedBox(
+                                  width: 24,
+                                  height: 24,
+                                  child: CircularProgressIndicator(
+                                    color: Colors.white,
+                                    strokeWidth: 2,
+                                  ),
+                                )
+                              : const Icon(Icons.my_location, color: Colors.white),
+                          tooltip: 'Obtener ubicación GPS',
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ],
             ),
-            const SizedBox(height: 16),
-
-            // Plantas muestreadas
-            Row(
-              children: [
-                Expanded(
-                  child: TextField(
-                    controller: plantasMuestreadasController,
-                    keyboardType: TextInputType.number,
-                    decoration: const InputDecoration(
-                      labelText: '🌱 Plantas muestreadas *',
-                      hintText: '10',
-                      border: OutlineInputBorder(),
-                      prefixIcon: Icon(Icons.eco),
-                    ),
-                  ),
+            if (_loteLatitud != null && _loteLongitud != null) ...[
+              const SizedBox(height: 8),
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: Colors.green[50],
+                  borderRadius: BorderRadius.circular(4),
+                  border: Border.all(color: Colors.green[200]!),
                 ),
-              ],
-            ),
+                child: Row(
+                  children: [
+                    Icon(Icons.gps_fixed, size: 16, color: Colors.green[700]),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'Lat: ${_loteLatitud!.toStringAsFixed(6)}, Lng: ${_loteLongitud!.toStringAsFixed(6)}',
+                        style: TextStyle(fontSize: 12, color: Colors.green[700]),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
             const SizedBox(height: 16),
             
             // Grados de infección
@@ -966,11 +1412,29 @@ class _SigatokaAuditScreenState extends State<SigatokaAuditScreen> {
             const SizedBox(height: 8),
             Row(
               children: [
-                Expanded(child: TextField(controller: grado3eraController, decoration: const InputDecoration(labelText: '3era hoja', hintText: '2a', border: OutlineInputBorder()))),
+                Expanded(
+                  child: _buildInfectionGradeDropdown(
+                    controller: grado3eraController,
+                    label: '3era hoja',
+                    hint: '-',
+                  ),
+                ),
                 const SizedBox(width: 8),
-                Expanded(child: TextField(controller: grado4taController, decoration: const InputDecoration(labelText: '4ta hoja', hintText: '3c', border: OutlineInputBorder()))),
+                Expanded(
+                  child: _buildInfectionGradeDropdown(
+                    controller: grado4taController,
+                    label: '4ta hoja',
+                    hint: '-',
+                  ),
+                ),
                 const SizedBox(width: 8),
-                Expanded(child: TextField(controller: grado5taController, decoration: const InputDecoration(labelText: '5ta hoja', hintText: '1b', border: OutlineInputBorder()))),
+                Expanded(
+                  child: _buildInfectionGradeDropdown(
+                    controller: grado5taController,
+                    label: '5ta hoja',
+                    hint: '-',
+                  ),
+                ),
               ],
             ),
             const SizedBox(height: 16),

@@ -79,6 +79,7 @@ class AuditService {
     String? observaciones,
     required List<Map<String, dynamic>> scores,
     String? cedulaCliente,
+    List<Map<String, dynamic>>? trayectoUbicaciones,
   }) async {
     try {
       final headers = await _getHeaders();
@@ -94,6 +95,9 @@ class AuditService {
       };
       if (cedulaCliente != null && cedulaCliente.isNotEmpty) {
         body['cedulaCliente'] = cedulaCliente;
+      }
+      if (trayectoUbicaciones != null && trayectoUbicaciones.isNotEmpty) {
+        body['trayectoUbicaciones'] = trayectoUbicaciones;
       }
       final response = await http.post(
         uri,

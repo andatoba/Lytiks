@@ -22,6 +22,12 @@ public class RegistroMoko {
     @Column(name = "gps_coordinates")
     private String gpsCoordinates;
 
+    @Column(name = "lote_latitud")
+    private Double loteLatitud;
+
+    @Column(name = "lote_longitud")
+    private Double loteLongitud;
+
     @Column(name = "plantas_afectadas", nullable = false)
     private Integer plantasAfectadas;
 
@@ -94,6 +100,22 @@ public class RegistroMoko {
 
     public void setGpsCoordinates(String gpsCoordinates) {
         this.gpsCoordinates = gpsCoordinates;
+    }
+
+    public Double getLoteLatitud() {
+        return loteLatitud;
+    }
+
+    public void setLoteLatitud(Double loteLatitud) {
+        this.loteLatitud = loteLatitud;
+    }
+
+    public Double getLoteLongitud() {
+        return loteLongitud;
+    }
+
+    public void setLoteLongitud(Double loteLongitud) {
+        this.loteLongitud = loteLongitud;
     }
 
     public Integer getPlantasAfectadas() {

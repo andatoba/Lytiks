@@ -14,7 +14,7 @@ import java.util.Map;
 
 @RestController
 @RequestMapping("/clients")
-@CrossOrigin(origins = "*")
+
 public class ClientController {
 
     @Autowired
@@ -29,26 +29,8 @@ public class ClientController {
             Optional<Client> client = clientRepository.findByCedula(cedula);
             
             if (client.isPresent()) {
-                Client foundClient = client.get();
-                Map<String, Object> clientData = new HashMap<>();
-                clientData.put("id", foundClient.getId());
-                clientData.put("cedula", foundClient.getCedula());
-                clientData.put("nombre", foundClient.getNombre());
-                clientData.put("apellidos", foundClient.getApellidos());
-                clientData.put("telefono", foundClient.getTelefono());
-                clientData.put("email", foundClient.getEmail());
-                clientData.put("direccion", foundClient.getDireccion());
-                clientData.put("parroquia", foundClient.getParroquia());
-                clientData.put("nombreFinca", foundClient.getFincaNombre());
-                clientData.put("fincaHectareas", foundClient.getFincaHectareas());
-                clientData.put("cultivosPrincipales", foundClient.getCultivosPrincipales());
-                clientData.put("geolocalizacionLat", foundClient.getGeolocalizacionLat());
-                clientData.put("geolocalizacionLng", foundClient.getGeolocalizacionLng());
-                clientData.put("observaciones", foundClient.getObservaciones());
-                clientData.put("tecnicoAsignadoId", foundClient.getTecnicoAsignadoId());
-
-                System.out.println("Cliente encontrado: " + clientData);
-                response = clientData; // Enviar directamente los datos del cliente
+                response = buildClientData(client.get());
+                System.out.println("Cliente encontrado: " + response);
             } else {
                 // Buscar hacienda por cédula si existe
                 Optional<Client> hacienda = clientRepository.findByCedula(cedula);
@@ -67,6 +49,46 @@ public class ClientController {
             response.put("message", "Error al buscar cliente: " + e.getMessage());
             return ResponseEntity.badRequest().body(response);
         }
+    }
+
+    // Buscar cliente por email
+    @GetMapping("/search/email/{email}")
+    public ResponseEntity<Map<String, Object>> searchClientByEmail(@PathVariable String email) {
+        Map<String, Object> response = new HashMap<>();
+
+        try {
+            Optional<Client> client = clientRepository.findByEmail(email);
+            if (client.isPresent()) {
+                response = buildClientData(client.get());
+            } else {
+                response.put("error", "No se encontró ningún cliente con el email: " + email);
+            }
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            response.put("found", false);
+            response.put("message", "Error al buscar cliente: " + e.getMessage());
+            return ResponseEntity.badRequest().body(response);
+        }
+    }
+
+    private Map<String, Object> buildClientData(Client foundClient) {
+        Map<String, Object> clientData = new HashMap<>();
+        clientData.put("id", foundClient.getId());
+        clientData.put("cedula", foundClient.getCedula());
+        clientData.put("nombre", foundClient.getNombre());
+        clientData.put("apellidos", foundClient.getApellidos());
+        clientData.put("telefono", foundClient.getTelefono());
+        clientData.put("email", foundClient.getEmail());
+        clientData.put("direccion", foundClient.getDireccion());
+        clientData.put("parroquia", foundClient.getParroquia());
+        clientData.put("nombreFinca", foundClient.getFincaNombre());
+        clientData.put("fincaHectareas", foundClient.getFincaHectareas());
+        clientData.put("cultivosPrincipales", foundClient.getCultivosPrincipales());
+        clientData.put("geolocalizacionLat", foundClient.getGeolocalizacionLat());
+        clientData.put("geolocalizacionLng", foundClient.getGeolocalizacionLng());
+        clientData.put("observaciones", foundClient.getObservaciones());
+        clientData.put("tecnicoAsignadoId", foundClient.getTecnicoAsignadoId());
+        return clientData;
     }
 
     // Crear nuevo cliente

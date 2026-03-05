@@ -11,7 +11,6 @@ import java.util.List;
 
 @RestController
 @RequestMapping("/moko")
-@CrossOrigin(origins = "*")
 public class ProductoController {
 
     @Autowired

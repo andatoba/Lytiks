@@ -2,10 +2,12 @@ package com.lytiks.backend.service;
 
 import com.lytiks.backend.entity.*;
 import com.lytiks.backend.repository.*;
+import com.lytiks.backend.util.SigatokaDateUtil;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import lombok.extern.slf4j.Slf4j;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -16,9 +18,10 @@ import java.util.*;
  * Implementa operaciones CRUD y orquesta los cálculos
  */
 @Service
-@Slf4j
 @Transactional
 public class SigatokaEvaluacionService {
+    
+    private static final Logger log = LoggerFactory.getLogger(SigatokaEvaluacionService.class);
     
     @Autowired
     private SigatokaEvaluacionRepository evaluacionRepository;
@@ -46,6 +49,7 @@ public class SigatokaEvaluacionService {
     
     /**
      * Crea una nueva evaluación
+     * Calcula automáticamente la semana epidemiológica ISO y el período si no se proporcionan
      */
     public SigatokaEvaluacion crearEvaluacion(
         Long clienteId,
@@ -57,6 +61,18 @@ public class SigatokaEvaluacionService {
     ) {
         log.info("Creando nueva evaluación para cliente {} en hacienda {}", clienteId, hacienda);
         
+        // Si no se proporciona la semana epidemiológica, calcularla automáticamente
+        if (semanaEpidemiologica == null || semanaEpidemiologica == 0) {
+            semanaEpidemiologica = SigatokaDateUtil.getSemanaEpidemiologicaISO(fecha);
+            log.info("Semana epidemiológica calculada automáticamente: {}", semanaEpidemiologica);
+        }
+        
+        // Si no se proporciona el período, calcularlo automáticamente
+        if (periodo == null || periodo.isEmpty()) {
+            periodo = SigatokaDateUtil.getPeriodoSemanaDelMes(fecha);
+            log.info("Período calculado automáticamente: {}", periodo);
+        }
+        
         SigatokaEvaluacion evaluacion = new SigatokaEvaluacion();
         evaluacion.setClienteId(clienteId);
         evaluacion.setHacienda(hacienda);
@@ -67,7 +83,8 @@ public class SigatokaEvaluacionService {
         
         evaluacion = evaluacionRepository.save(evaluacion);
         
-        log.info("Evaluación creada con ID: {}", evaluacion.getId());
+        log.info("Evaluación creada con ID: {}, Semana ISO: {}, Período: {}", 
+            evaluacion.getId(), semanaEpidemiologica, periodo);
         
         return evaluacion;
     }

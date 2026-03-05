@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import '../services/registro_moko_service.dart';
-import 'registro_moko_screen.dart';
+import 'plan_seguimiento_moko_screen.dart';
 
 class ListaFocosScreen extends StatefulWidget {
   const ListaFocosScreen({super.key});
@@ -582,6 +582,38 @@ class _ListaFocosScreenState extends State<ListaFocosScreen> {
                           ),
                         ),
                       ],
+
+                      // Botón para Plan de Seguimiento
+                      const SizedBox(height: 24),
+                      SizedBox(
+                        width: double.infinity,
+                        child: ElevatedButton.icon(
+                          onPressed: () {
+                            Navigator.pop(context);
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) => PlanSeguimientoMokoScreen(
+                                  focoId: foco['id'] ?? 0,
+                                  numeroFoco: foco['numeroFoco'] ?? 0,
+                                ),
+                              ),
+                            );
+                          },
+                          icon: const Icon(Icons.assignment, color: Colors.white),
+                          label: const Text(
+                            'PLAN DE SEGUIMIENTO',
+                            style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white),
+                          ),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF1A365D),
+                            padding: const EdgeInsets.symmetric(vertical: 16),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ),
+                        ),
+                      ),
                     ],
                   ),
                 ),
