@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import '../services/auth_service.dart';
-import 'new_login.dart';
+import 'agrotecban_login.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -144,7 +144,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       await _authService.logout();
       if (mounted) {
         Navigator.of(context).pushAndRemoveUntil(
-          MaterialPageRoute(builder: (context) => const NewLoginScreen()),
+          MaterialPageRoute(builder: (context) => AgrotecbanLogin()),
           (route) => false,
         );
       }

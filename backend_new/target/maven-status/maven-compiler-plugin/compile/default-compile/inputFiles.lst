@@ -14,6 +14,7 @@
 /home/atobar/Lytiks/backend_new/src/main/java/com/lytiks/backend/controller/HaciendaController.java
 /home/atobar/Lytiks/backend_new/src/main/java/com/lytiks/backend/controller/LocationTrackingController.java
 /home/atobar/Lytiks/backend_new/src/main/java/com/lytiks/backend/controller/LoteController.java
+/home/atobar/Lytiks/backend_new/src/main/java/com/lytiks/backend/controller/PlagasResumenController.java
 /home/atobar/Lytiks/backend_new/src/main/java/com/lytiks/backend/controller/PlanSeguimientoMokoController.java
 /home/atobar/Lytiks/backend_new/src/main/java/com/lytiks/backend/controller/ProductoController.java
 /home/atobar/Lytiks/backend_new/src/main/java/com/lytiks/backend/controller/RegistroMokoController.java
@@ -21,6 +22,7 @@
 /home/atobar/Lytiks/backend_new/src/main/java/com/lytiks/backend/controller/SigatokaEvaluacionController.java
 /home/atobar/Lytiks/backend_new/src/main/java/com/lytiks/backend/controller/SintomaController.java
 /home/atobar/Lytiks/backend_new/src/main/java/com/lytiks/backend/dto/LocationTrackingDTO.java
+/home/atobar/Lytiks/backend_new/src/main/java/com/lytiks/backend/dto/PlagasResumenDTO.java
 /home/atobar/Lytiks/backend_new/src/main/java/com/lytiks/backend/dto/SigatokaEvaluacionDTO.java
 /home/atobar/Lytiks/backend_new/src/main/java/com/lytiks/backend/dto/SigatokaLoteDTO.java
 /home/atobar/Lytiks/backend_new/src/main/java/com/lytiks/backend/dto/SigatokaMuestraCompletaDTO.java
@@ -43,6 +45,7 @@
 /home/atobar/Lytiks/backend_new/src/main/java/com/lytiks/backend/entity/ItemsTareasMoko.java
 /home/atobar/Lytiks/backend_new/src/main/java/com/lytiks/backend/entity/LocationTracking.java
 /home/atobar/Lytiks/backend_new/src/main/java/com/lytiks/backend/entity/Lote.java
+/home/atobar/Lytiks/backend_new/src/main/java/com/lytiks/backend/entity/PlagasResumenAuditoria.java
 /home/atobar/Lytiks/backend_new/src/main/java/com/lytiks/backend/entity/PlanSeguimientoMoko.java
 /home/atobar/Lytiks/backend_new/src/main/java/com/lytiks/backend/entity/Producto.java
 /home/atobar/Lytiks/backend_new/src/main/java/com/lytiks/backend/entity/ProductoContencion.java
@@ -77,6 +80,7 @@
 /home/atobar/Lytiks/backend_new/src/main/java/com/lytiks/backend/repository/ItemsTareasMokoRepository.java
 /home/atobar/Lytiks/backend_new/src/main/java/com/lytiks/backend/repository/LocationTrackingRepository.java
 /home/atobar/Lytiks/backend_new/src/main/java/com/lytiks/backend/repository/LoteRepository.java
+/home/atobar/Lytiks/backend_new/src/main/java/com/lytiks/backend/repository/PlagasResumenAuditoriaRepository.java
 /home/atobar/Lytiks/backend_new/src/main/java/com/lytiks/backend/repository/PlanSeguimientoMokoRepository.java
 /home/atobar/Lytiks/backend_new/src/main/java/com/lytiks/backend/repository/ProductoContencionRepository.java
 /home/atobar/Lytiks/backend_new/src/main/java/com/lytiks/backend/repository/ProductoRepository.java
@@ -100,6 +104,7 @@
 /home/atobar/Lytiks/backend_new/src/main/java/com/lytiks/backend/service/HaciendaService.java
 /home/atobar/Lytiks/backend_new/src/main/java/com/lytiks/backend/service/LocationTrackingService.java
 /home/atobar/Lytiks/backend_new/src/main/java/com/lytiks/backend/service/LoteService.java
+/home/atobar/Lytiks/backend_new/src/main/java/com/lytiks/backend/service/PlagasResumenService.java
 /home/atobar/Lytiks/backend_new/src/main/java/com/lytiks/backend/service/PlanSeguimientoMokoService.java
 /home/atobar/Lytiks/backend_new/src/main/java/com/lytiks/backend/service/RegistroMokoService.java
 /home/atobar/Lytiks/backend_new/src/main/java/com/lytiks/backend/service/SeguimientoAplicacionService.java

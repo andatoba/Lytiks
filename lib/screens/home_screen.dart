@@ -9,6 +9,7 @@ import '../widgets/dynamic_logo_widget.dart';
 import 'audit_screen.dart';
 import 'moko_audit_screen.dart';
 import 'sigatoka_audit_screen.dart';
+import 'plagas_screen.dart';
 import 'audit_consultation_screen.dart';
 import 'client_info_screen.dart';
 import 'profile_screen.dart';
@@ -808,7 +809,7 @@ class _InicioTabState extends State<InicioTab> {
           ),
           const SizedBox(height: 8),
           const Text(
-            'Este cliente se usará para auditorías de Moko, Sigatoka y Cultivos.',
+            'Este cliente se usará para auditorías de Moko, Sigatoka, Cultivos y Plagas.',
             style: TextStyle(fontSize: 12, color: Colors.black54),
           ),
           const SizedBox(height: 12),
@@ -942,6 +943,28 @@ class _InicioTabState extends State<InicioTab> {
               ),
             ),
             const SizedBox(height: 8),
+
+              SizedBox(
+                width: double.infinity,
+                child: _buildActionButton(
+                  context,
+                  icon: Icons.bug_report,
+                  title: 'Control de Plagas',
+                  color: const Color(0xFF8D6E63),
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => PlagasScreen(
+                          clientData: _selectedClient,
+                        ),
+                      ),
+                    );
+                  },
+                  isFullWidth: true,
+                ),
+              ),
+
             const Text(
               'Puede cambiarlo al ingresar a cada módulo.',
               style: TextStyle(fontSize: 11, color: Colors.black54),

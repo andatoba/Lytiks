@@ -30,6 +30,7 @@ class AuditScreen extends StatefulWidget {
 class _AuditScreenState extends State<AuditScreen> {
   final OfflineStorageService _offlineStorageCampo = OfflineStorageService();
   final TextEditingController _nombreController = TextEditingController();
+  final TextEditingController _loteController = TextEditingController();
   final FocusNode _nombreFocusNode = FocusNode();
   final ClientService _clientService = ClientService();
   final ImagePicker _picker = ImagePicker();
@@ -53,6 +54,15 @@ class _AuditScreenState extends State<AuditScreen> {
   // Modo cliente: bloquea búsqueda de cliente y seguimiento de ubicación
   bool _isClienteMode = false;
 
+  // Variables para sección COSECHA personalizada
+  final List<int> _cosechaEdades = [9, 10, 11, 12, 13];
+  final List<int> _cosechaCalibraciones = [38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50];
+  final Map<int, Map<int, TextEditingController>> _cosechaControllers = {};
+  double _cosechaPorcentajeBajoGrado = 0;
+  double _cosechaPorcentajeSobreGrado = 0;
+  double _cosechaScore = 100;
+  bool _cosechaExpanded = false;
+
   @override
   void initState() {
     super.initState();
@@ -61,6 +71,7 @@ class _AuditScreenState extends State<AuditScreen> {
     if (widget.clientData != null) {
       _selectedClient = widget.clientData;
       _nombreController.text = _formatClientName(widget.clientData!);
+      _loteController.text = _formatFincaName(widget.clientData!);
       _clientService.saveSelectedClient(widget.clientData!);
       
       // Verificar si es modo cliente (usuario con rol CLIENTE)
@@ -73,7 +84,16 @@ class _AuditScreenState extends State<AuditScreen> {
     if (!_isClienteMode) {
       _iniciarTrackingUbicacion();
     }
-  }
+
+      // Inicializar controladores de grilla COSECHA
+      for (var edad in _cosechaEdades) {
+        _cosechaControllers[edad] = {};
+        for (var cal in _cosechaCalibraciones) {
+          _cosechaControllers[edad]![cal] = TextEditingController();
+          _cosechaControllers[edad]![cal]!.addListener(_recalcularCosecha);
+        }
+      }
+    }
 
   Future<void> _loadStoredClient() async {
     final stored = await _clientService.getSelectedClient();
@@ -83,15 +103,24 @@ class _AuditScreenState extends State<AuditScreen> {
     setState(() {
       _selectedClient = stored;
       _nombreController.text = _formatClientName(stored);
+      if (_loteController.text.trim().isEmpty) {
+        _loteController.text = _formatFincaName(stored);
+      }
     });
   }
 
   @override
   void dispose() {
-    _detenerTrackingUbicacion(); // Detener tracking al cerrar
+      _detenerTrackingUbicacion();
     _searchDebounce?.cancel();
     _nombreController.dispose();
+      _loteController.dispose();
     _nombreFocusNode.dispose();
+      for (var edadMap in _cosechaControllers.values) {
+        for (var ctrl in edadMap.values) {
+          ctrl.dispose();
+        }
+      }
     super.dispose();
   }
 
@@ -175,11 +204,11 @@ class _AuditScreenState extends State<AuditScreen> {
   // Estructura de datos para los elementos de evaluación
   final Map<String, List<AuditItem>> _auditSections = {
     'ENFUNDE': [
-      AuditItem('ATRASO DE LABOR E MAL IDENTIFICACION', 20),
-      AuditItem('RETOLDEO', 20),
-      AuditItem('CIRUGIA, SE ENCUENTRAN MELLIZOS', 20),
+      AuditItem('ATRASO DE LABOR E MAL IDENTIFICACION', 25),
+      AuditItem('RETOLDEO', 15),
+      AuditItem('CIRUGIA, SE ENCUENTRAN MELLIZOS', 15),
       AuditItem('FALTA DE PROTECTORES Y/O MAL COLOCADO', 20),
-      AuditItem('SACUDIR BRACTEAS 2DA SUBIDA Y 3RA SUBIDA AL RACIMO', 20),
+      AuditItem('SACUDIR BRACTEAS 2DA SUBIDA Y 3RA SUBIDA AL RACIMO', 25),
     ],
     'SELECCION': [
       AuditItem('MALA DISTRIBUCION Y/O DEJA PLANTAS SIN SELECTAR', 20),
@@ -188,66 +217,63 @@ class _AuditScreenState extends State<AuditScreen> {
       AuditItem('MAL CANCELADOS', 20),
       AuditItem('NO GENERA DOBLES PERIFERICOS', 20),
     ],
-    'COSECHA': [
-      AuditItem('FFE + FFI (6.01% a 7.99%)', 10),
-      AuditItem('FFE + FFI (8 a 9%)', 15),
-      AuditItem('FFE+FFI (>=9.01%)', 20),
-      AuditItem('NO SE LLEVA PARCELA DE CALIBRACION', 15),
-      AuditItem('LIBRO DE AR (LLEVA REGISTRO DIARIO DE LOTES COSECHADOS)', 20),
-    ],
     'DESHOJE FITOSANITARIO': [
-      AuditItem('TEJIDO NECROTICO SIN CORTAR', 40),
-      AuditItem('ELIMINAN TEJIDO VERDE Y/O CON ESTRIAS', 30),
+      AuditItem('TEJIDO NECROTICO SIN CORTAR', 35),
+      AuditItem('ELIMINAN TEJIDO VERDE Y/O CON ESTRIAS', 35),
       AuditItem('LA LONGITUD DE LA PALANCA NO ES LA CORRECTA', 30),
     ],
     'DESHOJE NORMAL': [
-      AuditItem('HOJA TOCANDO RACIMO Y/O HOJA PUENTE SIN CORTAR', 25),
-      AuditItem('ELIMINA HOJAS VERDES', 25),
-      AuditItem('DEJA HOJA BAJERA', 25),
-      AuditItem('DEJAN CODOS', 25),
+      AuditItem('HOJA TOCANDO RACIMO Y/O HOJA PUENTE SIN CORTAR', 35),
+      AuditItem('ELIMINA HOJAS VERDES', 35),
+      AuditItem('DEJA HOJA BAJERA', 30),
     ],
     'DESVIO DE HIJOS': [
       AuditItem('SIN DESVIAR', 50),
       AuditItem('HIJOS MALTRATADOS', 50),
     ],
     'APUNTALAMIENTO CON ZUNCHO': [
-      AuditItem('ZUNCHO FLOJO Y/O MAL ANGULO MAL COLOCADO', 25),
+      AuditItem('ZUNCHO FLOJO Y/O MAL ANGULO MAL COLOCADO', 30),
       AuditItem(
-        'MATAS CAIDAS MAYOR A 3% DEL ENFUNDE PROMEDIO SEMANAL DEL LOTE',
-        25,
+        'MATAS CAIDAS MAYOR A 5% DEL ENFUNDE PROMEDIO SEMANAL DEL LOTE',
+        30,
       ),
       AuditItem(
         'UTILIZA ESTAQUILLA PARA MEJORAR ANGULO DENTRO DE LA PLANTACION Y CABLE VIA',
-        25,
-      ),
-      AuditItem('AMARRE EN HIJOS Y/O EN PLANTAS CON RACIMOS +9 SEM', 25),
-    ],
-    'APUNTALAMIENTO CON PUNTAL': [
-      AuditItem('PUNTAL FLOJO Y/O MAL ANGULO', 20),
-      AuditItem(
-        'MATAS CAIDAS MAYOR A 3% DEL ENFUNDE PROMEDIO SEMANAL DEL LOTE',
         20,
       ),
+      AuditItem('AMARRE EN HIJOS Y/O EN PLANTAS CON RACIMOS +9 SEM O RESIEMBRAS', 20),
+    ],
+    'APUNTALAMIENTO CON PUNTAL': [
+      AuditItem('PUNTAL FLOJO Y/O MAL ANGULO', 25),
+      AuditItem(
+        'MATAS CAIDAS MAYOR A 5% DEL ENFUNDE PROMEDIO SEMANAL DEL LOTE',
+        25,
+      ),
       AuditItem('UN PUNTAL', 20),
-      AuditItem('PUNTAL ROZANDO RACIMO Y/O DAÑA PARTE BASAL DE LA HOJA', 20),
-      AuditItem('PUNTAL PODRIDO', 20),
+      AuditItem('PUNTAL ROZANDO RACIMO Y/O DAÑA PARTE BASAL DE LA HOJA', 15),
+      AuditItem('PUNTAL PODRIDO', 15),
     ],
     'MANEJO DE AGUAS (RIEGO)': [
-      AuditItem('SATURACION DE AREA SIN CAPACIDAD DE CAMPO', 20),
       AuditItem('CUMPLIMIENTO DE TURNOS DE RIEGO', 20),
-      AuditItem('SE OBSERVAN TRIANGULO SECOS', 15),
-      AuditItem('SE OBSERVAN FUGAS', 15),
-      AuditItem('FALTA DE ASPERSORES', 15),
-      AuditItem(
-        'Lotes con frecuencia mayor a 5 días / mala planificación de cosecha',
-        15,
-      ),
-      AuditItem('PRESION INADECUADA (ALTA O BAJA)', 15),
+      AuditItem('SE OBSERVAN TRIANGULOS SECOS', 20),
+      AuditItem('SE OBSERVAN FUGAS', 20),
+      AuditItem('FALTA DE ASPERSORES', 20),
+      AuditItem('PRESION INADECUADA, NO HAY TRASLAPE (BAJA)', 20),
     ],
     'MANEJO DE AGUAS (DRENAJE)': [
       AuditItem('AGUAS RETENIDAS', 35),
       AuditItem('CANALES SUCIOS', 35),
       AuditItem('ENCHARCAMIENTO POR FALTA DE DRENAJE', 30),
+    ],
+    'FERTILIZACION': [
+      AuditItem('MAL APLICADO Y/O MALA DISTRIBUCION', 35),
+      AuditItem('APLICA SIN CAPACIDAD DE CAMPO', 35),
+      AuditItem('SE APLICA CON CORONA SUCIA Y/O MATERIAL VERDE', 30),
+    ],
+    'CONTROL DE MALEZA': [
+      AuditItem('MAL CONTROL', 35),
+      AuditItem('MALA COBERTURA', 35),
+      AuditItem('CANALES CON MALEZA EN DESCONTROL', 30),
     ],
   };
 
@@ -281,8 +307,16 @@ class _AuditScreenState extends State<AuditScreen> {
               _buildConfigurationCard(),
               const SizedBox(height: 20),
               ..._auditSections.entries
-                  .map((entry) => _buildAuditSection(entry.key, entry.value))
-                  .toList(),
+                    .take(2)
+                    .map((entry) => _buildAuditSection(entry.key, entry.value))
+                    .toList(),
+                  _buildCosechaSection(),
+                  ..._auditSections.entries
+                    .skip(2)
+                    .map((entry) => _buildAuditSection(entry.key, entry.value))
+                    .toList(),
+                  const SizedBox(height: 8),
+                  _buildFinalScoreCard(),
               const SizedBox(height: 20),
               _buildSaveButton(),
             ],
@@ -437,6 +471,9 @@ class _AuditScreenState extends State<AuditScreen> {
                     setState(() {
                       _selectedClient = client;
                       _clientSuggestions = [];
+                      if (_loteController.text.trim().isEmpty) {
+                        _loteController.text = _formatFincaName(client);
+                      }
                     });
                     _clientService.saveSelectedClient(client);
                   },
@@ -454,8 +491,10 @@ class _AuditScreenState extends State<AuditScreen> {
                       readOnly: _isClienteMode,
                       enabled: !_isClienteMode,
                       decoration: InputDecoration(
-                        labelText: 'Nombre y Apellido del Cliente',
-                        hintText: _isClienteMode ? 'Cliente autenticado' : 'Ingrese nombre y apellido',
+                        labelText: 'Nombre, Apellido o Cédula',
+                        hintText: _isClienteMode
+                            ? 'Cliente autenticado'
+                            : 'Ingrese nombre, apellido o cédula',
                         prefixIcon: Icon(
                           Icons.person,
                           color: _isClienteMode ? Colors.grey : null,
@@ -594,11 +633,7 @@ class _AuditScreenState extends State<AuditScreen> {
       }
     }
 
-    // Determinar si es búsqueda por cédula (numérico) o por nombre (texto)
-    final isNumeric = RegExp(r'^[0-9]+$').hasMatch(query);
-    final minLength = isNumeric ? 4 : 2; // 4 dígitos para cédula, 2 letras para nombre
-
-    if (query.length < minLength) {
+    if (query.length < 2) {
       if (_clientSuggestions.isNotEmpty) {
         setState(() {
           _clientSuggestions = [];
@@ -619,8 +654,26 @@ class _AuditScreenState extends State<AuditScreen> {
     );
   }
 
+  bool _isLikelyCedula(String value) {
+    if (value.isEmpty) {
+      return false;
+    }
+    return RegExp(r'^[0-9]+$').hasMatch(value);
+  }
+
   Future<void> _fetchClientSuggestions(String query) async {
     try {
+      if (_isLikelyCedula(query)) {
+        final client = await _clientService.searchClientByCedula(query);
+        if (!mounted || query != _lastQuery) {
+          return;
+        }
+        setState(() {
+          _clientSuggestions = client == null ? [] : [client];
+        });
+        return;
+      }
+
       final clients = await _clientService.searchClientsByName(query);
       if (!mounted || query != _lastQuery) {
         return;
@@ -641,19 +694,12 @@ class _AuditScreenState extends State<AuditScreen> {
   Future<void> _triggerSearch() async {
     final query = _nombreController.text.trim();
     _lastQuery = query;
-    
-    // Determinar si es búsqueda por cédula (numérico) o por nombre (texto)
-    final isNumeric = RegExp(r'^[0-9]+$').hasMatch(query);
-    final minLength = isNumeric ? 4 : 2; // 4 dígitos para cédula, 2 letras para nombre
-    
-    if (query.length < minLength) {
+
+    if (query.length < 2) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(isNumeric 
-            ? 'Ingrese al menos 4 dígitos de la cédula para buscar'
-            : 'Ingrese al menos 2 letras del nombre para buscar'),
+        const SnackBar(
+          content: Text('Ingrese al menos 2 letras para buscar'),
           backgroundColor: Colors.orange,
-          duration: const Duration(seconds: 2),
         ),
       );
       return;
@@ -669,6 +715,9 @@ class _AuditScreenState extends State<AuditScreen> {
       setState(() {
         _selectedClient = client;
         _clientSuggestions = [];
+        if (_loteController.text.trim().isEmpty) {
+          _loteController.text = _formatFincaName(client);
+        }
       });
       _clientService.saveSelectedClient(client);
       _nombreController.text = _formatClientName(client);
@@ -743,6 +792,17 @@ class _AuditScreenState extends State<AuditScreen> {
               ),
             ),
           ],
+
+          TextField(
+            controller: _loteController,
+            decoration: const InputDecoration(
+              labelText: 'Lote de la evaluación',
+              hintText: 'Ingrese lote',
+              border: OutlineInputBorder(),
+              prefixIcon: Icon(Icons.agriculture),
+            ),
+          ),
+          const SizedBox(height: 16),
 
           _buildModeSelector(),
           const SizedBox(height: 16),
@@ -962,13 +1022,13 @@ class _AuditScreenState extends State<AuditScreen> {
                     color: Colors.grey[500],
                   ),
                 ),
-          children: items.map((item) => _buildAuditItem(item)).toList(),
+          children: items.map((item) => _buildAuditItem(item, sectionName)).toList(),
         ),
       ),
     );
   }
 
-  Widget _buildAuditItem(AuditItem item) {
+  Widget _buildAuditItem(AuditItem item, String sectionName) {
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
       padding: const EdgeInsets.all(12),
@@ -995,26 +1055,47 @@ class _AuditScreenState extends State<AuditScreen> {
                     border: OutlineInputBorder(),
                   ),
                   items: const [
-                    DropdownMenuItem(value: 'Alto', child: Text('Alto (30)')),
-                    DropdownMenuItem(value: 'Medio', child: Text('Medio (50)')),
-                    DropdownMenuItem(value: 'Bajo', child: Text('Bajo (100)')),
+                    DropdownMenuItem(value: 'Muy buena', child: Text('Muy buena (90-100%)')),
+                    DropdownMenuItem(value: 'Buena', child: Text('Buena (70-89%)')),
+                    DropdownMenuItem(value: 'Regular', child: Text('Regular (50-69%)')),
+                    DropdownMenuItem(value: 'Mala', child: Text('Mala (0-49%)')),
                   ],
                   onChanged: (value) {
                     setState(() {
                       item.rating = value;
                       if (value != null) {
-                        switch (value) {
-                          case 'Alto':
-                            item.calculatedScore = (item.maxScore * 0.3)
-                                .round();
-                            break;
-                          case 'Medio':
-                            item.calculatedScore = (item.maxScore * 0.5)
-                                .round();
-                            break;
-                          case 'Bajo':
-                            item.calculatedScore = item.maxScore;
-                            break;
+                        // Lógica especial para COSECHA que se calcula diferente
+                        if (sectionName == 'COSECHA') {
+                          switch (value) {
+                            case 'Muy buena':
+                              item.calculatedScore = (item.maxScore * 0.95).round();
+                              break;
+                            case 'Buena':
+                              item.calculatedScore = (item.maxScore * 0.80).round();
+                              break;
+                            case 'Regular':
+                              item.calculatedScore = (item.maxScore * 0.60).round();
+                              break;
+                            case 'Mala':
+                              item.calculatedScore = (item.maxScore * 0.25).round();
+                              break;
+                          }
+                        } else {
+                          // Lógica estándar para todas las demás secciones
+                          switch (value) {
+                            case 'Muy buena':
+                              item.calculatedScore = (item.maxScore * 0.95).round();
+                              break;
+                            case 'Buena':
+                              item.calculatedScore = (item.maxScore * 0.80).round();
+                              break;
+                            case 'Regular':
+                              item.calculatedScore = (item.maxScore * 0.60).round();
+                              break;
+                            case 'Mala':
+                              item.calculatedScore = (item.maxScore * 0.25).round();
+                              break;
+                          }
                         }
                       }
                     });
@@ -1074,6 +1155,365 @@ class _AuditScreenState extends State<AuditScreen> {
       ),
     );
   }
+
+    void _recalcularCosecha() {
+      int total = 0;
+      int bajoGrado = 0;
+      int sobreGrado = 0;
+      for (var edad in _cosechaEdades) {
+        for (var cal in _cosechaCalibraciones) {
+          final val = int.tryParse(_cosechaControllers[edad]![cal]!.text.trim()) ?? 0;
+          total += val;
+          if (cal <= 42) bajoGrado += val;
+          if (cal >= 47) sobreGrado += val;
+        }
+      }
+      setState(() {
+        if (total > 0) {
+          _cosechaPorcentajeBajoGrado = (bajoGrado / total) * 100;
+          _cosechaPorcentajeSobreGrado = (sobreGrado / total) * 100;
+        } else {
+          _cosechaPorcentajeBajoGrado = 0;
+          _cosechaPorcentajeSobreGrado = 0;
+        }
+        final double sumaDesviacion =
+            _cosechaPorcentajeBajoGrado + _cosechaPorcentajeSobreGrado;
+
+        if (sumaDesviacion <= 6.0) {
+          _cosechaScore = 100;
+        } else if (sumaDesviacion < 8.0) {
+          _cosechaScore = 85;
+        } else if (sumaDesviacion <= 9.0) {
+          _cosechaScore = 70;
+        } else {
+          _cosechaScore = 0;
+        }
+      });
+    }
+
+    double _getSectionScore(String sectionName) {
+      final items = _auditSections[sectionName];
+      if (items == null) return 0;
+      int scored = 0;
+      int maxTotal = 0;
+      for (var item in items) {
+        maxTotal += item.maxScore;
+        if (item.calculatedScore != null) scored += item.calculatedScore!;
+      }
+      if (maxTotal == 0) return 0;
+      return (scored / maxTotal) * 100;
+    }
+
+    double _getGroupScore(List<String> sectionNames) {
+      double total = 0;
+      int count = 0;
+      for (var name in sectionNames) {
+        if (_auditSections.containsKey(name)) {
+          total += _getSectionScore(name);
+          count++;
+        }
+      }
+      return count > 0 ? total / count : 0;
+    }
+
+    double _calculateFinalWeightedScore() {
+      final bool enfundeEvaluado = _hasAnyRatedItem('ENFUNDE');
+      final bool cosechaEvaluada = _hasCosechaData();
+
+      final List<String> group1 = [
+        'DESHOJE FITOSANITARIO', 'DESHOJE NORMAL', 'DESVIO DE HIJOS',
+        'APUNTALAMIENTO CON ZUNCHO', 'APUNTALAMIENTO CON PUNTAL',
+      ];
+      final List<String> group2 = [
+        'MANEJO DE AGUAS (RIEGO)', 'MANEJO DE AGUAS (DRENAJE)',
+        'FERTILIZACION', 'CONTROL DE MALEZA',
+      ];
+
+      final bool group1Evaluado = _hasAnyRatedItemInSections(group1);
+      final bool group2Evaluado = _hasAnyRatedItemInSections(group2);
+
+      final double enfundeScore = _getSectionScore('ENFUNDE');
+      final double cosechaScore = _cosechaScore;
+      final double group1Score = _getGroupScore(group1);
+      final double group2Score = _getGroupScore(group2);
+
+      final double rawWeighted = (enfundeScore * 0.15) +
+          (cosechaScore * 0.35) +
+          (group1Score * 0.25) +
+          (group2Score * 0.25);
+
+      if (!_isBasicMode) {
+        return rawWeighted;
+      }
+
+      double usedWeight = 0;
+      if (enfundeEvaluado) usedWeight += 0.15;
+      if (cosechaEvaluada) usedWeight += 0.35;
+      if (group1Evaluado) usedWeight += 0.25;
+      if (group2Evaluado) usedWeight += 0.25;
+
+      if (usedWeight == 0) {
+        return 0;
+      }
+
+      return (rawWeighted / usedWeight).clamp(0, 100);
+    }
+
+    bool _hasAnyRatedItem(String sectionName) {
+      final items = _auditSections[sectionName];
+      if (items == null) return false;
+      for (final item in items) {
+        if (item.rating != null) {
+          return true;
+        }
+      }
+      return false;
+    }
+
+    bool _hasAnyRatedItemInSections(List<String> sectionNames) {
+      for (final section in sectionNames) {
+        if (_hasAnyRatedItem(section)) {
+          return true;
+        }
+      }
+      return false;
+    }
+
+    bool _hasCosechaData() {
+      for (var edad in _cosechaEdades) {
+        for (var cal in _cosechaCalibraciones) {
+          final val = int.tryParse(_cosechaControllers[edad]![cal]!.text.trim()) ?? 0;
+          if (val > 0) {
+            return true;
+          }
+        }
+      }
+      return false;
+    }
+
+    Color _scoreColor(double score) {
+      if (score >= 90) return Colors.green;
+      if (score >= 70) return Colors.blue;
+      if (score >= 50) return Colors.orange;
+      return Colors.red;
+    }
+
+    String _scoreLabel(double score) {
+      if (score >= 90) return 'Muy buena';
+      if (score >= 70) return 'Buena';
+      if (score >= 50) return 'Regular';
+      return 'Mala';
+    }
+
+    Widget _buildFinalScoreCard() {
+      final double enfundeScore = _getSectionScore('ENFUNDE');
+      final List<String> group1 = ['DESHOJE FITOSANITARIO', 'DESHOJE NORMAL', 'DESVIO DE HIJOS', 'APUNTALAMIENTO CON ZUNCHO', 'APUNTALAMIENTO CON PUNTAL'];
+      final List<String> group2 = ['MANEJO DE AGUAS (RIEGO)', 'MANEJO DE AGUAS (DRENAJE)', 'FERTILIZACION', 'CONTROL DE MALEZA'];
+      final double group1Score = _getGroupScore(group1);
+      final double group2Score = _getGroupScore(group2);
+      final double finalScore = _calculateFinalWeightedScore();
+      return Container(
+        margin: const EdgeInsets.only(bottom: 16),
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: const Color(0xFF004B63),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('CALIFICACIÓN FINAL', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16, letterSpacing: 1)),
+            const SizedBox(height: 16),
+            _buildScoreRow('Enfunde (15%)', enfundeScore),
+            _buildScoreRow('Cosecha (35%)', _cosechaScore),
+            _buildScoreRow('Labores de campo (25%)', group1Score),
+            _buildScoreRow('Manejo agronómico (25%)', group2Score),
+            const Divider(color: Colors.white38, height: 24),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text('TOTAL', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18)),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Text('${finalScore.toStringAsFixed(1)}%', style: TextStyle(color: _scoreColor(finalScore), fontWeight: FontWeight.bold, fontSize: 28)),
+                    Text(_scoreLabel(finalScore), style: TextStyle(color: _scoreColor(finalScore), fontSize: 13, fontWeight: FontWeight.w600)),
+                  ],
+                ),
+              ],
+            ),
+          ],
+        ),
+      );
+    }
+
+    Widget _buildScoreRow(String label, double score) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 4),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(label, style: const TextStyle(color: Colors.white70, fontSize: 13)),
+            Text('${score.toStringAsFixed(1)}%', style: TextStyle(color: _scoreColor(score), fontWeight: FontWeight.w600, fontSize: 13)),
+          ],
+        ),
+      );
+    }
+
+    Widget _buildCosechaSection() {
+      return Container(
+        margin: const EdgeInsets.only(bottom: 12),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          boxShadow: [BoxShadow(color: Colors.grey.withOpacity(0.1), spreadRadius: 1, blurRadius: 4, offset: const Offset(0, 2))],
+          border: Border.all(color: _cosechaExpanded ? const Color(0xFF004B63) : Colors.grey[300]!, width: _cosechaExpanded ? 2 : 1),
+        ),
+        child: Theme(
+          data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+          child: ExpansionTile(
+            initiallyExpanded: false,
+            onExpansionChanged: (v) => setState(() => _cosechaExpanded = v),
+            tilePadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+            leading: Container(
+              width: 40, height: 40,
+              decoration: BoxDecoration(
+                color: _cosechaExpanded ? const Color(0xFF004B63) : Colors.grey[200],
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Icon(_cosechaExpanded ? Icons.check_circle : Icons.expand_more,
+                color: _cosechaExpanded ? Colors.white : Colors.grey[600]),
+            ),
+            title: Text('COSECHA', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold,
+              color: _cosechaExpanded ? const Color(0xFF004B63) : Colors.black87)),
+            subtitle: Text(
+              'Calificación: ${_cosechaScore.toStringAsFixed(0)}/100  |  Bajo grado: ${_cosechaPorcentajeBajoGrado.toStringAsFixed(1)}%  Sobre grado: ${_cosechaPorcentajeSobreGrado.toStringAsFixed(1)}%',
+              style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+            ),
+            children: [
+              const Text('Ingrese cantidad de racimos por semana de edad y calibración:', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+              const SizedBox(height: 4),
+              Wrap(spacing: 12, runSpacing: 4, children: [
+                _buildCosechaLegend('Bajo grado ≤42', Colors.red[700]!),
+                _buildCosechaLegend('Normal 43-46', Colors.green[700]!),
+                _buildCosechaLegend('Sobre grado ≥47', Colors.orange[700]!),
+              ]),
+              const SizedBox(height: 12),
+              SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Column(
+                  children: [
+                    // Header
+                    Row(children: [
+                      _cosechaHeaderCell('Sem.', const Color(0xFF004B63)),
+                      ..._cosechaCalibraciones.map((cal) {
+                        Color c = cal <= 42 ? Colors.red[700]! : cal >= 47 ? Colors.orange[700]! : Colors.green[700]!;
+                        return _cosechaHeaderCell('$cal', c);
+                      }),
+                      _cosechaHeaderCell('Total', const Color(0xFF004B63)),
+                    ]),
+                    // Data rows
+                    ..._cosechaEdades.map((edad) {
+                      int rowTotal = _cosechaCalibraciones.fold(0, (s, cal) =>
+                        s + (int.tryParse(_cosechaControllers[edad]![cal]!.text.trim()) ?? 0));
+                      return Row(children: [
+                        SizedBox(width: 48, height: 40,
+                          child: Container(color: const Color(0xFF004B63).withOpacity(0.12),
+                            alignment: Alignment.center,
+                            child: Text('$edad', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)))),
+                        ..._cosechaCalibraciones.map((cal) {
+                          Color bg = cal <= 42 ? Colors.red[50]! : cal >= 47 ? Colors.orange[50]! : Colors.green[50]!;
+                          return SizedBox(width: 48, height: 40,
+                            child: Container(color: bg, padding: const EdgeInsets.all(2),
+                              child: TextField(
+                                controller: _cosechaControllers[edad]![cal],
+                                textAlign: TextAlign.center,
+                                style: const TextStyle(fontSize: 12),
+                                keyboardType: TextInputType.number,
+                                decoration: const InputDecoration(border: InputBorder.none, isDense: true, hintText: '0', hintStyle: TextStyle(fontSize: 11, color: Colors.grey)),
+                              )));
+                        }),
+                        SizedBox(width: 52, height: 40,
+                          child: Container(color: Colors.grey[100], alignment: Alignment.center,
+                            child: Text('$rowTotal', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)))),
+                      ]);
+                    }),
+                    // Totals row
+                    Row(children: [
+                      _cosechaHeaderCell('Total', const Color(0xFF004B63)),
+                      ..._cosechaCalibraciones.map((cal) {
+                        int colTotal = _cosechaEdades.fold(0, (s, edad) =>
+                          s + (int.tryParse(_cosechaControllers[edad]![cal]!.text.trim()) ?? 0));
+                        Color bg = cal <= 42 ? Colors.red[100]! : cal >= 47 ? Colors.orange[100]! : Colors.green[100]!;
+                        return SizedBox(width: 48, height: 36,
+                          child: Container(color: bg, alignment: Alignment.center,
+                            child: Text('$colTotal', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold))));
+                      }),
+                      Builder(builder: (ctx) {
+                        int grand = 0;
+                        for (var e in _cosechaEdades) for (var c in _cosechaCalibraciones) {
+                          grand += int.tryParse(_cosechaControllers[e]![c]!.text.trim()) ?? 0;
+                        }
+                        return SizedBox(width: 52, height: 36,
+                          child: Container(color: Colors.grey[300], alignment: Alignment.center,
+                            child: Text('$grand', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold))));
+                      }),
+                    ]),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(color: Colors.grey[100], borderRadius: BorderRadius.circular(8)),
+                child: Column(children: [
+                  Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+                    const Text('% Bajo grado (≤42):', style: TextStyle(fontWeight: FontWeight.w600)),
+                    Text('${_cosechaPorcentajeBajoGrado.toStringAsFixed(1)}%',
+                      style: TextStyle(color: Colors.red[700], fontWeight: FontWeight.bold, fontSize: 15)),
+                  ]),
+                  const SizedBox(height: 6),
+                  Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+                    const Text('% Sobre grado (≥47):', style: TextStyle(fontWeight: FontWeight.w600)),
+                    Text('${_cosechaPorcentajeSobreGrado.toStringAsFixed(1)}%',
+                      style: TextStyle(color: Colors.orange[700], fontWeight: FontWeight.bold, fontSize: 15)),
+                  ]),
+                  const SizedBox(height: 6),
+                  Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+                    const Text('Suma (% bajo + % sobre):', style: TextStyle(fontWeight: FontWeight.w600)),
+                    Text(
+                      '${(_cosechaPorcentajeBajoGrado + _cosechaPorcentajeSobreGrado).toStringAsFixed(1)}%',
+                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                    ),
+                  ]),
+                  const Divider(height: 16),
+                  Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+                    const Text('Calificación COSECHA:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+                    Text('${_cosechaScore.toStringAsFixed(0)}/100',
+                      style: TextStyle(color: _scoreColor(_cosechaScore), fontWeight: FontWeight.bold, fontSize: 18)),
+                  ]),
+                ]),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    Widget _cosechaHeaderCell(String text, Color color) {
+      return SizedBox(width: 48, height: 36,
+        child: Container(color: color, alignment: Alignment.center,
+          child: Text(text, style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold), textAlign: TextAlign.center)));
+    }
+
+    Widget _buildCosechaLegend(String label, Color color) {
+      return Row(mainAxisSize: MainAxisSize.min, children: [
+        Container(width: 12, height: 12, color: color),
+        const SizedBox(width: 4),
+        Text(label, style: const TextStyle(fontSize: 11)),
+      ]);
+    }
 
   Widget _buildSaveButton() {
     return SizedBox(
@@ -1161,6 +1601,17 @@ class _AuditScreenState extends State<AuditScreen> {
       }
     }
 
+    final String loteEvaluacion = _loteController.text.trim();
+    if (loteEvaluacion.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Debe ingresar el lote de la evaluación'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+
     // Validar que haya foto en todas las evaluaciones completadas
     final List<String> missingPhotoItems = [];
     for (var section in _auditSections.values) {
@@ -1200,6 +1651,14 @@ class _AuditScreenState extends State<AuditScreen> {
             )
             .toList();
       }
+          auditData['Lote'] = loteEvaluacion;
+          auditData['CosechaResumen'] = {
+            'porcentajeBajoGrado': _cosechaPorcentajeBajoGrado,
+            'porcentajeSobreGrado': _cosechaPorcentajeSobreGrado,
+            'sumaPorcentajes':
+            _cosechaPorcentajeBajoGrado + _cosechaPorcentajeSobreGrado,
+            'calificacion': _cosechaScore,
+          };
 
       // Validaciones adicionales
       if (_selectedClient == null) {
@@ -1222,7 +1681,7 @@ class _AuditScreenState extends State<AuditScreen> {
         status: 'COMPLETADA',
         auditData: [auditData], // Convertir el mapa en una lista
         observations:
-        'Auditoría ${_isBasicMode ? 'básica' : 'completa'} de $_selectedCrop',
+        'Auditoría ${_isBasicMode ? 'básica' : 'completa'} de $_selectedCrop - Lote: $loteEvaluacion',
         trayectoUbicaciones: _trayectoUbicaciones, // Agregar trayecto
         inicioEvaluacion: _inicioEvaluacion?.toIso8601String(),
         finEvaluacion: DateTime.now().toIso8601String(),
@@ -1232,11 +1691,14 @@ class _AuditScreenState extends State<AuditScreen> {
       _detenerTrackingUbicacion();
 
       // Calcular puntuación solo sobre los ítems completados
-      final int totalScore = _calculateTotalScore();
-      final int completedMaxScore = _calculateCompletedMaxScore();
-      final double percentage = completedMaxScore > 0 ? (totalScore / completedMaxScore) * 100 : 0;
+      final double percentage = _calculateFinalWeightedScore();
 
-      final String hacienda = _selectedClient!['hacienda'] ?? 'No especificada';
+          final String fincaCliente = _formatFincaName(_selectedClient!);
+          final String hacienda = fincaCliente.isNotEmpty
+            ? fincaCliente
+            : (_selectedClient!['hacienda']?.toString().isNotEmpty == true
+              ? _selectedClient!['hacienda'].toString()
+              : 'No especificada');
       final String cultivo = _selectedCrop;
       final String tipoAuditoria = _isBasicMode ? 'Básica' : 'Completa';
       final String clienteNombre =
@@ -1249,7 +1711,8 @@ class _AuditScreenState extends State<AuditScreen> {
 
     Cliente: $clienteNombre
     Cédula: $cedulaCliente
-    Hacienda: $hacienda
+    Finca: $hacienda
+    Lote: $loteEvaluacion
     Cultivo: ${cultivo.toUpperCase()}
     Tipo: $tipoAuditoria
 
@@ -1291,42 +1754,4 @@ class _AuditScreenState extends State<AuditScreen> {
       );
   }
 
-  int _calculateTotalScore() {
-    int totalScore = 0;
-    for (var section in _auditSections.values) {
-      for (var item in section) {
-        if (item.calculatedScore != null) {
-          totalScore += item.calculatedScore is int
-              ? item.calculatedScore as int
-              : (item.calculatedScore as double).round();
-        }
-      }
     }
-    return totalScore;
-  }
-
-  int _calculateMaxPossibleScore() {
-    int maxPossibleScore = 0;
-    for (var section in _auditSections.values) {
-      for (var item in section) {
-        maxPossibleScore += item.maxScore is int
-            ? item.maxScore as int
-            : (item.maxScore as double).round();
-      }
-    }
-    return maxPossibleScore;
-  }
-
-  // Nuevo método: suma solo los maxScore de los ítems completados
-  int _calculateCompletedMaxScore() {
-    int completedMaxScore = 0;
-    for (var section in _auditSections.values) {
-      for (var item in section) {
-        if (item.rating != null) {
-          completedMaxScore += item.maxScore;
-        }
-      }
-    }
-    return completedMaxScore;
-  }
-}

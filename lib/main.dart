@@ -5,7 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
-import 'screens/new_login.dart';
+import 'screens/agrotecban_login.dart';
 
 void main() {
   // Inicializar sqflite_ffi solo para plataformas desktop (NO Web)
@@ -36,7 +36,7 @@ class LytiksApp extends StatelessWidget {
       ],
       locale: const Locale('es', 'ES'),
       routes: {
-        '/login': (context) => const AgronomyLoginPage(),
+        '/login': (context) => AgrotecbanLogin(),
       },
       theme: ThemeData(
         primarySwatch: Colors.teal,
@@ -69,7 +69,7 @@ class LytiksApp extends StatelessWidget {
         ),
         useMaterial3: true,
       ),
-      home: const AgronomyLoginPage(),
+      home: AgrotecbanLogin(),
     );
   }
 }
