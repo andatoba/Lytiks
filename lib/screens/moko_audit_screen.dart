@@ -75,7 +75,7 @@ class _MokoAuditScreenState extends State<MokoAuditScreen> {
     return Scaffold(
       backgroundColor: Colors.grey[50],
       appBar: AppBar(
-        backgroundColor: const Color(0xFF004B63),
+        backgroundColor: const Color(0xFF00903E),
         title: const Text(
           'Control de Moko',
           style: TextStyle(color: Colors.white),

@@ -10,7 +10,7 @@ class SigatokaResultadoScreen extends StatelessWidget {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Resultados Sigatoka'),
-        backgroundColor: const Color(0xFF2563EB),
+        backgroundColor: const Color(0xFF00903E),
         foregroundColor: Colors.white,
       ),
       body: Center(

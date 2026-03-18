@@ -492,7 +492,7 @@ class _AgrotecbanLoginState extends State<AgrotecbanLogin> {
                   // Footer
                   const Center(
                     child: Text(
-                      'Powered by Lytiks',
+                      'Powered by Agrotecban',
                       style: TextStyle(
                         fontSize: 11,
                         color: Color(0xFF0B3D25),

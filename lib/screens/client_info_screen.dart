@@ -18,7 +18,7 @@ class _ClientInfoScreenState extends State<ClientInfoScreen> {
     final telefono = _telefonoController.text.trim();
     if (telefono.isNotEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('SMS enviado a $telefono: "¡Tus datos han sido guardados exitosamente!"'), backgroundColor: Colors.blue),
+        SnackBar(content: Text('SMS enviado a $telefono: "¡Tus datos han sido guardados exitosamente!"'), backgroundColor: const Color(0xFF00903E)),
       );
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -123,7 +123,7 @@ class _ClientInfoScreenState extends State<ClientInfoScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Cliente'),
-        backgroundColor: const Color(0xFF004B63),
+        backgroundColor: const Color(0xFF00903E),
         foregroundColor: Colors.white,
         actions: [
           Icon(
@@ -466,7 +466,7 @@ class _ClientInfoScreenState extends State<ClientInfoScreen> {
                         : const Icon(Icons.save),
                     label: Text(_isSaving ? 'Guardando...' : 'Guardar'),
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF004B63),
+                      backgroundColor: const Color(0xFF00903E),
                       foregroundColor: Colors.white,
                       padding: const EdgeInsets.symmetric(vertical: 12),
                     ),

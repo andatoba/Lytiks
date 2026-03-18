@@ -104,7 +104,7 @@ class _HomeScreenState extends State<HomeScreen> {
     return Scaffold(
       appBar: AppBar(
         title: Text(_titles[_selectedIndex]),
-        backgroundColor: const Color(0xFF004B63),
+        backgroundColor: const Color(0xFF00903E),
         foregroundColor: Colors.white,
         actions: [
           IconButton(
@@ -544,7 +544,7 @@ class _InicioTabState extends State<InicioTab> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        '¡Bienvenido a Lytiks! 👋',
+                        '¡Bienvenido a Agrotecban! 👋',
                         style: TextStyle(
                           fontSize: 20,
                           fontWeight: FontWeight.bold,

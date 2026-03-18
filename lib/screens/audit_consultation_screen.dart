@@ -82,7 +82,7 @@ class _AuditConsultationScreenState extends State<AuditConsultationScreen> {
       return Scaffold(
         backgroundColor: Colors.grey[50],
         appBar: AppBar(
-          backgroundColor: const Color(0xFF004B63),
+          backgroundColor: const Color(0xFF00903E),
           title: const Text(
             'Consulta de Auditorías',
             style: TextStyle(color: Colors.white),

@@ -997,7 +997,7 @@ class _ClienteHomeScreenState extends State<ClienteHomeScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Mi Cultivo'),
-        backgroundColor: const Color(0xFF004B63),
+        backgroundColor: const Color(0xFF00903E),
         foregroundColor: Colors.white,
         actions: [
           IconButton(
@@ -1049,7 +1049,7 @@ class _ClienteHomeScreenState extends State<ClienteHomeScreen> {
             ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: _mostrarOpcionesNuevoIngreso,
-        backgroundColor: const Color(0xFF004B63),
+        backgroundColor: const Color(0xFF00903E),
         icon: const Icon(Icons.add),
         label: const Text('Nuevo ingreso'),
       ),

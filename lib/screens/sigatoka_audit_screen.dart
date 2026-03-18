@@ -183,7 +183,7 @@ class _SigatokaAuditScreenState extends State<SigatokaAuditScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Evaluación creada. Ahora puede agregar muestras.'),
-          backgroundColor: Colors.blue,
+          backgroundColor: const Color(0xFF00903E),
           duration: Duration(seconds: 3),
         ),
       );
@@ -564,7 +564,7 @@ class _SigatokaAuditScreenState extends State<SigatokaAuditScreen> {
     return Scaffold(
       backgroundColor: Colors.grey[50],
       appBar: AppBar(
-        backgroundColor: const Color(0xFF004B63),
+        backgroundColor: const Color(0xFF00903E),
         title: const Text(
           'Evaluación Sigatoka',
           style: TextStyle(color: Colors.white),
@@ -1239,7 +1239,7 @@ class _SigatokaAuditScreenState extends State<SigatokaAuditScreen> {
                 label: const Text('Guardar y Cargar Reporte'),
                 style: ElevatedButton.styleFrom(
                   padding: const EdgeInsets.symmetric(vertical: 16),
-                  backgroundColor: const Color(0xFF004B63),
+                  backgroundColor: const Color(0xFF00903E),
                   foregroundColor: Colors.white,
                   textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                 ),
@@ -1511,7 +1511,7 @@ class _SigatokaAuditScreenState extends State<SigatokaAuditScreen> {
                   label: const Text('🧮 Calcular Resumen e Indicadores'),
                   style: ElevatedButton.styleFrom(
                     padding: const EdgeInsets.symmetric(vertical: 16),
-                    backgroundColor: Colors.blue[700],
+                    backgroundColor: const Color(0xFF00903E),
                     foregroundColor: Colors.white,
                     textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                   ),

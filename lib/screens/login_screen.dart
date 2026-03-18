@@ -190,7 +190,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
                     // Título
                     Text(
-                      'Lytiks',
+                      'Agrotecban',
                       style: TextStyle(
                         fontSize: titleSize,
                         fontWeight: FontWeight.bold,
@@ -283,7 +283,7 @@ class _LoginScreenState extends State<LoginScreen> {
                             child: ElevatedButton(
                               onPressed: _isLoading ? null : _login,
                               style: ElevatedButton.styleFrom(
-                                backgroundColor: const Color(0xFF004B63),
+                                backgroundColor: const Color(0xFF00903E),
                                 shape: RoundedRectangleBorder(
                                   borderRadius: BorderRadius.circular(12),
                                 ),

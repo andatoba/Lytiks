@@ -303,7 +303,7 @@ class _ResumenSigatokaScreenState extends State<ResumenSigatokaScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('📊 Resumen Sigatoka'),
-        backgroundColor: Colors.blue[700],
+        backgroundColor: const Color(0xFF00903E),
         actions: [
           if (isLoading)
             const Center(

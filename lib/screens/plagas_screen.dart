@@ -426,7 +426,7 @@ class _PlagasScreenState extends State<PlagasScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        backgroundColor: const Color(0xFF004B63),
+        backgroundColor: const Color(0xFF00903E),
         foregroundColor: Colors.white,
         title: const Text('Control de Plagas'),
       ),

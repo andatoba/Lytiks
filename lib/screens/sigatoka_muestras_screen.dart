@@ -10,7 +10,7 @@ class SigatokaMuestrasScreen extends StatelessWidget {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Ingreso de Muestras'),
-        backgroundColor: const Color(0xFF2563EB),
+        backgroundColor: const Color(0xFF00903E),
         foregroundColor: Colors.white,
       ),
       body: Center(

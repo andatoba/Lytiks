@@ -395,7 +395,7 @@ class _LocationTrackingScreenState extends State<LocationTrackingScreen> {
                 ),
                 Chip(
                   label: Text('${_locationHistory.length}'),
-                  backgroundColor: Colors.blue.shade100,
+                  backgroundColor: const Color(0xFFFFDF00).withOpacity(0.2),
                 ),
               ],
             ),

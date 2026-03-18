@@ -282,7 +282,7 @@ class _AuditScreenState extends State<AuditScreen> {
     return Scaffold(
       backgroundColor: Colors.grey[50],
       appBar: AppBar(
-        backgroundColor: const Color(0xFF004B63),
+        backgroundColor: const Color(0xFF00903E),
         title: const Text(
           'Auditoría de Cultivos',
           style: TextStyle(color: Colors.white),
@@ -1521,7 +1521,7 @@ class _AuditScreenState extends State<AuditScreen> {
       child: ElevatedButton(
         onPressed: _saveAuditResults,
         style: ElevatedButton.styleFrom(
-          backgroundColor: const Color(0xFF004B63),
+          backgroundColor: const Color(0xFF00903E),
           foregroundColor: Colors.white,
           padding: const EdgeInsets.symmetric(vertical: 16),
         ),

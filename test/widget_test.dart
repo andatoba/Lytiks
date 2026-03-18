@@ -1,4 +1,4 @@
-// Test básico para la aplicación Lytiks
+// Test básico para la aplicación Agrotecban
 //
 // NOTA: Este archivo debería estar en test/widget_test.dart, no en la raíz
 // Para ejecutar los tests:
@@ -9,9 +9,9 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:lytiks/main.dart';
 
 void main() {
-  testWidgets('Lytiks app builds without errors', (WidgetTester tester) async {
+  testWidgets('Agrotecban app builds without errors', (WidgetTester tester) async {
     // Construir la app y renderizar un frame
-    await tester.pumpWidget(const LytiksApp());
+    await tester.pumpWidget(const AgrotecbanApp());
     
     // Dar tiempo para que se construya la primera pantalla
     await tester.pump();
@@ -25,11 +25,11 @@ void main() {
 
   testWidgets('App has correct title', (WidgetTester tester) async {
     // Construir la app
-    await tester.pumpWidget(const LytiksApp());
+    await tester.pumpWidget(const AgrotecbanApp());
     await tester.pump();
 
     // Verificar que el MaterialApp tiene el título correcto
     final MaterialApp app = tester.widget(find.byType(MaterialApp));
-    expect(app.title, 'Lytiks');
+    expect(app.title, 'Agrotecban');
   });
 }
