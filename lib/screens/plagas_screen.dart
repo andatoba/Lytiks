@@ -57,6 +57,11 @@ class PlagasScreen extends StatefulWidget {
 class _PlagasScreenState extends State<PlagasScreen> {
   final ClientService _clientService = ClientService();
   final PlagasService _plagasService = PlagasService();
+  static const List<String> _plagasDisponibles = [
+    'CERAMIDIA',
+    'MONTURITA',
+    'VAQUITA',
+  ];
 
   final TextEditingController _nombreController = TextEditingController();
   final FocusNode _nombreFocusNode = FocusNode();
@@ -73,10 +78,7 @@ class _PlagasScreenState extends State<PlagasScreen> {
   bool _isClienteMode = false;
   bool _isSaving = false;
 
-  final List<_PlagaSample> _samples = List<_PlagaSample>.generate(
-    5,
-    (index) => _PlagaSample(index + 1),
-  );
+  final List<_PlagaSample> _samples = [_PlagaSample(1)];
 
   @override
   void initState() {
@@ -84,10 +86,7 @@ class _PlagasScreenState extends State<PlagasScreen> {
     _initializeDefaultDate();
 
     for (final sample in _samples) {
-      sample.huevoController.addListener(_onSamplesChanged);
-      sample.pequenaController.addListener(_onSamplesChanged);
-      sample.medianaController.addListener(_onSamplesChanged);
-      sample.grandeController.addListener(_onSamplesChanged);
+      _registerSampleListeners(sample);
     }
 
     if (widget.clientData != null) {
@@ -165,6 +164,21 @@ class _PlagasScreenState extends State<PlagasScreen> {
       return;
     }
     setState(() {});
+  }
+
+  void _registerSampleListeners(_PlagaSample sample) {
+    sample.huevoController.addListener(_onSamplesChanged);
+    sample.pequenaController.addListener(_onSamplesChanged);
+    sample.medianaController.addListener(_onSamplesChanged);
+    sample.grandeController.addListener(_onSamplesChanged);
+  }
+
+  void _addSample() {
+    final sample = _PlagaSample(_samples.length + 1);
+    _registerSampleListeners(sample);
+    setState(() {
+      _samples.add(sample);
+    });
   }
 
   String _formatClientName(Map<String, dynamic> client) {
@@ -306,7 +320,12 @@ class _PlagasScreenState extends State<PlagasScreen> {
   int get _totalIndividuos =>
       _samples.fold(0, (previousValue, sample) => previousValue + sample.totalIndividuos);
 
-  double _avgInt(int total) => total / _samples.length;
+  double _avgInt(int total) {
+    if (_samples.isEmpty) {
+      return 0;
+    }
+    return total / _samples.length;
+  }
 
   double get _promHuevo => _avgInt(_totalHuevo);
   double get _promPequena => _avgInt(_totalPequena);
@@ -329,6 +348,9 @@ class _PlagasScreenState extends State<PlagasScreen> {
   double get _pctDanioResumen => _ratio(_totalGrande, _totalIndividuos);
 
   double get _promDanio {
+    if (_samples.isEmpty) {
+      return 0;
+    }
     final total = _samples.fold<double>(
       0,
       (previousValue, sample) => previousValue + sample.porcentajeDanio,
@@ -338,6 +360,11 @@ class _PlagasScreenState extends State<PlagasScreen> {
 
   String _fmt(double value, {int decimals = 1}) {
     return value.toStringAsFixed(decimals).replaceAll('.', ',');
+  }
+
+  String get _loteResumen {
+    final lote = _loteController.text.trim();
+    return lote.isEmpty ? '-' : lote;
   }
 
   Future<void> _guardarResumen() async {
@@ -459,7 +486,9 @@ class _PlagasScreenState extends State<PlagasScreen> {
                           child: CircularProgressIndicator(strokeWidth: 2),
                         )
                       : const Icon(Icons.save),
-                  label: Text(_isSaving ? 'Guardando...' : 'Guardar Resumen'),
+                  label: Text(
+                    _isSaving ? 'Guardando...' : 'Calcular y Enviar Resumen',
+                  ),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFF5D4037),
                     foregroundColor: Colors.white,
@@ -756,15 +785,31 @@ class _PlagasScreenState extends State<PlagasScreen> {
             ],
           ),
           const SizedBox(height: 12),
-          TextField(
-            controller: _plagaController,
-            textCapitalization: TextCapitalization.characters,
+          DropdownButtonFormField<String>(
+            value: _plagasDisponibles.contains(_plagaController.text.trim())
+                ? _plagaController.text.trim()
+                : _plagasDisponibles.first,
             decoration: const InputDecoration(
               labelText: 'Plaga',
-              hintText: 'Ej: CERAMIDIA',
               border: OutlineInputBorder(),
               prefixIcon: Icon(Icons.bug_report_outlined),
             ),
+            items: _plagasDisponibles
+                .map(
+                  (plaga) => DropdownMenuItem<String>(
+                    value: plaga,
+                    child: Text(plaga),
+                  ),
+                )
+                .toList(),
+            onChanged: (value) {
+              if (value == null) {
+                return;
+              }
+              setState(() {
+                _plagaController.text = value;
+              });
+            },
           ),
         ],
       ),
@@ -792,11 +837,20 @@ class _PlagasScreenState extends State<PlagasScreen> {
           ),
           const SizedBox(height: 10),
           const Text(
-            'Ingrese manualmente Huevo, Pequeña, Mediana y Grande. Total individuos y % daño se calculan automáticamente.',
+            'Complete una muestra y agregue otra solo si la necesita. Total individuos y % daño se calculan automáticamente.',
             style: TextStyle(fontSize: 12, color: Colors.black54),
           ),
           const SizedBox(height: 12),
           ..._samples.map(_buildSampleCard),
+          const SizedBox(height: 12),
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              onPressed: _addSample,
+              icon: const Icon(Icons.add),
+              label: const Text('Agregar muestra'),
+            ),
+          ),
         ],
       ),
     );
@@ -939,7 +993,7 @@ class _PlagasScreenState extends State<PlagasScreen> {
           ),
           const SizedBox(height: 10),
           _summaryMeta('Fecha', _fechaController.text),
-          _summaryMeta('Lote', _loteController.text.trim().isEmpty ? '-' : _loteController.text.trim()),
+          _summaryMeta('Lote', _loteResumen),
           _summaryMeta(
             'Plaga',
             _plagaController.text.trim().isEmpty ? '-' : _plagaController.text.trim(),
@@ -953,6 +1007,7 @@ class _PlagasScreenState extends State<PlagasScreen> {
               ),
               columns: const [
                 DataColumn(label: Text('PLAGA')),
+                DataColumn(label: Text('LOTE')),
                 DataColumn(label: Text('HUEVO')),
                 DataColumn(label: Text('PEQUEÑA')),
                 DataColumn(label: Text('MEDIANA')),
@@ -964,6 +1019,7 @@ class _PlagasScreenState extends State<PlagasScreen> {
                 DataRow(
                   cells: [
                     DataCell(Text(_plagaController.text.trim().isEmpty ? '-' : _plagaController.text.trim())),
+                    DataCell(Text(_loteResumen)),
                     DataCell(Text(_totalHuevo.toString())),
                     DataCell(Text(_totalPequena.toString())),
                     DataCell(Text(_totalMediana.toString())),
@@ -975,6 +1031,7 @@ class _PlagasScreenState extends State<PlagasScreen> {
                 DataRow(
                   cells: [
                     const DataCell(Text('PROMEDIO')),
+                    const DataCell(Text('-')),
                     DataCell(Text(_fmt(_promHuevo))),
                     DataCell(Text(_fmt(_promPequena))),
                     DataCell(Text(_fmt(_promMediana))),
@@ -986,12 +1043,25 @@ class _PlagasScreenState extends State<PlagasScreen> {
                 DataRow(
                   cells: [
                     const DataCell(Text('DISTRIBUCIÓN %')),
+                    const DataCell(Text('-')),
                     DataCell(Text('${_fmt(_pctHuevo)} %')),
                     DataCell(Text('${_fmt(_pctPequena)} %')),
                     DataCell(Text('${_fmt(_pctMediana)} %')),
                     DataCell(Text('${_fmt(_pctGrande)} %')),
                     const DataCell(Text('100,0 %')),
                     DataCell(Text('${_fmt(_pctDanioResumen)} %')),
+                  ],
+                ),
+                DataRow(
+                  cells: [
+                    const DataCell(Text('PROMEDIO COLUMNAS')),
+                    const DataCell(Text('-')),
+                    DataCell(Text(_fmt(_promHuevo))),
+                    DataCell(Text(_fmt(_promPequena))),
+                    DataCell(Text(_fmt(_promMediana))),
+                    DataCell(Text(_fmt(_promGrande))),
+                    DataCell(Text(_fmt(_promTotal))),
+                    DataCell(Text('${_fmt(_promDanio)} %')),
                   ],
                 ),
               ],

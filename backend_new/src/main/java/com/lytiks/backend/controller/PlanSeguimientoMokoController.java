@@ -282,6 +282,31 @@ public class PlanSeguimientoMokoController {
     }
 
     /**
+     * Guarda o actualiza múltiples configuraciones de aplicación.
+     */
+    @PostMapping("/configuracion-aplicacion/bulk")
+    public ResponseEntity<Map<String, Object>> guardarConfiguracionesAplicacionBulk(
+            @RequestBody List<ConfiguracionAplicacion> configuraciones) {
+        try {
+            List<ConfiguracionAplicacion> guardadas =
+                    planService.guardarConfiguracionesAplicacionBulk(configuraciones);
+
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", true);
+            response.put("message", "Configuraciones guardadas correctamente");
+            response.put("total", guardadas.size());
+            response.put("configuraciones", guardadas);
+
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            Map<String, Object> error = new HashMap<>();
+            error.put("success", false);
+            error.put("error", "Error al guardar configuraciones: " + e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(error);
+        }
+    }
+
+    /**
      * Obtiene todas las configuraciones de un foco
      */
     @GetMapping("/foco/{focoId}/configuraciones")

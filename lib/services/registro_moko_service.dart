@@ -46,8 +46,9 @@ class RegistroMokoService {
   Future<List<Map<String, dynamic>>> getSintomas() async {
     try {
       final base = await baseUri;
-      print('🔗 Cargando síntomas desde: ${base.replace(path: '${base.path}/sintomas')}');
-      
+      print(
+          '🔗 Cargando síntomas desde: ${base.replace(path: '${base.path}/sintomas')}');
+
       final response = await http.get(
         base.replace(path: '${base.path}/sintomas'),
         headers: {'Content-Type': 'application/json'},
@@ -60,7 +61,8 @@ class RegistroMokoService {
         final List<dynamic> data = json.decode(response.body);
         print('✅ Síntomas parseados: ${data.length} encontrados');
         for (var sintoma in data) {
-          print('  - ${sintoma['id']}: ${sintoma['sintomaObservable']} (${sintoma['severidad']})');
+          print(
+              '  - ${sintoma['id']}: ${sintoma['sintomaObservable']} (${sintoma['severidad']})');
         }
         return data.cast<Map<String, dynamic>>();
       } else {
@@ -102,7 +104,8 @@ class RegistroMokoService {
   Future<List<Map<String, dynamic>>> getProductos() async {
     try {
       final base = await baseUri;
-      print('🔗 Cargando productos desde: ${base.replace(path: '${base.path}/productos-contencion')}');
+      print(
+          '🔗 Cargando productos desde: ${base.replace(path: '${base.path}/productos-contencion')}');
 
       final response = await http.get(
         base.replace(path: '${base.path}/productos-contencion'),
@@ -127,10 +130,12 @@ class RegistroMokoService {
   }
 
   // Guardar aplicación de producto
-  Future<Map<String, dynamic>> postAplicacion(Map<String, dynamic> aplicacionData) async {
+  Future<Map<String, dynamic>> postAplicacion(
+      Map<String, dynamic> aplicacionData) async {
     try {
       final base = await baseUri;
-      print('🔗 Guardando aplicación en: ${base.replace(path: '${base.path}/aplicaciones-contencion')}');
+      print(
+          '🔗 Guardando aplicación en: ${base.replace(path: '${base.path}/aplicaciones-contencion')}');
 
       final response = await http.post(
         base.replace(path: '${base.path}/aplicaciones-contencion'),
@@ -152,6 +157,30 @@ class RegistroMokoService {
     }
   }
 
+  // Guardar contención completa (aplicaciones + seguimiento)
+  Future<Map<String, dynamic>> guardarContencionCompleta(
+    Map<String, dynamic> payload,
+  ) async {
+    try {
+      final base = await baseUri;
+      final response = await http.post(
+        base.replace(path: '${base.path}/contencion/guardar-completo'),
+        headers: {'Content-Type': 'application/json'},
+        body: json.encode(payload),
+      );
+
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        return json.decode(response.body);
+      }
+
+      throw Exception(
+        'Error al guardar contención completa: ${response.statusCode} - ${response.body}',
+      );
+    } catch (e) {
+      throw Exception('Error de conexión al guardar contención completa: $e');
+    }
+  }
+
   // Guardar el registro de moko
   Future<Map<String, dynamic>> guardarRegistro(
     Map<String, dynamic> registroData,
@@ -159,8 +188,9 @@ class RegistroMokoService {
   ) async {
     try {
       final base = await baseUri;
-      print('🔗 Intentando conectar a: ${base.replace(path: '${base.path}/registrar')}');
-      
+      print(
+          '🔗 Intentando conectar a: ${base.replace(path: '${base.path}/registrar')}');
+
       var request = http.MultipartRequest(
         'POST',
         base.replace(path: '${base.path}/registrar'),
@@ -170,27 +200,31 @@ class RegistroMokoService {
       request.fields['numeroFoco'] = registroData['numeroFoco'].toString();
       request.fields['clienteId'] = registroData['clienteId'].toString();
       request.fields['lote'] = registroData['lote'] ?? '';
-      request.fields['areaHectareas'] = registroData['areaHectareas'].toString();
+      request.fields['areaHectareas'] =
+          registroData['areaHectareas'].toString();
       request.fields['gpsCoordinates'] = registroData['gpsCoordinates'] ?? '';
       if (registroData['loteLatitud'] != null) {
         request.fields['loteLatitud'] = registroData['loteLatitud'].toString();
       }
       if (registroData['loteLongitud'] != null) {
-        request.fields['loteLongitud'] = registroData['loteLongitud'].toString();
+        request.fields['loteLongitud'] =
+            registroData['loteLongitud'].toString();
       }
-      request.fields['plantasAfectadas'] = registroData['plantasAfectadas']
-          .toString();
+      request.fields['plantasAfectadas'] =
+          registroData['plantasAfectadas'].toString();
       request.fields['fechaDeteccion'] = registroData['fechaDeteccion'];
-      
+
       // Enviar síntomas múltiples como JSON
       if (registroData.containsKey('sintomasIds')) {
-        request.fields['sintomasIds'] = json.encode(registroData['sintomasIds']);
-        request.fields['sintomasDetalles'] = json.encode(registroData['sintomasDetalles']);
+        request.fields['sintomasIds'] =
+            json.encode(registroData['sintomasIds']);
+        request.fields['sintomasDetalles'] =
+            json.encode(registroData['sintomasDetalles']);
       } else if (registroData.containsKey('sintomaId')) {
         // Backward compatibility
         request.fields['sintomaId'] = registroData['sintomaId'].toString();
       }
-      
+
       request.fields['severidad'] = registroData['severidad'] ?? '';
       request.fields['metodoComprobacion'] =
           registroData['metodoComprobacion'] ?? '';
@@ -216,12 +250,14 @@ class RegistroMokoService {
       var response = await request.send().timeout(
         const Duration(seconds: 30),
         onTimeout: () {
-          throw Exception('Timeout: El servidor no responde después de 30 segundos. Verifica tu conexión a internet y que el servidor ${_host}:${_port} esté accesible.');
+          throw Exception(
+              'Timeout: El servidor no responde después de 30 segundos. Verifica tu conexión a internet y que el servidor ${_host}:${_port} esté accesible.');
         },
       );
-      
+
       var responseData = await response.stream.bytesToString();
-      print('📥 Respuesta del servidor: ${response.statusCode} - $responseData');
+      print(
+          '📥 Respuesta del servidor: ${response.statusCode} - $responseData');
 
       if (response.statusCode == 200 || response.statusCode == 201) {
         return json.decode(responseData);
@@ -231,12 +267,15 @@ class RegistroMokoService {
         );
       }
     } on TimeoutException catch (e) {
-      throw Exception('El servidor tardó demasiado en responder. Intenta nuevamente. Error: $e');
+      throw Exception(
+          'El servidor tardó demasiado en responder. Intenta nuevamente. Error: $e');
     } on SocketException catch (e) {
-      throw Exception('No se puede conectar al servidor ${_host}:${_port}. Verifica que:\n1. Tengas conexión a internet\n2. El servidor esté ejecutándose\n3. No haya firewall bloqueando el puerto 8081\n\nError técnico: $e');
+      throw Exception(
+          'No se puede conectar al servidor ${_host}:${_port}. Verifica que:\n1. Tengas conexión a internet\n2. El servidor esté ejecutándose\n3. No haya firewall bloqueando el puerto 8081\n\nError técnico: $e');
     } catch (e) {
       if (e.toString().contains('Failed to fetch')) {
-        throw Exception('Error de red: No se puede alcanzar el servidor ${_host}:${_port}. Verifica tu conexión a internet.');
+        throw Exception(
+            'Error de red: No se puede alcanzar el servidor ${_host}:${_port}. Verifica tu conexión a internet.');
       }
       throw Exception('Error inesperado: $e');
     }
@@ -296,8 +335,8 @@ class RegistroMokoService {
 
       // Agregar campos del formulario
       request.fields['gpsCoordinates'] = registroData['gpsCoordinates'] ?? '';
-      request.fields['plantasAfectadas'] = registroData['plantasAfectadas']
-          .toString();
+      request.fields['plantasAfectadas'] =
+          registroData['plantasAfectadas'].toString();
       request.fields['sintomaId'] = registroData['sintomaId'].toString();
       request.fields['severidad'] = registroData['severidad'] ?? '';
       request.fields['metodoComprobacion'] =
@@ -344,7 +383,8 @@ class RegistroMokoService {
       if (response.statusCode == 200) {
         return json.decode(response.body);
       } else {
-        throw Exception('Error al inicializar productos: ${response.statusCode}');
+        throw Exception(
+            'Error al inicializar productos: ${response.statusCode}');
       }
     } catch (e) {
       throw Exception('Error de conexión al inicializar productos: $e');
@@ -405,7 +445,8 @@ class RegistroMokoService {
       if (response.statusCode == 200) {
         return json.decode(responseData);
       } else {
-        throw Exception('Error al marcar completada: ${response.statusCode} - $responseData');
+        throw Exception(
+            'Error al marcar completada: ${response.statusCode} - $responseData');
       }
     } catch (e) {
       throw Exception('Error de conexión al marcar completada: $e');
@@ -421,7 +462,8 @@ class RegistroMokoService {
     try {
       final base = await baseUri;
       final response = await http.post(
-        base.replace(path: '${base.path}/seguimiento/$seguimientoId/reprogramar'),
+        base.replace(
+            path: '${base.path}/seguimiento/$seguimientoId/reprogramar'),
         headers: {'Content-Type': 'application/x-www-form-urlencoded'},
         body: {
           'nuevaFecha': nuevaFecha.toIso8601String(),

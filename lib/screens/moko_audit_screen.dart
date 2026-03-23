@@ -1,16 +1,8 @@
 import 'dart:async';
-import 'dart:io';
-import 'package:image_picker/image_picker.dart';
-
 import 'package:flutter/material.dart';
-import 'package:flutter/foundation.dart';
-import '../services/sync_service.dart';
-import '../services/moko_audit_service.dart';
-import '../services/offline_storage_service.dart';
 import '../services/client_service.dart';
-import 'registro_moko_screen.dart';
-import 'seguimiento_focos_screen.dart';
-import 'lista_focos_screen.dart';
+import 'agrotecban_moko_contencion.dart';
+import 'agrotecban_moko_preventivo.dart';
 
 class MokoAuditScreen extends StatefulWidget {
   final Map<String, dynamic>? clientData;
@@ -32,7 +24,7 @@ class _MokoAuditScreenState extends State<MokoAuditScreen> {
   List<Map<String, dynamic>> _clientSuggestions = [];
   Timer? _searchDebounce;
   String _lastQuery = '';
-  
+
   // Modo cliente: bloquea búsqueda de cliente
   bool _isClienteMode = false;
 
@@ -43,7 +35,7 @@ class _MokoAuditScreenState extends State<MokoAuditScreen> {
       _selectedClient = widget.clientData;
       _nombreController.text = _formatClientName(widget.clientData!);
       _clientService.saveSelectedClient(widget.clientData!);
-      
+
       // Verificar si es modo cliente (usuario con rol CLIENTE)
       _isClienteMode = widget.clientData!['isCliente'] == true;
     } else {
@@ -98,21 +90,21 @@ class _MokoAuditScreenState extends State<MokoAuditScreen> {
           const SizedBox(height: 20),
           _buildClientSearchSection(),
           const SizedBox(height: 40),
-
           if (_selectedClient == null) ...[
             _buildClientRequiredNotice(),
           ] else ...[
-            // Botones principales del módulo Moko
+            // Flujo nuevo del módulo Moko: primero preventivo y luego contención.
             _buildIntuitiveButton(
-              title: 'Registrar Nuevo Foco',
-              subtitle: 'Reportar una nueva área infectada',
-              icon: Icons.add_circle_outline,
-              color: const Color(0xFFE53E3E), // Rojo para urgencia
+              title: 'Moko Preventivo',
+              subtitle: 'Paso 1: completar programa preventivo por ciclos',
+              icon: Icons.fact_check,
+              color: const Color(0xFF2E7D32),
               onPressed: () {
                 Navigator.push(
                   context,
                   MaterialPageRoute(
-                    builder: (context) => RegistroMokoScreen(clientData: _selectedClient),
+                    builder: (context) =>
+                        const AgrotecbanMokoPreventivoScreen(),
                   ),
                 );
               },
@@ -120,31 +112,16 @@ class _MokoAuditScreenState extends State<MokoAuditScreen> {
             const SizedBox(height: 16),
 
             _buildIntuitiveButton(
-              title: 'Seguimiento de Focos',
-              subtitle: 'Monitorear áreas ya identificadas',
-              icon: Icons.visibility,
-              color: const Color(0xFFED8936), // Naranja para seguimiento
+              title: 'Moko Contención',
+              subtitle: 'Paso 2: ejecutar auditoría de contención por foco',
+              icon: Icons.shield,
+              color: const Color(0xFFC62828),
               onPressed: () {
                 Navigator.push(
                   context,
                   MaterialPageRoute(
-                    builder: (context) => const SeguimientoFocosScreen(),
-                  ),
-                );
-              },
-            ),
-            const SizedBox(height: 16),
-
-            _buildIntuitiveButton(
-              title: 'Lista de Focos',
-              subtitle: 'Ver todos los focos registrados',
-              icon: Icons.format_list_bulleted,
-              color: const Color(0xFF38A169), // Verde para consulta
-              onPressed: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => const ListaFocosScreen(),
+                    builder: (context) =>
+                        const AgrotecbanMokoContencionScreen(),
                   ),
                 );
               },
@@ -397,20 +374,24 @@ class _MokoAuditScreenState extends State<MokoAuditScreen> {
                       enabled: !_isClienteMode,
                       decoration: InputDecoration(
                         labelText: 'Nombre y Apellido del Cliente',
-                        hintText: _isClienteMode ? 'Cliente autenticado' : 'Ingrese nombre y apellido',
+                        hintText: _isClienteMode
+                            ? 'Cliente autenticado'
+                            : 'Ingrese nombre y apellido',
                         prefixIcon: Icon(
                           Icons.person,
                           color: _isClienteMode ? Colors.grey : null,
                         ),
                         border: const OutlineInputBorder(),
                         filled: _isClienteMode,
-                        fillColor: _isClienteMode ? Colors.grey.withOpacity(0.1) : null,
-                        suffixIcon: _isClienteMode 
-                          ? const Icon(Icons.lock, color: Colors.grey)
-                          : IconButton(
-                              icon: const Icon(Icons.search),
-                              onPressed: _triggerSearch,
-                            ),
+                        fillColor: _isClienteMode
+                            ? Colors.grey.withOpacity(0.1)
+                            : null,
+                        suffixIcon: _isClienteMode
+                            ? const Icon(Icons.lock, color: Colors.grey)
+                            : IconButton(
+                                icon: const Icon(Icons.search),
+                                onPressed: _triggerSearch,
+                              ),
                       ),
                     );
                   },
@@ -430,7 +411,8 @@ class _MokoAuditScreenState extends State<MokoAuditScreen> {
                             padding: EdgeInsets.zero,
                             shrinkWrap: true,
                             itemCount: optionList.length,
-                            separatorBuilder: (_, __) => const Divider(height: 1),
+                            separatorBuilder: (_, __) =>
+                                const Divider(height: 1),
                             itemBuilder: (context, index) {
                               final client = optionList[index];
                               final nombre = _formatClientName(client);
@@ -444,7 +426,9 @@ class _MokoAuditScreenState extends State<MokoAuditScreen> {
                                 subtitleParts.add('Finca: $finca');
                               }
                               return ListTile(
-                                title: Text(nombre.isEmpty ? 'Cliente sin nombre' : nombre),
+                                title: Text(nombre.isEmpty
+                                    ? 'Cliente sin nombre'
+                                    : nombre),
                                 subtitle: subtitleParts.isEmpty
                                     ? null
                                     : Text(subtitleParts.join(' | ')),

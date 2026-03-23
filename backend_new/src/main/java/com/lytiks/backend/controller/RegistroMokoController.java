@@ -8,15 +8,18 @@ import com.lytiks.backend.entity.ProductoContencion;
 import com.lytiks.backend.entity.Producto;
 import com.lytiks.backend.entity.Aplicacion;
 import com.lytiks.backend.entity.SeguimientoAplicacion;
+import com.lytiks.backend.entity.SeguimientoMoko;
 import com.lytiks.backend.service.RegistroMokoService;
 import com.lytiks.backend.service.SintomaService;
 import com.lytiks.backend.service.SeguimientoAplicacionService;
+import com.lytiks.backend.service.SeguimientoMokoService;
 import com.lytiks.backend.repository.ProductoContencionRepository;
 import com.lytiks.backend.repository.ProductoRepository;
 import com.lytiks.backend.repository.AplicacionRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -58,6 +61,9 @@ public class RegistroMokoController {
     
     @Autowired
     private SeguimientoAplicacionService seguimientoService;
+
+    @Autowired
+    private SeguimientoMokoService seguimientoMokoService;
 
     private static final String UPLOAD_DIR = "photos/moko/";
 
@@ -612,6 +618,167 @@ public class RegistroMokoController {
             error.put("success", false);
             error.put("error", "Error al guardar aplicación: " + e.getMessage());
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(error);
+        }
+    }
+
+    /**
+     * Guarda toda la información de contención en una sola transacción.
+     * Payload esperado:
+     * {
+     *   "focoId": 123,
+     *   "numeroFoco": 5,
+     *   "aplicaciones": [ { ...campos de Aplicacion... } ],
+     *   "seguimiento": { ...campos de SeguimientoMoko... }
+     * }
+     */
+    @PostMapping("/contencion/guardar-completo")
+    @Transactional
+    public ResponseEntity<Map<String, Object>> guardarContencionCompleta(
+            @RequestBody Map<String, Object> payload) {
+        try {
+            Long focoId = toLong(payload.get("focoId"));
+            Integer numeroFoco = toInteger(payload.get("numeroFoco"));
+
+            int aplicacionesGuardadas = 0;
+            List<Long> aplicacionesIds = new java.util.ArrayList<>();
+
+            Object aplicacionesRaw = payload.get("aplicaciones");
+            if (aplicacionesRaw instanceof List<?> apps) {
+                for (Object appRaw : apps) {
+                    if (!(appRaw instanceof Map<?, ?> appMapRaw)) {
+                        continue;
+                    }
+
+                    @SuppressWarnings("unchecked")
+                    Map<String, Object> appMap = (Map<String, Object>) appMapRaw;
+
+                    Aplicacion aplicacion = new Aplicacion();
+                    aplicacion.setClienteId(toLong(appMap.get("clienteId")));
+                    aplicacion.setProductoId(toLong(appMap.get("productoId")));
+                    aplicacion.setProductoNombre(toStringValue(appMap.get("productoNombre")));
+                    aplicacion.setPlan(toStringValue(appMap.get("plan")));
+                    aplicacion.setLote(toStringValue(appMap.get("lote")));
+                    aplicacion.setAreaHectareas(toDouble(appMap.get("areaHectareas")));
+                    aplicacion.setDosis(toStringValue(appMap.get("dosis")));
+                    aplicacion.setFechaInicio(toDateTime(appMap.get("fechaInicio")));
+                    aplicacion.setFrecuenciaDias(toInteger(appMap.get("frecuenciaDias")));
+                    aplicacion.setRepeticiones(toInteger(appMap.get("repeticiones")));
+                    aplicacion.setRecordatorioHora(toStringValue(appMap.get("recordatorioHora")));
+                    aplicacion.setCreatedAt(LocalDateTime.now());
+
+                    Aplicacion savedAplicacion = aplicacionRepository.save(aplicacion);
+                    seguimientoService.crearSeguimientoAutomatico(savedAplicacion);
+
+                    aplicacionesGuardadas++;
+                    aplicacionesIds.add(savedAplicacion.getId());
+                }
+            }
+
+            SeguimientoMoko seguimientoGuardado = null;
+            Object seguimientoRaw = payload.get("seguimiento");
+            if (seguimientoRaw instanceof Map<?, ?> seguimientoMapRaw) {
+                @SuppressWarnings("unchecked")
+                Map<String, Object> seguimientoMap = (Map<String, Object>) seguimientoMapRaw;
+
+                SeguimientoMoko seguimiento = new SeguimientoMoko();
+                seguimiento.setFocoId(toLongOrDefault(seguimientoMap.get("focoId"), focoId));
+                seguimiento.setNumeroFoco(
+                        toIntegerOrDefault(seguimientoMap.get("numeroFoco"), numeroFoco));
+                seguimiento.setSemanaInicio(toInteger(seguimientoMap.get("semanaInicio")));
+                seguimiento.setPlantasAfectadas(
+                        toIntegerOrDefault(seguimientoMap.get("plantasAfectadas"), 0));
+                seguimiento.setPlantasInyectadas(
+                        toIntegerOrDefault(seguimientoMap.get("plantasInyectadas"), 0));
+                seguimiento.setControlVectores(toBoolean(seguimientoMap.get("controlVectores")));
+                seguimiento.setCuarentenaActiva(toBoolean(seguimientoMap.get("cuarentenaActiva")));
+                seguimiento.setUnicaEntradaHabilitada(
+                        toBoolean(seguimientoMap.get("unicaEntradaHabilitada")));
+                seguimiento.setEliminacionMalezaHospedera(
+                        toBoolean(seguimientoMap.get("eliminacionMalezaHospedera")));
+                seguimiento.setControlPicudoAplicado(
+                        toBoolean(seguimientoMap.get("controlPicudoAplicado")));
+                seguimiento.setInspeccionPlantasVecinas(
+                        toBoolean(seguimientoMap.get("inspeccionPlantasVecinas")));
+                seguimiento.setCorteRiego(toBoolean(seguimientoMap.get("corteRiego")));
+                seguimiento.setPediluvioActivo(toBoolean(seguimientoMap.get("pediluvioActivo")));
+                seguimiento.setPpmSolucionDesinfectante(
+                        toInteger(seguimientoMap.get("ppmSolucionDesinfectante")));
+
+                seguimientoGuardado = seguimientoMokoService.save(seguimiento);
+            }
+
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", true);
+            response.put("message", "Contención guardada correctamente");
+            response.put("aplicacionesGuardadas", aplicacionesGuardadas);
+            response.put("aplicacionesIds", aplicacionesIds);
+            response.put("seguimientoId", seguimientoGuardado != null ? seguimientoGuardado.getId() : null);
+            return ResponseEntity.status(HttpStatus.CREATED).body(response);
+        } catch (Exception e) {
+            Map<String, Object> error = new HashMap<>();
+            error.put("success", false);
+            error.put("error", "Error al guardar contención completa: " + e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(error);
+        }
+    }
+
+    private String toStringValue(Object value) {
+        return value == null ? null : value.toString();
+    }
+
+    private Long toLong(Object value) {
+        if (value == null) return null;
+        if (value instanceof Number number) return number.longValue();
+        try {
+            return Long.parseLong(value.toString());
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    private Long toLongOrDefault(Object value, Long fallback) {
+        Long parsed = toLong(value);
+        return parsed != null ? parsed : fallback;
+    }
+
+    private Integer toInteger(Object value) {
+        if (value == null) return null;
+        if (value instanceof Number number) return number.intValue();
+        try {
+            return Integer.parseInt(value.toString());
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    private Integer toIntegerOrDefault(Object value, Integer fallback) {
+        Integer parsed = toInteger(value);
+        return parsed != null ? parsed : fallback;
+    }
+
+    private Double toDouble(Object value) {
+        if (value == null) return null;
+        if (value instanceof Number number) return number.doubleValue();
+        try {
+            return Double.parseDouble(value.toString());
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    private Boolean toBoolean(Object value) {
+        if (value == null) return false;
+        if (value instanceof Boolean bool) return bool;
+        return Boolean.parseBoolean(value.toString());
+    }
+
+    private LocalDateTime toDateTime(Object value) {
+        if (value == null) return LocalDateTime.now();
+        if (value instanceof LocalDateTime dateTime) return dateTime;
+        try {
+            return LocalDateTime.parse(value.toString());
+        } catch (Exception e) {
+            return LocalDateTime.now();
         }
     }
 

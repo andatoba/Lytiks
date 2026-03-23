@@ -296,6 +296,18 @@ public class PlanSeguimientoMokoService {
     }
 
     /**
+     * Guarda o actualiza un lote de configuraciones.
+     */
+    public List<ConfiguracionAplicacion> guardarConfiguracionesAplicacionBulk(
+            List<ConfiguracionAplicacion> configuraciones) {
+        List<ConfiguracionAplicacion> guardadas = new ArrayList<>();
+        for (ConfiguracionAplicacion configuracion : configuraciones) {
+            guardadas.add(guardarConfiguracionAplicacion(configuracion));
+        }
+        return guardadas;
+    }
+
+    /**
      * Obtiene todas las configuraciones de un foco
      */
     public List<ConfiguracionAplicacion> getConfiguracionesByFoco(Long focoId) {

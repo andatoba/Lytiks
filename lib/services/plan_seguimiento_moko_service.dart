@@ -51,7 +51,8 @@ class PlanSeguimientoMokoService {
         final List<dynamic> data = json.decode(utf8.decode(response.bodyBytes));
         return data.cast<Map<String, dynamic>>();
       } else {
-        throw Exception('Error al obtener fases con tareas: ${response.statusCode}');
+        throw Exception(
+            'Error al obtener fases con tareas: ${response.statusCode}');
       }
     } catch (e) {
       print('❌ Error al obtener fases con tareas: $e');
@@ -136,12 +137,18 @@ class PlanSeguimientoMokoService {
       }
     } catch (e) {
       print('❌ Error al obtener progreso: $e');
-      return {'totalFases': 0, 'fasesCompletadas': 0, 'porcentaje': 0, 'completado': false};
+      return {
+        'totalFases': 0,
+        'fasesCompletadas': 0,
+        'porcentaje': 0,
+        'completado': false
+      };
     }
   }
 
   /// Obtiene las tareas de una ejecución de plan
-  Future<List<Map<String, dynamic>>> getTareasEjecucion(int ejecucionPlanId) async {
+  Future<List<Map<String, dynamic>>> getTareasEjecucion(
+      int ejecucionPlanId) async {
     try {
       final base = await baseUri;
       final response = await http.get(
@@ -153,7 +160,8 @@ class PlanSeguimientoMokoService {
         final List<dynamic> data = json.decode(utf8.decode(response.bodyBytes));
         return data.cast<Map<String, dynamic>>();
       } else {
-        throw Exception('Error al obtener tareas de ejecución: ${response.statusCode}');
+        throw Exception(
+            'Error al obtener tareas de ejecución: ${response.statusCode}');
       }
     } catch (e) {
       print('❌ Error al obtener tareas de ejecución: $e');
@@ -162,7 +170,8 @@ class PlanSeguimientoMokoService {
   }
 
   /// Actualiza el estado de una tarea
-  Future<Map<String, dynamic>> actualizarEstadoTarea(int tareaId, bool completado) async {
+  Future<Map<String, dynamic>> actualizarEstadoTarea(
+      int tareaId, bool completado) async {
     try {
       final base = await baseUri;
       final response = await http.put(
@@ -185,7 +194,8 @@ class PlanSeguimientoMokoService {
   }
 
   /// Actualiza múltiples tareas de una fase
-  Future<Map<String, dynamic>> actualizarTareas(int ejecucionPlanId, List<int> tareasCompletadas) async {
+  Future<Map<String, dynamic>> actualizarTareas(
+      int ejecucionPlanId, List<int> tareasCompletadas) async {
     try {
       final base = await baseUri;
       final response = await http.put(
@@ -206,7 +216,8 @@ class PlanSeguimientoMokoService {
   }
 
   /// Finaliza la revisión de una fase
-  Future<Map<String, dynamic>> finalizarRevision(int ejecucionPlanId, {String? observaciones}) async {
+  Future<Map<String, dynamic>> finalizarRevision(int ejecucionPlanId,
+      {String? observaciones}) async {
     try {
       final base = await baseUri;
       final response = await http.post(
@@ -234,7 +245,8 @@ class PlanSeguimientoMokoService {
     try {
       final base = await baseUri;
       final response = await http.put(
-        base.replace(path: '${base.path}/ejecucion/$ejecucionPlanId/observaciones'),
+        base.replace(
+            path: '${base.path}/ejecucion/$ejecucionPlanId/observaciones'),
         headers: {'Content-Type': 'application/json'},
         body: json.encode({'observaciones': observaciones}),
       );
@@ -242,7 +254,8 @@ class PlanSeguimientoMokoService {
       if (response.statusCode == 200) {
         return json.decode(utf8.decode(response.bodyBytes));
       } else {
-        throw Exception('Error al actualizar observaciones: ${response.statusCode}');
+        throw Exception(
+            'Error al actualizar observaciones: ${response.statusCode}');
       }
     } catch (e) {
       print('❌ Error al actualizar observaciones: $e');
@@ -256,18 +269,28 @@ class PlanSeguimientoMokoService {
       {
         'id': 1,
         'nombre': 'LABORES EN FOCOS',
-        'detalle': 'Eliminación segura de plantas infectadas y reducción rápida del patógeno en el suelo.',
+        'detalle':
+            'Eliminación segura de plantas infectadas y reducción rápida del patógeno en el suelo.',
         'orden': 1,
         'tareas': [
-          {'id': 1, 'nombre': 'INYECCIÓN CON GLIFOSATO', 'dosis': '50CC/UNIDAD BIOLÓGICA'},
-          {'id': 2, 'nombre': 'ACELERACIÓN DE DESCOMPOSICIÓN DEGRADEX + SAFERSOIL', 'dosis': '2 LT'},
+          {
+            'id': 1,
+            'nombre': 'INYECCIÓN CON GLIFOSATO',
+            'dosis': '50CC/UNIDAD BIOLÓGICA'
+          },
+          {
+            'id': 2,
+            'nombre': 'ACELERACIÓN DE DESCOMPOSICIÓN DEGRADEX + SAFERSOIL',
+            'dosis': '2 LT'
+          },
           {'id': 3, 'nombre': 'APLICACIÓN SAFERSOIL', 'dosis': '200 GR'},
         ],
       },
       {
         'id': 2,
         'nombre': 'VACÍO BIOLÓGICO',
-        'detalle': 'Periodo para disminuir la presencia del Moko y reforzar la desinfección del área.',
+        'detalle':
+            'Periodo para disminuir la presencia del Moko y reforzar la desinfección del área.',
         'orden': 2,
         'tareas': [
           {'id': 4, 'nombre': 'PRIMER VACÍO - YODOSAFER', 'dosis': '3 LT'},
@@ -281,7 +304,8 @@ class PlanSeguimientoMokoService {
       {
         'id': 3,
         'nombre': 'ACTIVACIÓN SAR',
-        'detalle': 'Fortalecimiento de la defensa natural de las plantas sanas mediante bioestimulantes.',
+        'detalle':
+            'Fortalecimiento de la defensa natural de las plantas sanas mediante bioestimulantes.',
         'orden': 3,
         'tareas': [
           {'id': 10, 'nombre': 'CICLO 1 - ARMORUX', 'dosis': '1 L'},
@@ -295,12 +319,21 @@ class PlanSeguimientoMokoService {
       {
         'id': 4,
         'nombre': 'SUELOS SUPRESIVOS',
-        'detalle': 'Recuperación del suelo con microorganismos benéficos que reducen el riesgo de reinfección.',
+        'detalle':
+            'Recuperación del suelo con microorganismos benéficos que reducen el riesgo de reinfección.',
         'orden': 4,
         'tareas': [
-          {'id': 16, 'nombre': 'PRIMER CICLO - APLICACIÓN DE CHOQUE', 'dosis': '3LT'},
+          {
+            'id': 16,
+            'nombre': 'PRIMER CICLO - APLICACIÓN DE CHOQUE',
+            'dosis': '3LT'
+          },
           {'id': 17, 'nombre': 'PRIMER CICLO - SAFERBACTER', 'dosis': '250 GR'},
-          {'id': 18, 'nombre': 'SEGUNDO CICLO - SAFERBACTER', 'dosis': '250 GR'},
+          {
+            'id': 18,
+            'nombre': 'SEGUNDO CICLO - SAFERBACTER',
+            'dosis': '250 GR'
+          },
           {'id': 19, 'nombre': 'TERCER CICLO - SAFERSOIL', 'dosis': '250 GR'},
           {'id': 20, 'nombre': 'CUARTO CICLO - SAFERBACTER', 'dosis': '250 GR'},
         ],
@@ -313,7 +346,8 @@ class PlanSeguimientoMokoService {
   // =====================================================
 
   /// Guarda o actualiza una configuración de aplicación en el servidor
-  Future<Map<String, dynamic>> guardarConfiguracionAplicacion(Map<String, dynamic> configuracion) async {
+  Future<Map<String, dynamic>> guardarConfiguracionAplicacion(
+      Map<String, dynamic> configuracion) async {
     try {
       final base = await baseUri;
       final response = await http.post(
@@ -324,10 +358,12 @@ class PlanSeguimientoMokoService {
 
       if (response.statusCode == 200) {
         final data = json.decode(utf8.decode(response.bodyBytes));
-        print('✅ Configuración guardada en servidor: ${data['configuracion']['id']}');
+        print(
+            '✅ Configuración guardada en servidor: ${data['configuracion']['id']}');
         return data;
       } else {
-        throw Exception('Error al guardar configuración: ${response.statusCode}');
+        throw Exception(
+            'Error al guardar configuración: ${response.statusCode}');
       }
     } catch (e) {
       print('❌ Error al guardar configuración en servidor: $e');
@@ -335,8 +371,33 @@ class PlanSeguimientoMokoService {
     }
   }
 
+  /// Guarda o actualiza múltiples configuraciones de aplicación en una sola petición
+  Future<Map<String, dynamic>> guardarConfiguracionesAplicacionBulk(
+    List<Map<String, dynamic>> configuraciones,
+  ) async {
+    try {
+      final base = await baseUri;
+      final response = await http.post(
+        base.replace(path: '${base.path}/configuracion-aplicacion/bulk'),
+        headers: {'Content-Type': 'application/json; charset=UTF-8'},
+        body: json.encode(configuraciones),
+      );
+
+      if (response.statusCode == 200) {
+        return json.decode(utf8.decode(response.bodyBytes));
+      }
+
+      throw Exception(
+          'Error al guardar configuraciones bulk: ${response.statusCode}');
+    } catch (e) {
+      print('❌ Error al guardar configuraciones bulk: $e');
+      rethrow;
+    }
+  }
+
   /// Obtiene todas las configuraciones de un foco
-  Future<List<Map<String, dynamic>>> getConfiguracionesByFoco(int focoId) async {
+  Future<List<Map<String, dynamic>>> getConfiguracionesByFoco(
+      int focoId) async {
     try {
       final base = await baseUri;
       final response = await http.get(
@@ -348,7 +409,8 @@ class PlanSeguimientoMokoService {
         final List<dynamic> data = json.decode(utf8.decode(response.bodyBytes));
         return data.cast<Map<String, dynamic>>();
       } else {
-        throw Exception('Error al obtener configuraciones: ${response.statusCode}');
+        throw Exception(
+            'Error al obtener configuraciones: ${response.statusCode}');
       }
     } catch (e) {
       print('❌ Error al obtener configuraciones del servidor: $e');
@@ -357,11 +419,13 @@ class PlanSeguimientoMokoService {
   }
 
   /// Obtiene las configuraciones de un foco y fase específica
-  Future<List<Map<String, dynamic>>> getConfiguracionesByFocoYFase(int focoId, int faseId) async {
+  Future<List<Map<String, dynamic>>> getConfiguracionesByFocoYFase(
+      int focoId, int faseId) async {
     try {
       final base = await baseUri;
       final response = await http.get(
-        base.replace(path: '${base.path}/foco/$focoId/fase/$faseId/configuraciones'),
+        base.replace(
+            path: '${base.path}/foco/$focoId/fase/$faseId/configuraciones'),
         headers: {'Content-Type': 'application/json'},
       );
 
@@ -369,7 +433,8 @@ class PlanSeguimientoMokoService {
         final List<dynamic> data = json.decode(utf8.decode(response.bodyBytes));
         return data.cast<Map<String, dynamic>>();
       } else {
-        throw Exception('Error al obtener configuraciones: ${response.statusCode}');
+        throw Exception(
+            'Error al obtener configuraciones: ${response.statusCode}');
       }
     } catch (e) {
       print('❌ Error al obtener configuraciones del servidor: $e');
@@ -378,11 +443,13 @@ class PlanSeguimientoMokoService {
   }
 
   /// Obtiene configuraciones pendientes de un foco
-  Future<List<Map<String, dynamic>>> getConfiguracionesPendientes(int focoId) async {
+  Future<List<Map<String, dynamic>>> getConfiguracionesPendientes(
+      int focoId) async {
     try {
       final base = await baseUri;
       final response = await http.get(
-        base.replace(path: '${base.path}/foco/$focoId/configuraciones/pendientes'),
+        base.replace(
+            path: '${base.path}/foco/$focoId/configuraciones/pendientes'),
         headers: {'Content-Type': 'application/json'},
       );
 
@@ -390,7 +457,8 @@ class PlanSeguimientoMokoService {
         final List<dynamic> data = json.decode(utf8.decode(response.bodyBytes));
         return data.cast<Map<String, dynamic>>();
       } else {
-        throw Exception('Error al obtener configuraciones pendientes: ${response.statusCode}');
+        throw Exception(
+            'Error al obtener configuraciones pendientes: ${response.statusCode}');
       }
     } catch (e) {
       print('❌ Error al obtener configuraciones pendientes del servidor: $e');
@@ -403,7 +471,8 @@ class PlanSeguimientoMokoService {
     try {
       final base = await baseUri;
       final response = await http.put(
-        base.replace(path: '${base.path}/configuracion-aplicacion/$id/completar'),
+        base.replace(
+            path: '${base.path}/configuracion-aplicacion/$id/completar'),
         headers: {'Content-Type': 'application/json'},
       );
 
@@ -411,7 +480,8 @@ class PlanSeguimientoMokoService {
         final data = json.decode(utf8.decode(response.bodyBytes));
         return data;
       } else {
-        throw Exception('Error al completar configuración: ${response.statusCode}');
+        throw Exception(
+            'Error al completar configuración: ${response.statusCode}');
       }
     } catch (e) {
       print('❌ Error al completar configuración: $e');
@@ -429,7 +499,8 @@ class PlanSeguimientoMokoService {
       );
 
       if (response.statusCode != 200) {
-        throw Exception('Error al eliminar configuración: ${response.statusCode}');
+        throw Exception(
+            'Error al eliminar configuración: ${response.statusCode}');
       }
     } catch (e) {
       print('❌ Error al eliminar configuración: $e');

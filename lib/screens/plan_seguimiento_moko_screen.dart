@@ -6,6 +6,8 @@ import 'fase_2_screen.dart';
 import 'fase_3_screen.dart';
 import 'fase_4_screen.dart';
 import 'fase_detalle_screen.dart';
+import 'agrotecban_moko_contencion.dart';
+import 'agrotecban_moko_preventivo.dart';
 
 class PlanSeguimientoMokoScreen extends StatefulWidget {
   final int focoId;
@@ -18,7 +20,8 @@ class PlanSeguimientoMokoScreen extends StatefulWidget {
   });
 
   @override
-  State<PlanSeguimientoMokoScreen> createState() => _PlanSeguimientoMokoScreenState();
+  State<PlanSeguimientoMokoScreen> createState() =>
+      _PlanSeguimientoMokoScreenState();
 }
 
 class _PlanSeguimientoMokoScreenState extends State<PlanSeguimientoMokoScreen> {
@@ -42,24 +45,24 @@ class _PlanSeguimientoMokoScreenState extends State<PlanSeguimientoMokoScreen> {
     try {
       // Intentar cargar desde el servidor
       final fases = await _service.getFases();
-      
+
       // Inicializar el plan para el foco si no existe
       await _service.inicializarPlan(widget.focoId);
-      
+
       // Obtener el estado actual
       final estado = await _service.getEstadoPlan(widget.focoId);
-      
+
       setState(() {
         _fases = fases.map((fase) {
           final cleaned = Map<String, dynamic>.from(fase);
           cleaned['nombre'] = _limpiarTexto(fase['nombre']?.toString() ?? '');
-          cleaned['detalle'] =
-              _limpiarTexto(fase['detalle']?.toString() ?? '');
+          cleaned['detalle'] = _limpiarTexto(fase['detalle']?.toString() ?? '');
           return cleaned;
         }).toList();
-        _ejecuciones = List<Map<String, dynamic>>.from(estado['ejecuciones'] ?? []);
+        _ejecuciones =
+            List<Map<String, dynamic>>.from(estado['ejecuciones'] ?? []);
         _isLoading = false;
-        
+
         // Encontrar la primera fase no completada
         for (int i = 0; i < _ejecuciones.length; i++) {
           if (_ejecuciones[i]['completado'] != true) {
@@ -76,8 +79,7 @@ class _PlanSeguimientoMokoScreenState extends State<PlanSeguimientoMokoScreen> {
         _fases = fases.map((fase) {
           final cleaned = Map<String, dynamic>.from(fase);
           cleaned['nombre'] = _limpiarTexto(fase['nombre']?.toString() ?? '');
-          cleaned['detalle'] =
-              _limpiarTexto(fase['detalle']?.toString() ?? '');
+          cleaned['detalle'] = _limpiarTexto(fase['detalle']?.toString() ?? '');
           return cleaned;
         }).toList();
         _isLoading = false;
@@ -87,14 +89,14 @@ class _PlanSeguimientoMokoScreenState extends State<PlanSeguimientoMokoScreen> {
 
   Future<void> _guardarYVolver() async {
     if (_isSaving) return;
-    
+
     setState(() => _isSaving = true);
-    
+
     try {
       // Sincronizar todos los cambios pendientes
       await _service.inicializarPlan(widget.focoId);
-      final estado = await _service.getEstadoPlan(widget.focoId);
-      
+      await _service.getEstadoPlan(widget.focoId);
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -103,10 +105,10 @@ class _PlanSeguimientoMokoScreenState extends State<PlanSeguimientoMokoScreen> {
             duration: Duration(seconds: 2),
           ),
         );
-        
+
         // Esperar un momento para que el usuario vea el mensaje
         await Future.delayed(const Duration(milliseconds: 500));
-        
+
         // Volver a la pantalla anterior
         if (mounted) {
           Navigator.pop(context, true);
@@ -148,7 +150,8 @@ class _PlanSeguimientoMokoScreenState extends State<PlanSeguimientoMokoScreen> {
             ),
             const Spacer(),
             IconButton(
-              icon: const Icon(Icons.notifications_outlined, color: Colors.white),
+              icon:
+                  const Icon(Icons.notifications_outlined, color: Colors.white),
               onPressed: () {},
             ),
             Container(
@@ -169,24 +172,27 @@ class _PlanSeguimientoMokoScreenState extends State<PlanSeguimientoMokoScreen> {
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : _buildContent(),
-      floatingActionButton: _isLoading ? null : FloatingActionButton.extended(
-        onPressed: _isSaving ? null : _guardarYVolver,
-        backgroundColor: const Color(0xFFC62828),
-        icon: _isSaving
-            ? const SizedBox(
-                width: 20,
-                height: 20,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2,
-                  color: Colors.white,
-                ),
-              )
-            : const Icon(Icons.save, color: Colors.white),
-        label: Text(
-          _isSaving ? 'Guardando...' : 'Guardar',
-          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-        ),
-      ),
+      floatingActionButton: _isLoading
+          ? null
+          : FloatingActionButton.extended(
+              onPressed: _isSaving ? null : _guardarYVolver,
+              backgroundColor: const Color(0xFFC62828),
+              icon: _isSaving
+                  ? const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Colors.white,
+                      ),
+                    )
+                  : const Icon(Icons.save, color: Colors.white),
+              label: Text(
+                _isSaving ? 'Guardando...' : 'Guardar',
+                style: const TextStyle(
+                    color: Colors.white, fontWeight: FontWeight.bold),
+              ),
+            ),
       floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
     );
   }
@@ -207,6 +213,38 @@ class _PlanSeguimientoMokoScreenState extends State<PlanSeguimientoMokoScreen> {
             ),
           ),
         ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+          child: Row(
+            children: [
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: _abrirProgramaPreventivo,
+                  icon: const Icon(Icons.event_note),
+                  label: const Text('Programa preventivo'),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: const Color(0xFF0F7B3C),
+                    side: const BorderSide(color: Color(0xFF0F7B3C)),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: ElevatedButton.icon(
+                  onPressed: _abrirProgramaContencion,
+                  icon: const Icon(Icons.shield, color: Colors.white),
+                  label: const Text(
+                    'Programa contencion',
+                    style: TextStyle(color: Colors.white),
+                  ),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFFC62828),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
         // Lista de fases
         Expanded(
           child: ListView.builder(
@@ -214,10 +252,11 @@ class _PlanSeguimientoMokoScreenState extends State<PlanSeguimientoMokoScreen> {
             itemCount: _fases.length,
             itemBuilder: (context, index) {
               final fase = _fases[index];
-              final ejecucion = index < _ejecuciones.length ? _ejecuciones[index] : null;
+              final ejecucion =
+                  index < _ejecuciones.length ? _ejecuciones[index] : null;
               final completado = ejecucion?['completado'] ?? false;
               final esActual = index == _faseActualIndex && !completado;
-              
+
               return _buildFaseCard(
                 index: index + 1,
                 fase: fase,
@@ -382,7 +421,9 @@ class _PlanSeguimientoMokoScreenState extends State<PlanSeguimientoMokoScreen> {
     var limpio = texto;
 
     for (var i = 0; i < 2; i++) {
-      if (limpio.contains('Ã') || limpio.contains('Â') || limpio.contains('�')) {
+      if (limpio.contains('Ã') ||
+          limpio.contains('Â') ||
+          limpio.contains('�')) {
         try {
           limpio = utf8.decode(latin1.encode(limpio));
           continue;
@@ -543,5 +584,29 @@ class _PlanSeguimientoMokoScreenState extends State<PlanSeguimientoMokoScreen> {
     if (actualizado == true && mounted) {
       _cargarDatos();
     }
+  }
+
+  Future<void> _abrirProgramaPreventivo() async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => AgrotecbanMokoPreventivoScreen(
+          focoId: widget.focoId,
+          numeroFoco: widget.numeroFoco,
+        ),
+      ),
+    );
+  }
+
+  Future<void> _abrirProgramaContencion() async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => AgrotecbanMokoContencionScreen(
+          focoId: widget.focoId,
+          numeroFoco: widget.numeroFoco,
+        ),
+      ),
+    );
   }
 }

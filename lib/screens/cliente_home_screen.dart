@@ -8,12 +8,12 @@ import '../services/client_service.dart';
 import '../services/hacienda_service.dart';
 import '../services/lote_service.dart';
 import 'sigatoka_audit_screen.dart';
-import 'moko_audit_screen.dart';
+import 'agrotecban_moko_preventivo.dart';
 import 'audit_screen.dart';
 
 class ClienteHomeScreen extends StatefulWidget {
   final Map<String, dynamic> userData;
-  
+
   const ClienteHomeScreen({super.key, required this.userData});
 
   @override
@@ -25,22 +25,22 @@ class _ClienteHomeScreenState extends State<ClienteHomeScreen> {
   final ClientService _clientService = ClientService();
   final HaciendaService _haciendaService = HaciendaService();
   final LoteService _loteService = LoteService();
-  
+
   bool _isLoading = true;
   Map<String, dynamic>? _clientData;
   List<Map<String, dynamic>> _haciendas = [];
   List<Map<String, dynamic>> _lotes = [];
   List<Map<String, dynamic>> _evaluaciones = [];
-  
+
   // Colores para cada tipo de evaluación
   static const Color colorSigatoka = Colors.amber; // Amarillo
-  static const Color colorMoko = Colors.green;     // Verde
+  static const Color colorMoko = Colors.green; // Verde
   static const Color colorAuditoria = Colors.blue; // Azul
-  
+
   // Centro del mapa por defecto (Ecuador)
   LatLng _mapCenter = const LatLng(-2.1894, -79.8891);
   double _mapZoom = 10.0;
-  
+
   final MapController _mapController = MapController();
 
   @override
@@ -177,14 +177,14 @@ class _ClienteHomeScreenState extends State<ClienteHomeScreen> {
     }
     return null;
   }
-  
+
   Future<void> _cargarDatos() async {
     setState(() => _isLoading = true);
     _clientData = null;
     _haciendas = [];
     _lotes = [];
     _evaluaciones = [];
-    
+
     try {
       final clientData = await _resolveClientData();
       if (clientData != null) {
@@ -198,7 +198,8 @@ class _ClienteHomeScreenState extends State<ClienteHomeScreen> {
           for (var hacienda in _haciendas) {
             final haciendaId = _toInt(hacienda['id']);
             if (haciendaId == null) continue;
-            final lotesHacienda = await _loteService.getLotesByHacienda(haciendaId);
+            final lotesHacienda =
+                await _loteService.getLotesByHacienda(haciendaId);
             _lotes.addAll(lotesHacienda);
           }
 
@@ -206,17 +207,18 @@ class _ClienteHomeScreenState extends State<ClienteHomeScreen> {
           _centrarMapa();
         }
       } else {
-        debugPrint('No se pudo resolver el cliente desde el usuario autenticado');
+        debugPrint(
+            'No se pudo resolver el cliente desde el usuario autenticado');
       }
     } catch (e) {
       debugPrint('Error cargando datos del cliente: $e');
     }
-    
+
     if (mounted) {
       setState(() => _isLoading = false);
     }
   }
-  
+
   Future<void> _cargarEvaluaciones(int clienteId) async {
     _evaluaciones.clear();
     try {
@@ -237,9 +239,8 @@ class _ClienteHomeScreenState extends State<ClienteHomeScreen> {
           await _clientService.getAuditoriasByCliente(clienteId);
       for (final eval in auditoriaResponse) {
         final trayecto = _parseTrayectoUbicaciones(eval['trayectoUbicaciones']);
-        final latLng = trayecto.isNotEmpty
-            ? trayecto.last
-            : _extractLatLngFromMap(eval);
+        final latLng =
+            trayecto.isNotEmpty ? trayecto.last : _extractLatLngFromMap(eval);
         _addEvaluacionEntry('AUDITORIA', colorAuditoria, eval, latLng);
       }
     } catch (e) {
@@ -340,7 +341,7 @@ class _ClienteHomeScreenState extends State<ClienteHomeScreen> {
     }
     return null;
   }
-  
+
   void _centrarMapa() {
     // Buscar primera ubicación válida
     for (var lote in _lotes) {
@@ -352,7 +353,7 @@ class _ClienteHomeScreenState extends State<ClienteHomeScreen> {
         return;
       }
     }
-    
+
     for (var hacienda in _haciendas) {
       final lat = hacienda['latitud'] as double?;
       final lng = hacienda['longitud'] as double?;
@@ -362,7 +363,7 @@ class _ClienteHomeScreenState extends State<ClienteHomeScreen> {
         return;
       }
     }
-    
+
     for (var eval in _evaluaciones) {
       final lat = eval['latitud'] as double?;
       final lng = eval['longitud'] as double?;
@@ -373,19 +374,19 @@ class _ClienteHomeScreenState extends State<ClienteHomeScreen> {
       }
     }
   }
-  
+
   List<Marker> _construirMarcadores() {
     final markers = <Marker>[];
-    
+
     // Agregar marcadores de lotes con coordenadas
     for (var lote in _lotes) {
       final lat = lote['latitud'] as double?;
       final lng = lote['longitud'] as double?;
-      
+
       if (lat != null && lng != null) {
         // Determinar el color basado en las evaluaciones de ese lote
         final color = _getColorLote(lote);
-        
+
         markers.add(
           Marker(
             point: LatLng(lat, lng),
@@ -417,12 +418,12 @@ class _ClienteHomeScreenState extends State<ClienteHomeScreen> {
         );
       }
     }
-    
+
     // Agregar marcadores de evaluaciones con coordenadas
     for (var eval in _evaluaciones) {
       final lat = eval['latitud'] as double?;
       final lng = eval['longitud'] as double?;
-      
+
       if (lat != null && lng != null) {
         markers.add(
           Marker(
@@ -455,21 +456,22 @@ class _ClienteHomeScreenState extends State<ClienteHomeScreen> {
         );
       }
     }
-    
+
     return markers;
   }
-  
+
   Color _getColorLote(Map<String, dynamic> lote) {
     final loteCodigo = lote['codigo']?.toString() ?? '';
-    
+
     // Buscar evaluaciones asociadas a este lote
     bool tieneSigatoka = false;
     bool tieneMoko = false;
     bool tieneAuditoria = false;
-    
+
     for (var eval in _evaluaciones) {
-      final evaluationLote = eval['data']?['lote']?.toString() ?? 
-                            eval['data']?['loteCodigo']?.toString() ?? '';
+      final evaluationLote = eval['data']?['lote']?.toString() ??
+          eval['data']?['loteCodigo']?.toString() ??
+          '';
       if (evaluationLote == loteCodigo) {
         switch (eval['tipo']) {
           case 'SIGATOKA':
@@ -484,14 +486,14 @@ class _ClienteHomeScreenState extends State<ClienteHomeScreen> {
         }
       }
     }
-    
+
     // Prioridad: Sigatoka > Moko > Auditoría > Gris (sin evaluaciones)
     if (tieneSigatoka) return colorSigatoka;
     if (tieneMoko) return colorMoko;
     if (tieneAuditoria) return colorAuditoria;
     return Colors.grey; // Sin evaluaciones
   }
-  
+
   IconData _getIconByTipo(String tipo) {
     switch (tipo) {
       case 'SIGATOKA':
@@ -504,15 +506,16 @@ class _ClienteHomeScreenState extends State<ClienteHomeScreen> {
         return Icons.place;
     }
   }
-  
+
   void _mostrarDetallesLote(Map<String, dynamic> lote) {
     final loteCodigo = lote['codigo']?.toString() ?? '';
     final evaluacionesLote = _evaluaciones.where((e) {
-      final evalLote = e['data']?['lote']?.toString() ?? 
-                       e['data']?['loteCodigo']?.toString() ?? '';
+      final evalLote = e['data']?['lote']?.toString() ??
+          e['data']?['loteCodigo']?.toString() ??
+          '';
       return evalLote == loteCodigo;
     }).toList();
-    
+
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -524,7 +527,7 @@ class _ClienteHomeScreenState extends State<ClienteHomeScreen> {
       ),
     );
   }
-  
+
   void _mostrarDetallesEvaluacion(Map<String, dynamic> eval) {
     showModalBottomSheet(
       context: context,
@@ -533,8 +536,9 @@ class _ClienteHomeScreenState extends State<ClienteHomeScreen> {
       builder: (context) => _buildEvaluacionSheet(eval),
     );
   }
-  
-  Widget _buildDetallesSheet(String titulo, Map<String, dynamic> lote, List<Map<String, dynamic>> evaluaciones) {
+
+  Widget _buildDetallesSheet(String titulo, Map<String, dynamic> lote,
+      List<Map<String, dynamic>> evaluaciones) {
     return Container(
       decoration: const BoxDecoration(
         color: Colors.white,
@@ -567,7 +571,8 @@ class _ClienteHomeScreenState extends State<ClienteHomeScreen> {
                     color: const Color(0xFF004B63).withOpacity(0.1),
                     borderRadius: BorderRadius.circular(10),
                   ),
-                  child: const Icon(Icons.agriculture, color: Color(0xFF004B63)),
+                  child:
+                      const Icon(Icons.agriculture, color: Color(0xFF004B63)),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
@@ -635,7 +640,8 @@ class _ClienteHomeScreenState extends State<ClienteHomeScreen> {
               padding: const EdgeInsets.symmetric(horizontal: 16),
               child: Row(
                 children: [
-                  const Icon(Icons.assessment, size: 20, color: Color(0xFF004B63)),
+                  const Icon(Icons.assessment,
+                      size: 20, color: Color(0xFF004B63)),
                   const SizedBox(width: 8),
                   Text(
                     'Evaluaciones (${evaluaciones.length})',
@@ -654,7 +660,8 @@ class _ClienteHomeScreenState extends State<ClienteHomeScreen> {
                 shrinkWrap: true,
                 padding: const EdgeInsets.symmetric(horizontal: 16),
                 itemCount: evaluaciones.length,
-                itemBuilder: (context, index) => _buildEvaluacionCard(evaluaciones[index]),
+                itemBuilder: (context, index) =>
+                    _buildEvaluacionCard(evaluaciones[index]),
               ),
             ),
           ],
@@ -663,12 +670,12 @@ class _ClienteHomeScreenState extends State<ClienteHomeScreen> {
       ),
     );
   }
-  
+
   Widget _buildEvaluacionSheet(Map<String, dynamic> eval) {
     final tipo = eval['tipo'] as String;
     final color = eval['color'] as Color;
     final data = eval['data'] as Map<String, dynamic>;
-    
+
     return Container(
       decoration: const BoxDecoration(
         color: Colors.white,
@@ -738,34 +745,39 @@ class _ClienteHomeScreenState extends State<ClienteHomeScreen> {
       ),
     );
   }
-  
+
   Widget _buildContenidoEvaluacion(String tipo, Map<String, dynamic> data) {
     switch (tipo) {
       case 'SIGATOKA':
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _buildInfoRow(Icons.agriculture, 'Hacienda', data['hacienda'] ?? '-'),
+            _buildInfoRow(
+                Icons.agriculture, 'Hacienda', data['hacienda'] ?? '-'),
             const SizedBox(height: 8),
             _buildInfoRow(Icons.person, 'Evaluador', data['evaluador'] ?? '-'),
             const SizedBox(height: 8),
-            _buildInfoRow(Icons.calendar_month, 'Semana', data['semanaEpidemiologica']?.toString() ?? '-'),
+            _buildInfoRow(Icons.calendar_month, 'Semana',
+                data['semanaEpidemiologica']?.toString() ?? '-'),
           ],
         );
       case 'MOKO':
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _buildInfoRow(Icons.numbers, 'Foco #', data['numeroFoco']?.toString() ?? '-'),
+            _buildInfoRow(
+                Icons.numbers, 'Foco #', data['numeroFoco']?.toString() ?? '-'),
             const SizedBox(height: 8),
-            _buildInfoRow(Icons.warning, 'Plantas afectadas', data['plantasAfectadas']?.toString() ?? '-'),
+            _buildInfoRow(Icons.warning, 'Plantas afectadas',
+                data['plantasAfectadas']?.toString() ?? '-'),
             const SizedBox(height: 8),
             _buildInfoRow(Icons.agriculture, 'Lote', data['lote'] ?? '-'),
             const SizedBox(height: 8),
             _buildInfoRow(Icons.speed, 'Severidad', data['severidad'] ?? '-'),
             if (data['observaciones'] != null) ...[
               const SizedBox(height: 8),
-              _buildInfoRow(Icons.notes, 'Observaciones', data['observaciones']),
+              _buildInfoRow(
+                  Icons.notes, 'Observaciones', data['observaciones']),
             ],
           ],
         );
@@ -773,14 +785,17 @@ class _ClienteHomeScreenState extends State<ClienteHomeScreen> {
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _buildInfoRow(Icons.agriculture, 'Hacienda', data['hacienda'] ?? '-'),
+            _buildInfoRow(
+                Icons.agriculture, 'Hacienda', data['hacienda'] ?? '-'),
             const SizedBox(height: 8),
             _buildInfoRow(Icons.eco, 'Cultivo', data['cultivo'] ?? '-'),
             const SizedBox(height: 8),
-            _buildInfoRow(Icons.pending_actions, 'Estado', data['estado'] ?? '-'),
+            _buildInfoRow(
+                Icons.pending_actions, 'Estado', data['estado'] ?? '-'),
             if (data['observaciones'] != null) ...[
               const SizedBox(height: 8),
-              _buildInfoRow(Icons.notes, 'Observaciones', data['observaciones']),
+              _buildInfoRow(
+                  Icons.notes, 'Observaciones', data['observaciones']),
             ],
           ],
         );
@@ -788,7 +803,7 @@ class _ClienteHomeScreenState extends State<ClienteHomeScreen> {
         return const SizedBox.shrink();
     }
   }
-  
+
   Widget _buildInfoRow(IconData icon, String label, String value) {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -805,12 +820,12 @@ class _ClienteHomeScreenState extends State<ClienteHomeScreen> {
       ],
     );
   }
-  
+
   Widget _buildEvaluacionCard(Map<String, dynamic> eval) {
     final tipo = eval['tipo'] as String;
     final color = eval['color'] as Color;
     final data = eval['data'] as Map<String, dynamic>;
-    
+
     return Card(
       margin: const EdgeInsets.only(bottom: 8),
       child: ListTile(
@@ -832,7 +847,7 @@ class _ClienteHomeScreenState extends State<ClienteHomeScreen> {
       ),
     );
   }
-  
+
   String _getTipoLabel(String tipo) {
     switch (tipo) {
       case 'SIGATOKA':
@@ -845,7 +860,7 @@ class _ClienteHomeScreenState extends State<ClienteHomeScreen> {
         return tipo;
     }
   }
-  
+
   String _formatFecha(dynamic fecha) {
     if (fecha == null) return '-';
     if (fecha is String) {
@@ -858,7 +873,7 @@ class _ClienteHomeScreenState extends State<ClienteHomeScreen> {
     }
     return fecha.toString();
   }
-  
+
   void _mostrarOpcionesNuevoIngreso() {
     showModalBottomSheet(
       context: context,
@@ -902,8 +917,9 @@ class _ClienteHomeScreenState extends State<ClienteHomeScreen> {
       ),
     );
   }
-  
-  Widget _buildOpcionIngreso(String titulo, IconData icon, Color color, VoidCallback onTap) {
+
+  Widget _buildOpcionIngreso(
+      String titulo, IconData icon, Color color, VoidCallback onTap) {
     return Material(
       color: Colors.transparent,
       child: InkWell(
@@ -942,27 +958,33 @@ class _ClienteHomeScreenState extends State<ClienteHomeScreen> {
       ),
     );
   }
-  
+
   void _navegarNuevaEvaluacion(String tipo) {
     Navigator.pop(context); // Cerrar modal
-    
+
     // Preparar datos del cliente
-    final clientDataForEval = _clientData != null ? {
-      'id': _clientData!['id'],
-      'cedula': _clientData!['cedula'],
-      'nombre': '${_clientData!['nombre'] ?? ''} ${_clientData!['apellidos'] ?? ''}'.trim(),
-      'telefono': _clientData!['telefono'],
-      'haciendas': _haciendas,
-      'lotes': _lotes,
-      'isCliente': true, // Marca para indicar que es un cliente autenticado
-    } : null;
-    
+    final clientDataForEval = _clientData != null
+        ? {
+            'id': _clientData!['id'],
+            'cedula': _clientData!['cedula'],
+            'nombre':
+                '${_clientData!['nombre'] ?? ''} ${_clientData!['apellidos'] ?? ''}'
+                    .trim(),
+            'telefono': _clientData!['telefono'],
+            'haciendas': _haciendas,
+            'lotes': _lotes,
+            'isCliente':
+                true, // Marca para indicar que es un cliente autenticado
+          }
+        : null;
+
     switch (tipo) {
       case 'SIGATOKA':
         Navigator.push(
           context,
           MaterialPageRoute(
-            builder: (context) => SigatokaAuditScreen(clientData: clientDataForEval),
+            builder: (context) =>
+                SigatokaAuditScreen(clientData: clientDataForEval),
           ),
         );
         break;
@@ -970,7 +992,9 @@ class _ClienteHomeScreenState extends State<ClienteHomeScreen> {
         Navigator.push(
           context,
           MaterialPageRoute(
-            builder: (context) => MokoAuditScreen(clientData: clientDataForEval),
+            builder: (context) => AgrotecbanMokoPreventivoScreen(
+              clientData: clientDataForEval,
+            ),
           ),
         );
         break;
@@ -984,7 +1008,7 @@ class _ClienteHomeScreenState extends State<ClienteHomeScreen> {
         break;
     }
   }
-  
+
   Future<void> _logout() async {
     await _authService.logout();
     if (mounted) {
@@ -1026,7 +1050,8 @@ class _ClienteHomeScreenState extends State<ClienteHomeScreen> {
                   ),
                   children: [
                     TileLayer(
-                      urlTemplate: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+                      urlTemplate:
+                          'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
                       userAgentPackageName: 'com.lytiks.app',
                     ),
                     MarkerLayer(markers: _construirMarcadores()),
@@ -1055,10 +1080,10 @@ class _ClienteHomeScreenState extends State<ClienteHomeScreen> {
       ),
     );
   }
-  
+
   Widget _buildClienteInfo() {
     if (_clientData == null) return const SizedBox.shrink();
-    
+
     return Card(
       elevation: 4,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -1081,7 +1106,8 @@ class _ClienteHomeScreenState extends State<ClienteHomeScreen> {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Text(
-                    '${_clientData!['nombre'] ?? ''} ${_clientData!['apellidos'] ?? ''}'.trim(),
+                    '${_clientData!['nombre'] ?? ''} ${_clientData!['apellidos'] ?? ''}'
+                        .trim(),
                     style: const TextStyle(
                       fontWeight: FontWeight.bold,
                       fontSize: 16,
@@ -1101,7 +1127,7 @@ class _ClienteHomeScreenState extends State<ClienteHomeScreen> {
       ),
     );
   }
-  
+
   Widget _buildLeyenda() {
     return Card(
       elevation: 4,
@@ -1129,7 +1155,7 @@ class _ClienteHomeScreenState extends State<ClienteHomeScreen> {
       ),
     );
   }
-  
+
   Widget _buildLeyendaItem(Color color, String label) {
     return Row(
       mainAxisSize: MainAxisSize.min,
@@ -1154,37 +1180,37 @@ class _ClienteHomeScreenState extends State<ClienteHomeScreen> {
       ],
     );
   }
-  
+
   void _onMapTap(LatLng latLng) {
     // Buscar el punto más cercano
     const threshold = 0.001; // Aproximadamente 100m
-    
+
     // Buscar en lotes
     for (var lote in _lotes) {
       final lat = lote['latitud'] as double?;
       final lng = lote['longitud'] as double?;
       if (lat != null && lng != null) {
-        if ((lat - latLng.latitude).abs() < threshold && 
+        if ((lat - latLng.latitude).abs() < threshold &&
             (lng - latLng.longitude).abs() < threshold) {
           _mostrarDetallesLote(lote);
           return;
         }
       }
     }
-    
+
     // Buscar en evaluaciones
     for (var eval in _evaluaciones) {
       final lat = eval['latitud'] as double?;
       final lng = eval['longitud'] as double?;
       if (lat != null && lng != null) {
-        if ((lat - latLng.latitude).abs() < threshold && 
+        if ((lat - latLng.latitude).abs() < threshold &&
             (lng - latLng.longitude).abs() < threshold) {
           _mostrarDetallesEvaluacion(eval);
           return;
         }
       }
     }
-    
+
     // Si no hay ningún punto cercano, mostrar mensaje
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(

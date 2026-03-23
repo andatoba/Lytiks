@@ -7,7 +7,7 @@ import '../services/sync_service.dart';
 import '../services/client_service.dart';
 import '../widgets/dynamic_logo_widget.dart';
 import 'audit_screen.dart';
-import 'moko_audit_screen.dart';
+import 'agrotecban_moko_preventivo.dart';
 import 'sigatoka_audit_screen.dart';
 import 'plagas_screen.dart';
 import 'audit_consultation_screen.dart';
@@ -27,8 +27,9 @@ class _HomeScreenState extends State<HomeScreen> {
   int _pendingCount = 0;
   final SyncService _syncService = SyncService();
   bool _isSyncing = false;
-  dart_async.StreamSubscription<List<ConnectivityResult>>? _connectivitySubscription;
-  
+  dart_async.StreamSubscription<List<ConnectivityResult>>?
+      _connectivitySubscription;
+
   // Estadísticas del backend
   int _totalClients = 0;
   int _activeClients = 0;
@@ -68,17 +69,18 @@ class _HomeScreenState extends State<HomeScreen> {
         Uri.parse('http://5.161.198.89:8081/api/clients/stats'),
         headers: {'Content-Type': 'application/json'},
       );
-      
+
       // Cargar estadísticas de auditorías
       final auditsResponse = await http.get(
         Uri.parse('http://5.161.198.89:8081/api/audits/stats'),
         headers: {'Content-Type': 'application/json'},
       );
-      
-      if (clientsResponse.statusCode == 200 && auditsResponse.statusCode == 200) {
+
+      if (clientsResponse.statusCode == 200 &&
+          auditsResponse.statusCode == 200) {
         final clientsData = jsonDecode(clientsResponse.body);
         final auditsData = jsonDecode(auditsResponse.body);
-        
+
         if (mounted) {
           setState(() {
             _totalClients = clientsData['totalClients'] ?? 0;
@@ -263,7 +265,8 @@ class _HomeScreenState extends State<HomeScreen> {
     } catch (e) {
       if (mounted) {
         if (showDialogs) {
-          Navigator.of(context).pop(); // Cerrar diálogo de carga si está abierto
+          Navigator.of(context)
+              .pop(); // Cerrar diálogo de carga si está abierto
           _showSyncErrorDialog(null, error: e.toString());
         }
       }
@@ -658,7 +661,8 @@ class _InicioTabState extends State<InicioTab> {
                     Navigator.push(
                       context,
                       MaterialPageRoute(
-                        builder: (context) => AuditScreen(clientData: _selectedClient),
+                        builder: (context) =>
+                            AuditScreen(clientData: _selectedClient),
                       ),
                     ).then((_) => widget.onUpdateCount());
                   },
@@ -675,7 +679,7 @@ class _InicioTabState extends State<InicioTab> {
                     Navigator.push(
                       context,
                       MaterialPageRoute(
-                        builder: (context) => MokoAuditScreen(
+                        builder: (context) => AgrotecbanMokoPreventivoScreen(
                           clientData: _selectedClient,
                         ),
                       ),
@@ -727,6 +731,30 @@ class _InicioTabState extends State<InicioTab> {
                 ),
               ),
             ],
+          ),
+
+          const SizedBox(height: 12),
+
+          // Tercera fila: Control de Plagas
+          SizedBox(
+            width: double.infinity,
+            child: _buildActionButton(
+              context,
+              icon: Icons.bug_report,
+              title: 'Control de Plagas',
+              color: const Color(0xFF8D6E63),
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => PlagasScreen(
+                      clientData: _selectedClient,
+                    ),
+                  ),
+                );
+              },
+              isFullWidth: true,
+            ),
           ),
 
           const SizedBox(height: 12),
@@ -888,7 +916,8 @@ class _InicioTabState extends State<InicioTab> {
                           subtitleParts.add('Finca: $finca');
                         }
                         return ListTile(
-                          title: Text(nombre.isEmpty ? 'Cliente sin nombre' : nombre),
+                          title: Text(
+                              nombre.isEmpty ? 'Cliente sin nombre' : nombre),
                           subtitle: subtitleParts.isEmpty
                               ? null
                               : Text(subtitleParts.join(' | ')),
@@ -942,29 +971,6 @@ class _InicioTabState extends State<InicioTab> {
                 ],
               ),
             ),
-            const SizedBox(height: 8),
-
-              SizedBox(
-                width: double.infinity,
-                child: _buildActionButton(
-                  context,
-                  icon: Icons.bug_report,
-                  title: 'Control de Plagas',
-                  color: const Color(0xFF8D6E63),
-                  onTap: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => PlagasScreen(
-                          clientData: _selectedClient,
-                        ),
-                      ),
-                    );
-                  },
-                  isFullWidth: true,
-                ),
-              ),
-
             const Text(
               'Puede cambiarlo al ingresar a cada módulo.',
               style: TextStyle(fontSize: 11, color: Colors.black54),
@@ -991,7 +997,8 @@ class _InicioTabState extends State<InicioTab> {
     }
     final nombre = _formatClientName(client);
     final cedula = client['cedula']?.toString() ?? '';
-    final detail = nombre.isNotEmpty ? nombre : (cedula.isNotEmpty ? cedula : '');
+    final detail =
+        nombre.isNotEmpty ? nombre : (cedula.isNotEmpty ? cedula : '');
     final message = detail.isNotEmpty
         ? 'Cliente encontrado: $detail'
         : 'Cliente encontrado';
