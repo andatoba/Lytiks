@@ -211,7 +211,6 @@ class _AgrotecbanMokoContencionScreenState
         children: [
           for (final item in _form.fase2) _buildItemCard(item, maxFotos: 5),
           const SizedBox(height: 10),
-          _buildDosisReferencia(),
         ],
       ),
     );
@@ -305,13 +304,31 @@ class _AgrotecbanMokoContencionScreenState
             ],
           ),
           const SizedBox(height: 6),
-          TextField(
-            controller: item.evaluacion,
-            decoration: const InputDecoration(
-              labelText: 'Evaluacion / detalle',
-              border: OutlineInputBorder(),
+          if (item.titulo == 'Infraestructura' || item.titulo == 'Monitoreo' || item.titulo == 'Desinfeccion Herramientas')
+            DropdownButtonFormField<String>(
+              value: item.evaluacion.text.isNotEmpty ? item.evaluacion.text : null,
+              decoration: const InputDecoration(
+                labelText: 'Evaluacion / detalle',
+                border: OutlineInputBorder(),
+              ),
+              items: const [
+                DropdownMenuItem(value: 'Excelente', child: Text('Excelente')),
+                DropdownMenuItem(value: 'Bueno', child: Text('Bueno')),
+                DropdownMenuItem(value: 'Regular', child: Text('Regular')),
+                DropdownMenuItem(value: 'NT', child: Text('NT')),
+              ],
+              onChanged: (value) {
+                item.evaluacion.text = value ?? '';
+              },
+            )
+          else
+            TextField(
+              controller: item.evaluacion,
+              decoration: const InputDecoration(
+                labelText: 'Evaluacion / detalle',
+                border: OutlineInputBorder(),
+              ),
             ),
-          ),
           const SizedBox(height: 8),
           TextField(
             controller: item.observacion,
@@ -349,6 +366,30 @@ class _AgrotecbanMokoContencionScreenState
   }
 
   Widget _buildFase3Item(_Fase3Item item) {
+    final microorganismos = [
+      'SAFERBACTER',
+      'SAFERSOIL',
+      'SAFERMIX',
+      'GOLDEN',
+      'PREBIOTIK',
+    ];
+    final dosisMicro = [
+      '250-500 gr',
+      '2-4 lt',
+      '5 kilos',
+    ];
+    final sar = [
+      'ARMUROX',
+      'AMINOALEXIN',
+      'EQUILIBRIUM',
+      'TERRASORB T24',
+    ];
+    final dosisSar = [
+      '1 lt',
+      '0,5-0,75 lt',
+      '0,5-1 lt',
+    ];
+
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
       padding: const EdgeInsets.all(10),
@@ -362,6 +403,84 @@ class _AgrotecbanMokoContencionScreenState
           Text(item.parametro,
               style: const TextStyle(fontWeight: FontWeight.bold)),
           const SizedBox(height: 8),
+          if (item.tipo == 'microorganismo' || item.tipo == 'sar') ...[
+            Row(
+              children: [
+                Expanded(
+                  child: DropdownButtonFormField<String>(
+                    value: item.productoSeleccionado,
+                    decoration: InputDecoration(
+                      labelText: 'Producto',
+                      border: const OutlineInputBorder(),
+                    ),
+                    items: (item.tipo == 'microorganismo' ? microorganismos : sar)
+                        .map((p) => DropdownMenuItem<String>(
+                              value: p,
+                              child: Text(p),
+                            ))
+                        .toList(),
+                    onChanged: (value) {
+                      setState(() {
+                        item.productoSeleccionado = value;
+                      });
+                    },
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: DropdownButtonFormField<String>(
+                    value: item.dosisSeleccionada,
+                    decoration: InputDecoration(
+                      labelText: 'Dosis',
+                      border: const OutlineInputBorder(),
+                    ),
+                    items: (item.tipo == 'microorganismo' ? dosisMicro : dosisSar)
+                        .map((d) => DropdownMenuItem<String>(
+                              value: d,
+                              child: Text(d),
+                            ))
+                        .toList(),
+                    onChanged: (value) {
+                      setState(() {
+                        item.dosisSeleccionada = value;
+                      });
+                    },
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+          ]
+          else if (item.parametro == 'Control malezas' || item.parametro == 'Control de picudos') ...[
+            DropdownButtonFormField<String>(
+              value: item.extra1.text.isNotEmpty ? item.extra1.text : null,
+              decoration: InputDecoration(
+                labelText: item.extra1Label,
+                border: const OutlineInputBorder(),
+              ),
+              items: const [
+                DropdownMenuItem(value: 'SI', child: Text('SI')),
+                DropdownMenuItem(value: 'NO', child: Text('NO')),
+              ],
+              onChanged: (value) {
+                setState(() {
+                  item.extra1.text = value ?? '';
+                });
+              },
+            ),
+            const SizedBox(height: 8),
+          ]
+          else if (item.extra2Label == '# plantas sembradas' || item.extra2Label == '# plantas reinfectada') ...[
+            TextField(
+              controller: item.extra2,
+              keyboardType: TextInputType.number,
+              decoration: InputDecoration(
+                labelText: item.extra2Label,
+                border: const OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 8),
+          ],
           TextField(
             controller: item.detalle,
             decoration: const InputDecoration(
@@ -383,40 +502,52 @@ class _AgrotecbanMokoContencionScreenState
           Row(
             children: [
               Expanded(
-                child: TextField(
-                  controller: item.extra1,
-                  decoration: InputDecoration(
-                    labelText: item.extra1Label,
-                    border: const OutlineInputBorder(),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: DropdownButtonFormField<String>(
-                  value: _productos
-                          .any((p) => _nombreProducto(p) == item.extra2.text)
-                      ? item.extra2.text
-                      : null,
-                  decoration: InputDecoration(
-                    labelText: item.extra2Label,
-                    border: const OutlineInputBorder(),
-                  ),
-                  items: _productos
-                      .map(
-                        (p) => DropdownMenuItem<String>(
-                          value: _nombreProducto(p),
-                          child: Text(_nombreProducto(p)),
+                child: item.extra1Label == 'Fecha de siembra'
+                    ? GestureDetector(
+                        onTap: () async {
+                          DateTime? picked = await showDatePicker(
+                            context: context,
+                            initialDate: DateTime.now(),
+                            firstDate: DateTime(2000),
+                            lastDate: DateTime(2100),
+                          );
+                          if (picked != null) {
+                            setState(() {
+                              item.extra1.text = '${picked.year}-${picked.month.toString().padLeft(2, '0')}-${picked.day.toString().padLeft(2, '0')}';
+                            });
+                          }
+                        },
+                        child: AbsorbPointer(
+                          child: TextField(
+                            controller: item.extra1,
+                            decoration: InputDecoration(
+                              labelText: item.extra1Label,
+                              border: const OutlineInputBorder(),
+                              suffixIcon: const Icon(Icons.calendar_today),
+                            ),
+                          ),
                         ),
                       )
-                      .toList(),
-                  onChanged: (value) {
-                    setState(() {
-                      item.extra2.text = value ?? '';
-                    });
-                  },
-                ),
+                    : TextField(
+                        controller: item.extra1,
+                        decoration: InputDecoration(
+                          labelText: item.extra1Label,
+                          border: const OutlineInputBorder(),
+                        ),
+                      ),
               ),
+              if (item.tipo == null && item.extra2Label != '# plantas sembradas' && item.extra2Label != '# plantas reinfectada') ...[
+                const SizedBox(width: 8),
+                Expanded(
+                  child: TextField(
+                    controller: item.extra2,
+                    decoration: InputDecoration(
+                      labelText: item.extra2Label,
+                      border: const OutlineInputBorder(),
+                    ),
+                  ),
+                ),
+              ],
             ],
           ),
           Align(
@@ -430,6 +561,7 @@ class _AgrotecbanMokoContencionScreenState
         ],
       ),
     );
+  }
   }
 
   Widget _sectionCard({
@@ -459,36 +591,6 @@ class _AgrotecbanMokoContencionScreenState
     );
   }
 
-  Widget _buildDosisReferencia() {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(10),
-      decoration: BoxDecoration(
-        color: const Color(0xFFF5F5F5),
-        borderRadius: BorderRadius.circular(10),
-      ),
-      child: const Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text('Referencia de dosis',
-              style: TextStyle(fontWeight: FontWeight.bold)),
-          SizedBox(height: 6),
-          Text('MICROORGANISMOS'),
-          Text('SAFERBACTER: 250-500 gr'),
-          Text('SAFERSOIL: 250-500 gr'),
-          Text('SAFERMIX: 250-500 gr'),
-          Text('GOLDEN: 2-4 lt'),
-          Text('PREBIOTIK: 5 kilos'),
-          SizedBox(height: 8),
-          Text('SAR'),
-          Text('ARMUROX: 1 lt'),
-          Text('AMINOALEXIN: 0,5-0,75 lt'),
-          Text('EQUILIBRIUM: 0,5-1 lt'),
-          Text('TERRASORB T24: 1 lt'),
-        ],
-      ),
-    );
-  }
 
   Future<void> _agregarFoto(_ConFoto item, int maxFotos) async {
     if (item.fotos.length >= maxFotos) {
@@ -748,12 +850,15 @@ class _Fase3Item extends _ConFoto {
   final String parametro;
   final String extra1Label;
   final String extra2Label;
+  final String? tipo; // 'microorganismo' o 'sar' o null
   final TextEditingController detalle = TextEditingController();
   final TextEditingController recomendacion = TextEditingController();
   final TextEditingController extra1 = TextEditingController();
   final TextEditingController extra2 = TextEditingController();
+  String? productoSeleccionado;
+  String? dosisSeleccionada;
 
-  _Fase3Item(this.parametro, this.extra1Label, this.extra2Label);
+  _Fase3Item(this.parametro, this.extra1Label, this.extra2Label, {this.tipo});
 
   void dispose() {
     detalle.dispose();
@@ -794,10 +899,11 @@ class _ContencionFormulario {
 
   final List<_Fase3Item> fase3 = [
     _Fase3Item('Siembra', 'Fecha de siembra', '# plantas sembradas'),
-    _Fase3Item('Aplicacion Microorganismos', 'Fecha aplicacion', 'Producto'),
-    _Fase3Item('SAR', 'Fecha aplicacion', 'Producto'),
-    _Fase3Item('Control malezas', 'Si / No', 'Detalle de control'),
-    _Fase3Item('Control de picudos', 'Si / No', 'Detalle de control'),
+    _Fase3Item('Siembra', 'Fecha de siembra', '# plantas reinfectada'),
+    _Fase3Item('Aplicacion Microorganismos', 'Fecha aplicacion', 'Producto', tipo: 'microorganismo'),
+    _Fase3Item('SAR', 'Fecha aplicacion', 'Producto', tipo: 'sar'),
+    _Fase3Item('Control malezas', 'Si / No', '',),
+    _Fase3Item('Control de picudos', 'Si / No', '',),
   ];
 
   final TextEditingController observacionesGenerales = TextEditingController();

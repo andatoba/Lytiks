@@ -1,3 +1,4 @@
+  int _cicloSeleccionadoMicro = 1;
 import 'package:flutter/material.dart';
 
 import '../services/offline_storage_service.dart';
@@ -42,18 +43,18 @@ class _AgrotecbanMokoPreventivoScreenState
     _fechaInicioPlan = DateTime(_now.year, _now.month, 1);
 
     _microorganismos = [
-      _PreventivoProducto('SAFERBACTER', '250-500 gr', _ciclosMicro),
-      _PreventivoProducto('SAFERSOIL', '250-500 gr', _ciclosMicro),
-      _PreventivoProducto('SAFERMIX', '250-500 gr', _ciclosMicro),
-      _PreventivoProducto('GOLDEN', '2-4 lt', _ciclosMicro),
-      _PreventivoProducto('PREBIOTIK', '5 kilos', _ciclosMicro),
+      _PreventivoProducto('SAFERBACTER', ['250-500 gr', '2-4 lt', '5 kilos'], _ciclosMicro),
+      _PreventivoProducto('SAFERSOIL', ['250-500 gr', '2-4 lt', '5 kilos'], _ciclosMicro),
+      _PreventivoProducto('SAFERMIX', ['250-500 gr', '2-4 lt', '5 kilos'], _ciclosMicro),
+      _PreventivoProducto('GOLDEN', ['250-500 gr', '2-4 lt', '5 kilos'], _ciclosMicro),
+      _PreventivoProducto('PREBIOTIK', ['250-500 gr', '2-4 lt', '5 kilos'], _ciclosMicro),
     ];
 
     _sar = [
-      _PreventivoProducto('ARMUROX', '1 lt', _ciclosSar),
-      _PreventivoProducto('AMINOALEXIN', '0,5-0,75 lt', _ciclosSar),
-      _PreventivoProducto('EQUILIBRIUM', '0,5-1 lt', _ciclosSar),
-      _PreventivoProducto('TERRASORB T24', '1 lt', _ciclosSar),
+      _PreventivoProducto('ARMUROX', ['1 lt', '0,5-0,75 lt', '0,5-1 lt'], _ciclosSar),
+      _PreventivoProducto('AMINOALEXIN', ['1 lt', '0,5-0,75 lt', '0,5-1 lt'], _ciclosSar),
+      _PreventivoProducto('EQUILIBRIUM', ['1 lt', '0,5-0,75 lt', '0,5-1 lt'], _ciclosSar),
+      _PreventivoProducto('TERRASORB T24', ['1 lt', '0,5-0,75 lt', '0,5-1 lt'], _ciclosSar),
     ];
 
     _cargarConfiguracionesExistentes();
@@ -115,13 +116,44 @@ class _AgrotecbanMokoPreventivoScreenState
             child: ListView(
               padding: const EdgeInsets.all(16),
               children: [
-                _buildProgramaSection(
-                  titulo: 'PROGRAMA PREVENTIVO (INOCULACION MICROORGANISMOS)',
-                  subtitulo:
-                      'Checklist mensual: el tecnico marca cumplimiento por ciclo y registra la fecha real de aplicacion.',
-                  productos: _microorganismos,
-                  frecuenciaMeses: 1,
+                Card(
+                  elevation: 1,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  child: Padding(
+                    padding: const EdgeInsets.all(12),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text('PROGRAMA PREVENTIVO (INOCULACION MICROORGANISMOS)', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
+                        const SizedBox(height: 4),
+                        const Text('Seleccione el ciclo y registre los productos aplicados.', style: TextStyle(color: Colors.grey, fontSize: 12)),
+                        const SizedBox(height: 10),
+                        DropdownButtonFormField<int>(
+                          value: _cicloSeleccionadoMicro,
+                          decoration: const InputDecoration(labelText: 'Ciclo', border: OutlineInputBorder()),
+                          items: List.generate(12, (i) => DropdownMenuItem(value: i+1, child: Text('Ciclo ${i+1}'))),
+                          onChanged: (v) => setState(() => _cicloSeleccionadoMicro = v ?? 1),
+                        ),
+                        const SizedBox(height: 16),
+                        ..._microorganismos.map((producto) => _buildProductoCicloDropdown(producto)),
+                      ],
+                    ),
+                  ),
                 ),
+                  Widget _buildProductoCicloDropdown(_PreventivoProducto producto) {
+                    return Row(
+                      children: [
+                        Expanded(
+                          child: DropdownButtonFormField<String>(
+                            value: producto.dosisSeleccionada,
+                            decoration: InputDecoration(labelText: producto.nombre, border: const OutlineInputBorder()),
+                            items: producto.dosisOpciones.map((d) => DropdownMenuItem(value: d, child: Text(d))).toList(),
+                            onChanged: (v) => setState(() => producto.dosisSeleccionada = v),
+                          ),
+                        ),
+                      ],
+                    );
+                  }
                 const SizedBox(height: 16),
                 _buildProgramaSection(
                   titulo: 'PROGRAMA PREVENTIVO (SAR)',
@@ -445,9 +477,30 @@ class _AgrotecbanMokoPreventivoScreenState
           producto.nombre,
           style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14),
         ),
-        subtitle: Text(
-          'Dosis: ${producto.dosis} | Proximo ciclo: ${proximoPendiente ?? 'Completado'}',
-          style: const TextStyle(fontSize: 12),
+        subtitle: Row(
+          children: [
+            const Text('Dosis: ', style: TextStyle(fontSize: 12)),
+            Expanded(
+              child: DropdownButton<String>(
+                value: producto.dosisSeleccionada,
+                items: producto.dosisOpciones
+                    .map((d) => DropdownMenuItem<String>(
+                          value: d,
+                          child: Text(d),
+                        ))
+                    .toList(),
+                onChanged: (value) {
+                  setState(() {
+                    producto.dosisSeleccionada = value;
+                  });
+                },
+                isExpanded: true,
+                underline: Container(),
+                style: const TextStyle(fontSize: 12, color: Colors.black),
+              ),
+            ),
+            Text(' | Proximo ciclo: ${proximoPendiente ?? 'Completado'}', style: const TextStyle(fontSize: 12)),
+          ],
         ),
         childrenPadding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
         children: [
@@ -631,13 +684,15 @@ class _AgrotecbanMokoPreventivoScreenState
 
 class _PreventivoProducto {
   final String nombre;
-  final String dosis;
+  String? dosisSeleccionada;
+  final List<String> dosisOpciones;
   final List<int> ciclos;
   final Map<int, bool> cumplimiento = {};
   final Map<int, DateTime?> fechas = {};
   final TextEditingController detalleController = TextEditingController();
 
-  _PreventivoProducto(this.nombre, this.dosis, this.ciclos) {
+  _PreventivoProducto(this.nombre, this.dosisOpciones, this.ciclos, {String? dosisInicial}) {
+    dosisSeleccionada = dosisInicial ?? (dosisOpciones.isNotEmpty ? dosisOpciones[0] : null);
     for (final ciclo in ciclos) {
       cumplimiento[ciclo] = false;
       fechas[ciclo] = null;
