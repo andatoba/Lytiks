@@ -1,6 +1,7 @@
 com/lytiks/backend/repository/SigatokaMuestraRepository.class
 com/lytiks/backend/repository/ConfiguracionLogoRepository.class
 com/lytiks/backend/entity/SigatokaResumen.class
+com/lytiks/backend/repository/MokoPreventivoAuditoriaRepository.class
 com/lytiks/backend/repository/HaciendaRepository.class
 com/lytiks/backend/repository/PlanSeguimientoMokoRepository.class
 com/lytiks/backend/entity/Lote.class
@@ -48,6 +49,7 @@ com/lytiks/backend/entity/ProductoSegMoko.class
 com/lytiks/backend/service/PlagasResumenService.class
 com/lytiks/backend/entity/SigatokaMuestraCompleta.class
 com/lytiks/backend/repository/EjecucionPlanMokoRepository.class
+com/lytiks/backend/entity/MokoContencionAuditoria.class
 com/lytiks/backend/repository/LoteRepository.class
 com/lytiks/backend/repository/ProductoContencionRepository.class
 com/lytiks/backend/service/RegistroMokoService.class
@@ -115,5 +117,7 @@ com/lytiks/backend/entity/SigatokaEvaluacion.class
 com/lytiks/backend/repository/ConfiguracionAplicacionRepository.class
 com/lytiks/backend/dto/PlagasResumenDTO.class
 com/lytiks/backend/util/SigatokaDateUtil.class
+com/lytiks/backend/repository/MokoContencionAuditoriaRepository.class
 com/lytiks/backend/repository/SigatokaResumenRepository.class
+com/lytiks/backend/entity/MokoPreventivoAuditoria.class
 com/lytiks/backend/repository/ProductoRepository.class

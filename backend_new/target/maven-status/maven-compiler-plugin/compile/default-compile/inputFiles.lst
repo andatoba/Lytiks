@@ -45,6 +45,8 @@
 /home/atobar/Lytiks/backend_new/src/main/java/com/lytiks/backend/entity/ItemsTareasMoko.java
 /home/atobar/Lytiks/backend_new/src/main/java/com/lytiks/backend/entity/LocationTracking.java
 /home/atobar/Lytiks/backend_new/src/main/java/com/lytiks/backend/entity/Lote.java
+/home/atobar/Lytiks/backend_new/src/main/java/com/lytiks/backend/entity/MokoContencionAuditoria.java
+/home/atobar/Lytiks/backend_new/src/main/java/com/lytiks/backend/entity/MokoPreventivoAuditoria.java
 /home/atobar/Lytiks/backend_new/src/main/java/com/lytiks/backend/entity/PlagasResumenAuditoria.java
 /home/atobar/Lytiks/backend_new/src/main/java/com/lytiks/backend/entity/PlanSeguimientoMoko.java
 /home/atobar/Lytiks/backend_new/src/main/java/com/lytiks/backend/entity/Producto.java
@@ -80,6 +82,8 @@
 /home/atobar/Lytiks/backend_new/src/main/java/com/lytiks/backend/repository/ItemsTareasMokoRepository.java
 /home/atobar/Lytiks/backend_new/src/main/java/com/lytiks/backend/repository/LocationTrackingRepository.java
 /home/atobar/Lytiks/backend_new/src/main/java/com/lytiks/backend/repository/LoteRepository.java
+/home/atobar/Lytiks/backend_new/src/main/java/com/lytiks/backend/repository/MokoContencionAuditoriaRepository.java
+/home/atobar/Lytiks/backend_new/src/main/java/com/lytiks/backend/repository/MokoPreventivoAuditoriaRepository.java
 /home/atobar/Lytiks/backend_new/src/main/java/com/lytiks/backend/repository/PlagasResumenAuditoriaRepository.java
 /home/atobar/Lytiks/backend_new/src/main/java/com/lytiks/backend/repository/PlanSeguimientoMokoRepository.java
 /home/atobar/Lytiks/backend_new/src/main/java/com/lytiks/backend/repository/ProductoContencionRepository.java

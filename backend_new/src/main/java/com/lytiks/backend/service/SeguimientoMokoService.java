@@ -1,6 +1,7 @@
 package com.lytiks.backend.service;
 
 import com.lytiks.backend.entity.SeguimientoMoko;
+import com.lytiks.backend.repository.RegistroMokoRepository;
 import com.lytiks.backend.repository.SeguimientoMokoRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -15,8 +16,15 @@ public class SeguimientoMokoService {
     @Autowired
     private SeguimientoMokoRepository seguimientoMokoRepository;
 
+    @Autowired
+    private RegistroMokoRepository registroMokoRepository;
+
     // Guardar nuevo seguimiento
     public SeguimientoMoko save(SeguimientoMoko seguimiento) {
+        if (seguimiento.getFocoId() == null || !registroMokoRepository.existsById(seguimiento.getFocoId())) {
+            throw new IllegalArgumentException(
+                    "El foco indicado no existe en registro_moko: " + seguimiento.getFocoId());
+        }
         seguimiento.setFechaCreacion(LocalDateTime.now());
         seguimiento.setFechaSeguimiento(LocalDateTime.now());
         return seguimientoMokoRepository.save(seguimiento);

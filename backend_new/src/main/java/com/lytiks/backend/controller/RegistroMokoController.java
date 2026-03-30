@@ -649,6 +649,14 @@ public class RegistroMokoController {
             Long focoId = toLong(payload.get("focoId"));
             Integer numeroFoco = toInteger(payload.get("numeroFoco"));
 
+            if (focoId == null || focoId <= 0) {
+                return buildErrorResponse(HttpStatus.BAD_REQUEST, "focoId es obligatorio y debe ser mayor a cero");
+            }
+
+            if (registroMokoService.getRegistroById(focoId).isEmpty()) {
+                return buildErrorResponse(HttpStatus.NOT_FOUND, "No existe un foco registrado con id " + focoId);
+            }
+
             int aplicacionesGuardadas = 0;
             List<Long> aplicacionesIds = new java.util.ArrayList<>();
 
@@ -691,7 +699,13 @@ public class RegistroMokoController {
                 Map<String, Object> seguimientoMap = (Map<String, Object>) seguimientoMapRaw;
 
                 SeguimientoMoko seguimiento = new SeguimientoMoko();
-                seguimiento.setFocoId(toLongOrDefault(seguimientoMap.get("focoId"), focoId));
+                Long seguimientoFocoId = toLongOrDefault(seguimientoMap.get("focoId"), focoId);
+                if (!focoId.equals(seguimientoFocoId)) {
+                    return buildErrorResponse(
+                            HttpStatus.BAD_REQUEST,
+                            "El focoId del seguimiento no coincide con el foco principal enviado");
+                }
+                seguimiento.setFocoId(focoId);
                 seguimiento.setNumeroFoco(
                         toIntegerOrDefault(seguimientoMap.get("numeroFoco"), numeroFoco));
                 seguimiento.setSemanaInicio(toInteger(seguimientoMap.get("semanaInicio")));
@@ -731,12 +745,21 @@ public class RegistroMokoController {
             response.put("seguimientoId", seguimientoGuardado != null ? seguimientoGuardado.getId() : null);
             response.put("auditoriaId", auditoriaGuardada.getId());
             return ResponseEntity.status(HttpStatus.CREATED).body(response);
+        } catch (IllegalArgumentException e) {
+            return buildErrorResponse(HttpStatus.BAD_REQUEST, e.getMessage());
         } catch (Exception e) {
             Map<String, Object> error = new HashMap<>();
             error.put("success", false);
             error.put("error", "Error al guardar contención completa: " + e.getMessage());
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(error);
         }
+    }
+
+    private ResponseEntity<Map<String, Object>> buildErrorResponse(HttpStatus status, String message) {
+        Map<String, Object> error = new HashMap<>();
+        error.put("success", false);
+        error.put("error", message);
+        return ResponseEntity.status(status).body(error);
     }
 
     @GetMapping("/contencion/foco/{focoId}/ultima-auditoria")

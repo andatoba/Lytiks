@@ -679,7 +679,18 @@ Future<void> _guardarContencion() async {
   }
 
   try {
-    final focoId = _resolveFocoId() ?? 0;
+    final focoId = _resolveFocoId();
+    if (focoId == null || focoId <= 0) {
+      throw Exception(
+        'No hay un foco registrado asociado. Abra esta pantalla desde un foco existente.',
+      );
+    }
+
+    final clienteId = _resolveClienteId();
+    if (clienteId == null || clienteId <= 0) {
+      throw Exception('No se pudo determinar el cliente asociado al foco.');
+    }
+
     final aplicaciones = <Map<String, dynamic>>[];
 
     for (final item in _form.fase3) {
@@ -699,7 +710,7 @@ Future<void> _guardarContencion() async {
       }
 
       final aplicacionData = {
-        'clienteId': _resolveClienteId(),
+        'clienteId': clienteId,
         'productoId': productoId,
         'productoNombre': productoNombre,
         'plan': 'Moko-Contencion',
@@ -766,7 +777,7 @@ Future<void> _guardarContencion() async {
 
     final payload = {
       'focoId': focoId,
-      'clienteId': _resolveClienteId(),
+      'clienteId': clienteId,
       'numeroFoco': widget.numeroFoco ?? focoId,
       'aplicaciones': aplicaciones,
       'seguimiento': resumen,
