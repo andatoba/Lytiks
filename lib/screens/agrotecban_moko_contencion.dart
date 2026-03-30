@@ -304,9 +304,12 @@ class _AgrotecbanMokoContencionScreenState
             ],
           ),
           const SizedBox(height: 6),
-          if (item.titulo == 'Infraestructura' || item.titulo == 'Monitoreo' || item.titulo == 'Desinfeccion Herramientas')
+          if (item.titulo == 'Infraestructura' ||
+              item.titulo == 'Monitoreo' ||
+              item.titulo == 'Desinfeccion Herramientas')
             DropdownButtonFormField<String>(
-              value: item.evaluacion.text.isNotEmpty ? item.evaluacion.text : null,
+              value:
+                  item.evaluacion.text.isNotEmpty ? item.evaluacion.text : null,
               decoration: const InputDecoration(
                 labelText: 'Evaluacion / detalle',
                 border: OutlineInputBorder(),
@@ -413,12 +416,13 @@ class _AgrotecbanMokoContencionScreenState
                       labelText: 'Producto',
                       border: const OutlineInputBorder(),
                     ),
-                    items: (item.tipo == 'microorganismo' ? microorganismos : sar)
-                        .map((p) => DropdownMenuItem<String>(
-                              value: p,
-                              child: Text(p),
-                            ))
-                        .toList(),
+                    items:
+                        (item.tipo == 'microorganismo' ? microorganismos : sar)
+                            .map((p) => DropdownMenuItem<String>(
+                                  value: p,
+                                  child: Text(p),
+                                ))
+                            .toList(),
                     onChanged: (value) {
                       setState(() {
                         item.productoSeleccionado = value;
@@ -434,12 +438,13 @@ class _AgrotecbanMokoContencionScreenState
                       labelText: 'Dosis',
                       border: const OutlineInputBorder(),
                     ),
-                    items: (item.tipo == 'microorganismo' ? dosisMicro : dosisSar)
-                        .map((d) => DropdownMenuItem<String>(
-                              value: d,
-                              child: Text(d),
-                            ))
-                        .toList(),
+                    items:
+                        (item.tipo == 'microorganismo' ? dosisMicro : dosisSar)
+                            .map((d) => DropdownMenuItem<String>(
+                                  value: d,
+                                  child: Text(d),
+                                ))
+                            .toList(),
                     onChanged: (value) {
                       setState(() {
                         item.dosisSeleccionada = value;
@@ -450,8 +455,8 @@ class _AgrotecbanMokoContencionScreenState
               ],
             ),
             const SizedBox(height: 8),
-          ]
-          else if (item.parametro == 'Control malezas' || item.parametro == 'Control de picudos') ...[
+          ] else if (item.parametro == 'Control malezas' ||
+              item.parametro == 'Control de picudos') ...[
             DropdownButtonFormField<String>(
               value: item.extra1.text.isNotEmpty ? item.extra1.text : null,
               decoration: InputDecoration(
@@ -469,8 +474,8 @@ class _AgrotecbanMokoContencionScreenState
               },
             ),
             const SizedBox(height: 8),
-          ]
-          else if (item.extra2Label == '# plantas sembradas' || item.extra2Label == '# plantas reinfectada') ...[
+          ] else if (item.extra2Label == '# plantas sembradas' ||
+              item.extra2Label == '# plantas reinfectada') ...[
             TextField(
               controller: item.extra2,
               keyboardType: TextInputType.number,
@@ -513,7 +518,8 @@ class _AgrotecbanMokoContencionScreenState
                           );
                           if (picked != null) {
                             setState(() {
-                              item.extra1.text = '${picked.year}-${picked.month.toString().padLeft(2, '0')}-${picked.day.toString().padLeft(2, '0')}';
+                              item.extra1.text =
+                                  '${picked.year}-${picked.month.toString().padLeft(2, '0')}-${picked.day.toString().padLeft(2, '0')}';
                             });
                           }
                         },
@@ -536,7 +542,9 @@ class _AgrotecbanMokoContencionScreenState
                         ),
                       ),
               ),
-              if (item.tipo == null && item.extra2Label != '# plantas sembradas' && item.extra2Label != '# plantas reinfectada') ...[
+              if (item.tipo == null &&
+                  item.extra2Label != '# plantas sembradas' &&
+                  item.extra2Label != '# plantas reinfectada') ...[
                 const SizedBox(width: 8),
                 Expanded(
                   child: TextField(
@@ -562,208 +570,217 @@ class _AgrotecbanMokoContencionScreenState
       ),
     );
   }
-  }
 
-  Widget _sectionCard({
-    required String titulo,
-    required String subtitulo,
-    required Widget child,
-  }) {
-    return Card(
-      elevation: 1,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(titulo,
-                style:
-                    const TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
-            const SizedBox(height: 4),
-            Text(subtitulo,
-                style: TextStyle(fontSize: 12, color: Colors.grey[700])),
-            const SizedBox(height: 10),
-            child,
-          ],
-        ),
+Widget _sectionCard({
+  required String titulo,
+  required String subtitulo,
+  required Widget child,
+}) {
+  return Card(
+    elevation: 1,
+    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+    child: Padding(
+      padding: const EdgeInsets.all(12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(titulo,
+              style:
+                  const TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
+          const SizedBox(height: 4),
+          Text(subtitulo,
+              style: TextStyle(fontSize: 12, color: Colors.grey[700])),
+          const SizedBox(height: 10),
+          child,
+        ],
       ),
-    );
-  }
+    ),
+  );
+}
 
-
-  Future<void> _agregarFoto(_ConFoto item, int maxFotos) async {
-    if (item.fotos.length >= maxFotos) {
+Future<void> _agregarFoto(_ConFoto item, int maxFotos) async {
+  if (item.fotos.length >= maxFotos) {
+    if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Maximo $maxFotos fotos para este item.'),
           backgroundColor: Colors.orange,
         ),
       );
-      return;
     }
+    return;
+  }
 
-    final foto =
-        await _picker.pickImage(source: ImageSource.camera, imageQuality: 80);
-    if (foto == null) {
-      return;
-    }
+  final foto =
+      await _picker.pickImage(source: ImageSource.camera, imageQuality: 80);
+  if (foto == null) {
+    return;
+  }
 
+  if (mounted) {
     setState(() {
       item.fotos.add(foto.path);
     });
   }
+}
 
-  void _agregarFormulario() {
-    setState(() {
-      final nuevoNumero = _formularios.length + 1;
-      _formularios
-          .add(_ContencionFormulario(focoLabel: 'Foco extra $nuevoNumero'));
-      _indiceActual = _formularios.length - 1;
-    });
-  }
+void _agregarFormulario() {
+  setState(() {
+    final nuevoNumero = _formularios.length + 1;
+    _formularios
+        .add(_ContencionFormulario(focoLabel: 'Foco extra $nuevoNumero'));
+    _indiceActual = _formularios.length - 1;
+  });
+}
 
-  String _nombreProducto(Map<String, dynamic> producto) {
-    return (producto['nombre'] ?? '').toString();
-  }
+String _nombreProducto(Map<String, dynamic> producto) {
+  return (producto['nombre'] ?? '').toString();
+}
 
-  int? _productoIdPorNombre(String nombre) {
-    for (final producto in _productos) {
-      final pNombre = _nombreProducto(producto).toLowerCase().trim();
-      if (pNombre == nombre.toLowerCase().trim()) {
-        final dynamic idRaw = producto['idProducto'] ?? producto['id'];
-        if (idRaw is int) return idRaw;
-        return int.tryParse(idRaw?.toString() ?? '');
-      }
+int? _productoIdPorNombre(String nombre) {
+  for (final producto in _productos) {
+    final pNombre = _nombreProducto(producto).toLowerCase().trim();
+    if (pNombre == nombre.toLowerCase().trim()) {
+      final dynamic idRaw = producto['idProducto'] ?? producto['id'];
+      if (idRaw is int) return idRaw;
+      return int.tryParse(idRaw?.toString() ?? '');
     }
-    return null;
+  }
+  return null;
+}
+
+int? _resolveClienteId() {
+  final dynamic clientId =
+      widget.clientData?['clienteId'] ?? widget.clientData?['id'];
+  if (clientId is int) return clientId;
+  if (clientId is String) return int.tryParse(clientId);
+  return null;
+}
+
+int? _resolveFocoId() {
+  if (widget.focoId != null) {
+    return widget.focoId;
+  }
+  final dynamic focoId = widget.clientData?['focoId'];
+  if (focoId is int) return focoId;
+  if (focoId is String) return int.tryParse(focoId);
+  return null;
+}
+
+Future<void> _guardarContencion() async {
+  if (_isSaving) {
+    return;
   }
 
-  int? _resolveFocoId() {
-    if (widget.focoId != null) {
-      return widget.focoId;
-    }
-    final dynamic clientId = widget.clientData?['id'];
-    if (clientId is int) return clientId;
-    if (clientId is String) return int.tryParse(clientId);
-    return null;
-  }
-
-  Future<void> _guardarContencion() async {
-    if (_isSaving) {
-      return;
-    }
-
+  if (mounted) {
     setState(() {
       _isSaving = true;
     });
+  }
 
-    try {
-      final focoId = _resolveFocoId() ?? 0;
-      final aplicaciones = <Map<String, dynamic>>[];
+  try {
+    final focoId = _resolveFocoId() ?? 0;
+    final aplicaciones = <Map<String, dynamic>>[];
 
-      for (final item in _form.fase3) {
-        final parametro = item.parametro.toLowerCase();
-        if (!(parametro.contains('aplicacion') || parametro == 'sar')) {
-          continue;
-        }
-
-        final productoNombre = item.extra2.text.trim();
-        if (productoNombre.isEmpty) {
-          continue;
-        }
-
-        final productoId = _productoIdPorNombre(productoNombre);
-        if (productoId == null) {
-          continue;
-        }
-
-        final aplicacionData = {
-          'clienteId': widget.clientData?['id'],
-          'productoId': productoId,
-          'productoNombre': productoNombre,
-          'plan': 'Moko-Contencion',
-          'dosis': item.detalle.text.trim(),
-          'fechaInicio': DateTime.now().toIso8601String(),
-          'frecuenciaDias': 30,
-          'repeticiones': 1,
-          'recordatorioHora': '08:00',
-          'lote': _form.focoLabel,
-        };
-
-        aplicaciones.add(aplicacionData);
+    for (final item in _form.fase3) {
+      final parametro = item.parametro.toLowerCase();
+      if (!(parametro.contains('aplicacion') || parametro == 'sar')) {
+        continue;
       }
 
-      final plantasAfectadas = _contarSiEnLista(_form.fase1);
-      final plantasInyectadas =
-          _itemPorTitulo(_form.fase1, 'Plantas inyectadas')?.aplicar == true
-              ? plantasAfectadas
-              : 0;
-      final ppm = int.tryParse(
-            (_itemPorTitulo(_form.bioseguridad, 'Concentracion Amonio')
-                        ?.evaluacion
-                        .text ??
-                    '')
-                .trim(),
-          ) ??
-          750;
-
-      final resumen = {
-        'focoId': focoId,
-        'numeroFoco': widget.numeroFoco ?? focoId,
-        'semanaInicio': _isoWeek(DateTime.now()),
-        'plantasAfectadas': plantasAfectadas,
-        'plantasInyectadas': plantasInyectadas,
-        'controlVectores':
-            _itemPorTitulo(_form.fase1, 'Control de picudos en focos')
-                    ?.aplicar ==
-                true,
-        'cuarentenaActiva':
-            _itemPorTitulo(_form.fase1, 'Cumplimiento de perimetro 10x10')
-                    ?.aplicar ==
-                true,
-        'unicaEntradaHabilitada':
-            _itemPorTitulo(_form.fase1, 'Cumplimiento de perimetro 10x10')
-                    ?.aplicar ==
-                true,
-        'eliminacionMalezaHospedera':
-            _itemPorTitulo(_form.fase1, 'Erradicacion de malezas')?.aplicar ==
-                true,
-        'controlPicudoAplicado':
-            _itemPorTitulo(_form.fase1, 'Control de picudos en focos')
-                    ?.aplicar ==
-                true,
-        'inspeccionPlantasVecinas': _itemPorTitulo(
-              _form.fase1,
-              'Revision con sacabocado a plantas involucradas',
-            )?.aplicar ==
-            true,
-        'corteRiego': false,
-        'pediluvioActivo':
-            _itemPorTitulo(_form.bioseguridad, 'Concentracion Amonio')
-                    ?.aplicar ==
-                true,
-        'ppmSolucionDesinfectante': ppm,
-        'observaciones': _buildResumenObservaciones(),
-      };
-
-      final payload = {
-        'focoId': focoId,
-        'numeroFoco': widget.numeroFoco ?? focoId,
-        'aplicaciones': aplicaciones,
-        'seguimiento': resumen,
-      };
-
-      final response =
-          await _registroService.guardarContencionCompleta(payload);
-      final aplicacionesGuardadas =
-          (response['aplicacionesGuardadas'] as num?)?.toInt() ??
-              aplicaciones.length;
-
-      if (!mounted) {
-        return;
+      final productoNombre = item.extra2.text.trim();
+      if (productoNombre.isEmpty) {
+        continue;
       }
 
+      final productoId = _productoIdPorNombre(productoNombre);
+      if (productoId == null) {
+        continue;
+      }
+
+      final aplicacionData = {
+        'clienteId': _resolveClienteId(),
+        'productoId': productoId,
+        'productoNombre': productoNombre,
+        'plan': 'Moko-Contencion',
+        'dosis': item.detalle.text.trim(),
+        'fechaInicio': DateTime.now().toIso8601String(),
+        'frecuenciaDias': 30,
+        'repeticiones': 1,
+        'recordatorioHora': '08:00',
+        'lote': _form.focoLabel,
+      };
+
+      aplicaciones.add(aplicacionData);
+    }
+
+    final plantasAfectadas = _contarSiEnLista(_form.fase1);
+    final plantasInyectadas =
+        _itemPorTitulo(_form.fase1, 'Plantas inyectadas')?.aplicar == true
+            ? plantasAfectadas
+            : 0;
+    final ppm = int.tryParse(
+          (_itemPorTitulo(_form.bioseguridad, 'Concentracion Amonio')
+                      ?.evaluacion
+                      .text ??
+                  '')
+              .trim(),
+        ) ??
+        750;
+
+    final resumen = {
+      'focoId': focoId,
+      'numeroFoco': widget.numeroFoco ?? focoId,
+      'semanaInicio': _isoWeek(DateTime.now()),
+      'plantasAfectadas': plantasAfectadas,
+      'plantasInyectadas': plantasInyectadas,
+      'controlVectores':
+          _itemPorTitulo(_form.fase1, 'Control de picudos en focos')?.aplicar ==
+              true,
+      'cuarentenaActiva':
+          _itemPorTitulo(_form.fase1, 'Cumplimiento de perimetro 10x10')
+                  ?.aplicar ==
+              true,
+      'unicaEntradaHabilitada':
+          _itemPorTitulo(_form.fase1, 'Cumplimiento de perimetro 10x10')
+                  ?.aplicar ==
+              true,
+      'eliminacionMalezaHospedera':
+          _itemPorTitulo(_form.fase1, 'Erradicacion de malezas')?.aplicar ==
+              true,
+      'controlPicudoAplicado':
+          _itemPorTitulo(_form.fase1, 'Control de picudos en focos')?.aplicar ==
+              true,
+      'inspeccionPlantasVecinas': _itemPorTitulo(
+            _form.fase1,
+            'Revision con sacabocado a plantas involucradas',
+          )?.aplicar ==
+          true,
+      'corteRiego': false,
+      'pediluvioActivo':
+          _itemPorTitulo(_form.bioseguridad, 'Concentracion Amonio')?.aplicar ==
+              true,
+      'ppmSolucionDesinfectante': ppm,
+      'observaciones': _buildResumenObservaciones(),
+    };
+
+    final payload = {
+      'focoId': focoId,
+      'numeroFoco': widget.numeroFoco ?? focoId,
+      'aplicaciones': aplicaciones,
+      'seguimiento': resumen,
+    };
+
+    final response = await _registroService.guardarContencionCompleta(payload);
+    final aplicacionesGuardadas =
+        (response['aplicacionesGuardadas'] as num?)?.toInt() ??
+            aplicaciones.length;
+
+    if (!mounted) {
+      return;
+    }
+
+    if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
@@ -772,60 +789,61 @@ class _AgrotecbanMokoContencionScreenState
           backgroundColor: Colors.green,
         ),
       );
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error al guardar contencion: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    } finally {
-      if (mounted) {
-        setState(() {
-          _isSaving = false;
-        });
-      }
+    }
+  } catch (e) {
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error al guardar contencion: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  } finally {
+    if (mounted) {
+      setState(() {
+        _isSaving = false;
+      });
     }
   }
+}
 
-  int _contarSiEnLista(List<_CheckItem> items) {
-    return items.where((item) => item.aplicar == true).length;
-  }
+int _contarSiEnLista(List<_CheckItem> items) {
+  return items.where((item) => item.aplicar == true).length;
+}
 
-  _CheckItem? _itemPorTitulo(List<_CheckItem> items, String titulo) {
-    for (final item in items) {
-      if (item.titulo.toLowerCase() == titulo.toLowerCase()) {
-        return item;
-      }
+_CheckItem? _itemPorTitulo(List<_CheckItem> items, String titulo) {
+  for (final item in items) {
+    if (item.titulo.toLowerCase() == titulo.toLowerCase()) {
+      return item;
     }
-    return null;
   }
+  return null;
+}
 
-  String _buildResumenObservaciones() {
-    final partes = <String>[];
-    final obs = _form.observacionesGenerales.text.trim();
-    final rec = _form.recomendaciones.text.trim();
-    if (obs.isNotEmpty) {
-      partes.add('Observaciones: $obs');
-    }
-    if (rec.isNotEmpty) {
-      partes.add('Recomendaciones: $rec');
-    }
-    return partes.join(' | ');
+String _buildResumenObservaciones() {
+  final partes = <String>[];
+  final obs = _form.observacionesGenerales.text.trim();
+  final rec = _form.recomendaciones.text.trim();
+  if (obs.isNotEmpty) {
+    partes.add('Observaciones: $obs');
   }
+  if (rec.isNotEmpty) {
+    partes.add('Recomendaciones: $rec');
+  }
+  return partes.join(' | ');
+}
 
-  int _isoWeek(DateTime date) {
-    final dayOfYear = int.parse(
-          DateTime(date.year, date.month, date.day)
-              .difference(DateTime(date.year, 1, 1))
-              .inDays
-              .toString(),
-        ) +
-        1;
-    return ((dayOfYear - date.weekday + 10) / 7).floor();
-  }
+int _isoWeek(DateTime date) {
+  final dayOfYear = int.parse(
+        DateTime(date.year, date.month, date.day)
+            .difference(DateTime(date.year, 1, 1))
+            .inDays
+            .toString(),
+      ) +
+      1;
+  return ((dayOfYear - date.weekday + 10) / 7).floor();
+}
 }
 
 abstract class _ConFoto {
@@ -900,10 +918,19 @@ class _ContencionFormulario {
   final List<_Fase3Item> fase3 = [
     _Fase3Item('Siembra', 'Fecha de siembra', '# plantas sembradas'),
     _Fase3Item('Siembra', 'Fecha de siembra', '# plantas reinfectada'),
-    _Fase3Item('Aplicacion Microorganismos', 'Fecha aplicacion', 'Producto', tipo: 'microorganismo'),
+    _Fase3Item('Aplicacion Microorganismos', 'Fecha aplicacion', 'Producto',
+        tipo: 'microorganismo'),
     _Fase3Item('SAR', 'Fecha aplicacion', 'Producto', tipo: 'sar'),
-    _Fase3Item('Control malezas', 'Si / No', '',),
-    _Fase3Item('Control de picudos', 'Si / No', '',),
+    _Fase3Item(
+      'Control malezas',
+      'Si / No',
+      '',
+    ),
+    _Fase3Item(
+      'Control de picudos',
+      'Si / No',
+      '',
+    ),
   ];
 
   final TextEditingController observacionesGenerales = TextEditingController();

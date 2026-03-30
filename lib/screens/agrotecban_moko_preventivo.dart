@@ -1,6 +1,4 @@
-  int _cicloSeleccionadoMicro = 1;
 import 'package:flutter/material.dart';
-
 import '../services/offline_storage_service.dart';
 import '../services/plan_seguimiento_moko_service.dart';
 import 'agrotecban_moko_contencion.dart';
@@ -36,6 +34,7 @@ class _AgrotecbanMokoPreventivoScreenState
 
   static const List<int> _ciclosMicro = [1, 2, 3, 5, 6, 7, 8, 9, 10, 11, 12];
   static const List<int> _ciclosSar = [1, 2, 3, 5, 6];
+  int _cicloSeleccionadoMicro = 1;
 
   @override
   void initState() {
@@ -135,25 +134,12 @@ class _AgrotecbanMokoPreventivoScreenState
                           onChanged: (v) => setState(() => _cicloSeleccionadoMicro = v ?? 1),
                         ),
                         const SizedBox(height: 16),
-                        ..._microorganismos.map((producto) => _buildProductoCicloDropdown(producto)),
+                        ..._microorganismos.map((producto) => _buildProductoCicloDropdown(producto)).toList(),
                       ],
                     ),
                   ),
                 ),
-                  Widget _buildProductoCicloDropdown(_PreventivoProducto producto) {
-                    return Row(
-                      children: [
-                        Expanded(
-                          child: DropdownButtonFormField<String>(
-                            value: producto.dosisSeleccionada,
-                            decoration: InputDecoration(labelText: producto.nombre, border: const OutlineInputBorder()),
-                            items: producto.dosisOpciones.map((d) => DropdownMenuItem(value: d, child: Text(d))).toList(),
-                            onChanged: (v) => setState(() => producto.dosisSeleccionada = v),
-                          ),
-                        ),
-                      ],
-                    );
-                  }
+
                 const SizedBox(height: 16),
                 _buildProgramaSection(
                   titulo: 'PROGRAMA PREVENTIVO (SAR)',
@@ -369,12 +355,12 @@ class _AgrotecbanMokoPreventivoScreenState
     if (widget.focoId != null) {
       return widget.focoId;
     }
-    final dynamic clientId = widget.clientData?['id'];
-    if (clientId is int) {
-      return clientId;
+    final dynamic focoId = widget.clientData?['focoId'];
+    if (focoId is int) {
+      return focoId;
     }
-    if (clientId is String) {
-      return int.tryParse(clientId);
+    if (focoId is String) {
+      return int.tryParse(focoId);
     }
     return null;
   }
@@ -422,6 +408,26 @@ class _AgrotecbanMokoPreventivoScreenState
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildProductoCicloDropdown(_PreventivoProducto producto) {
+    return Row(
+      children: [
+        Expanded(
+          child: DropdownButtonFormField<String>(
+            value: producto.dosisSeleccionada,
+            decoration: InputDecoration(
+              labelText: producto.nombre,
+              border: const OutlineInputBorder(),
+            ),
+            items: producto.dosisOpciones
+                .map((d) => DropdownMenuItem(value: d, child: Text(d)))
+                .toList(),
+            onChanged: (v) => setState(() => producto.dosisSeleccionada = v),
+          ),
+        ),
+      ],
     );
   }
 

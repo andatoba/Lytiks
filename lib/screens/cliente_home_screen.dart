@@ -8,8 +8,8 @@ import '../services/client_service.dart';
 import '../services/hacienda_service.dart';
 import '../services/lote_service.dart';
 import 'sigatoka_audit_screen.dart';
-import 'agrotecban_moko_preventivo.dart';
 import 'audit_screen.dart';
+import 'moko_audit_screen.dart';
 
 class ClienteHomeScreen extends StatefulWidget {
   final Map<String, dynamic> userData;
@@ -899,7 +899,7 @@ class _ClienteHomeScreenState extends State<ClienteHomeScreen> {
             ),
             const SizedBox(height: 12),
             _buildOpcionIngreso(
-              'Registro Moko',
+              'Auditoría Moko',
               Icons.warning,
               colorMoko,
               () => _navegarNuevaEvaluacion('MOKO'),
@@ -992,9 +992,8 @@ class _ClienteHomeScreenState extends State<ClienteHomeScreen> {
         Navigator.push(
           context,
           MaterialPageRoute(
-            builder: (context) => AgrotecbanMokoPreventivoScreen(
-              clientData: clientDataForEval,
-            ),
+            builder: (context) =>
+                MokoAuditScreen(clientData: clientDataForEval),
           ),
         );
         break;

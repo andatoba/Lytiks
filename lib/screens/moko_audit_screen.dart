@@ -1,8 +1,8 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import '../services/client_service.dart';
-import 'agrotecban_moko_contencion.dart';
-import 'agrotecban_moko_preventivo.dart';
+import 'audit_screen.dart';
+import 'registro_moko_screen.dart';
 
 class MokoAuditScreen extends StatefulWidget {
   final Map<String, dynamic>? clientData;
@@ -93,18 +93,17 @@ class _MokoAuditScreenState extends State<MokoAuditScreen> {
           if (_selectedClient == null) ...[
             _buildClientRequiredNotice(),
           ] else ...[
-            // Flujo nuevo del módulo Moko: primero preventivo y luego contención.
             _buildIntuitiveButton(
-              title: 'Moko Preventivo',
-              subtitle: 'Paso 1: completar programa preventivo por ciclos',
-              icon: Icons.fact_check,
-              color: const Color(0xFF2E7D32),
+              title: 'Auditoría Moko',
+              subtitle: 'Registrar un nuevo foco de Moko con el flujo anterior',
+              icon: Icons.warning_amber_rounded,
+              color: const Color(0xFFE53E3E),
               onPressed: () {
                 Navigator.push(
                   context,
                   MaterialPageRoute(
                     builder: (context) =>
-                        const AgrotecbanMokoPreventivoScreen(),
+                        RegistroMokoScreen(clientData: _selectedClient),
                   ),
                 );
               },
@@ -112,16 +111,16 @@ class _MokoAuditScreenState extends State<MokoAuditScreen> {
             const SizedBox(height: 16),
 
             _buildIntuitiveButton(
-              title: 'Moko Contención',
-              subtitle: 'Paso 2: ejecutar auditoría de contención por foco',
-              icon: Icons.shield,
-              color: const Color(0xFFC62828),
+              title: 'Evaluación de Cultivos',
+              subtitle: 'Abrir la auditoría general antigua para este cliente',
+              icon: Icons.assignment,
+              color: const Color(0xFF4CAF50),
               onPressed: () {
                 Navigator.push(
                   context,
                   MaterialPageRoute(
                     builder: (context) =>
-                        const AgrotecbanMokoContencionScreen(),
+                        AuditScreen(clientData: _selectedClient),
                   ),
                 );
               },

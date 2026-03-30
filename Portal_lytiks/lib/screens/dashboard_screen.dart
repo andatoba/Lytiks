@@ -30,14 +30,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
       final user = widget.userData!['user'];
       _userRole = user?['rol']?.toString().toUpperCase() ?? '';
       _userName = '${user?['nombres'] ?? ''} ${user?['apellidos'] ?? ''}'.trim();
-      
-      // Validar que sea ADMIN
-      if (_userRole != 'ADMIN') {
+      // Solo redirigir si no es ADMIN ni CLIENTE
+      if (_userRole != 'ADMIN' && _userRole != 'CLIENTE') {
         WidgetsBinding.instance.addPostFrameCallback((_) {
           Navigator.of(context).pushReplacementNamed('/login');
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
-              content: Text('Acceso denegado. Solo administradores pueden acceder.'),
+              content: Text('Acceso denegado. Solo administradores o clientes pueden acceder.'),
               backgroundColor: Colors.red,
             ),
           );
