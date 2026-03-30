@@ -766,9 +766,11 @@ Future<void> _guardarContencion() async {
 
     final payload = {
       'focoId': focoId,
+      'clienteId': _resolveClienteId(),
       'numeroFoco': widget.numeroFoco ?? focoId,
       'aplicaciones': aplicaciones,
       'seguimiento': resumen,
+      'auditoria': _buildAuditoriaPayload(),
     };
 
     final response = await _registroService.guardarContencionCompleta(payload);
@@ -832,6 +834,44 @@ String _buildResumenObservaciones() {
     partes.add('Recomendaciones: $rec');
   }
   return partes.join(' | ');
+}
+
+Map<String, dynamic> _buildAuditoriaPayload() {
+  return {
+    'focoLabel': _form.focoLabel,
+    'bioseguridad': _form.bioseguridad.map(_serializeCheckItem).toList(),
+    'fase1': _form.fase1.map(_serializeCheckItem).toList(),
+    'fase2': _form.fase2.map(_serializeCheckItem).toList(),
+    'fase3': _form.fase3.map(_serializeFase3Item).toList(),
+    'observacionesGenerales': _form.observacionesGenerales.text.trim(),
+    'recomendaciones': _form.recomendaciones.text.trim(),
+  };
+}
+
+Map<String, dynamic> _serializeCheckItem(_CheckItem item) {
+  return {
+    'titulo': item.titulo,
+    'aplicar': item.aplicar,
+    'evaluacion': item.evaluacion.text.trim(),
+    'observacion': item.observacion.text.trim(),
+    'fotos': List<String>.from(item.fotos),
+  };
+}
+
+Map<String, dynamic> _serializeFase3Item(_Fase3Item item) {
+  return {
+    'parametro': item.parametro,
+    'extra1Label': item.extra1Label,
+    'extra2Label': item.extra2Label,
+    'tipo': item.tipo,
+    'detalle': item.detalle.text.trim(),
+    'recomendacion': item.recomendacion.text.trim(),
+    'extra1': item.extra1.text.trim(),
+    'extra2': item.extra2.text.trim(),
+    'productoSeleccionado': item.productoSeleccionado,
+    'dosisSeleccionada': item.dosisSeleccionada,
+    'fotos': List<String>.from(item.fotos),
+  };
 }
 
 int _isoWeek(DateTime date) {

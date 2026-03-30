@@ -395,6 +395,30 @@ class PlanSeguimientoMokoService {
     }
   }
 
+  Future<Map<String, dynamic>> guardarPreventivoCompleto(
+    Map<String, dynamic> payload,
+  ) async {
+    try {
+      final base = await baseUri;
+      final response = await http.post(
+        base.replace(path: '${base.path}/preventivo/guardar-completo'),
+        headers: {'Content-Type': 'application/json; charset=UTF-8'},
+        body: json.encode(payload),
+      );
+
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        return json.decode(utf8.decode(response.bodyBytes));
+      }
+
+      throw Exception(
+        'Error al guardar preventivo completo: ${response.statusCode}',
+      );
+    } catch (e) {
+      print('❌ Error al guardar preventivo completo: $e');
+      rethrow;
+    }
+  }
+
   /// Obtiene todas las configuraciones de un foco
   Future<List<Map<String, dynamic>>> getConfiguracionesByFoco(
       int focoId) async {

@@ -1,5 +1,7 @@
 package com.lytiks.backend.service;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.lytiks.backend.entity.*;
 import com.lytiks.backend.repository.*;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -26,6 +28,15 @@ public class PlanSeguimientoMokoService {
     
     @Autowired
     private EjecucionTareasMokoRepository ejecucionTareasRepository;
+
+    @Autowired
+    private ConfiguracionAplicacionRepository configuracionRepository;
+
+    @Autowired
+    private MokoPreventivoAuditoriaRepository mokoPreventivoAuditoriaRepository;
+
+    @Autowired
+    private ObjectMapper objectMapper;
     
     // =====================================================
     // MÉTODOS PARA PLANES/FASES
@@ -264,9 +275,6 @@ public class PlanSeguimientoMokoService {
     // MÉTODOS PARA CONFIGURACIONES DE APLICACIÓN
     // =====================================================
 
-    @Autowired
-    private ConfiguracionAplicacionRepository configuracionRepository;
-
     /**
      * Guarda o actualiza una configuración de aplicación
      */
@@ -351,5 +359,34 @@ public class PlanSeguimientoMokoService {
      */
     public Long contarConfiguracionesPendientes(Long focoId) {
         return configuracionRepository.countPendientesByFoco(focoId);
+    }
+
+    /**
+     * Guarda un snapshot completo del programa preventivo por foco.
+     */
+    @Transactional
+    public MokoPreventivoAuditoria guardarProgramaPreventivoCompleto(
+            Long focoId,
+            Integer numeroFoco,
+            LocalDateTime fechaInicioPlan,
+            Map<String, Object> payload) {
+        try {
+            String payloadJson = objectMapper.writeValueAsString(payload);
+            MokoPreventivoAuditoria auditoria = mokoPreventivoAuditoriaRepository
+                    .findTopByFocoIdOrderByCreatedAtDesc(focoId)
+                    .orElseGet(MokoPreventivoAuditoria::new);
+
+            auditoria.setFocoId(focoId);
+            auditoria.setNumeroFoco(numeroFoco);
+            auditoria.setFechaInicioPlan(fechaInicioPlan);
+            auditoria.setPayloadJson(payloadJson);
+            return mokoPreventivoAuditoriaRepository.save(auditoria);
+        } catch (JsonProcessingException e) {
+            throw new RuntimeException("No se pudo serializar el preventivo completo", e);
+        }
+    }
+
+    public Optional<MokoPreventivoAuditoria> getUltimoPreventivoPorFoco(Long focoId) {
+        return mokoPreventivoAuditoriaRepository.findTopByFocoIdOrderByCreatedAtDesc(focoId);
     }
 }

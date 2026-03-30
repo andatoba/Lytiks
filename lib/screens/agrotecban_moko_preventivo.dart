@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'dart:convert';
 import '../services/offline_storage_service.dart';
 import '../services/plan_seguimiento_moko_service.dart';
 import 'agrotecban_moko_contencion.dart';
@@ -35,6 +36,7 @@ class _AgrotecbanMokoPreventivoScreenState
   static const List<int> _ciclosMicro = [1, 2, 3, 5, 6, 7, 8, 9, 10, 11, 12];
   static const List<int> _ciclosSar = [1, 2, 3, 5, 6];
   int _cicloSeleccionadoMicro = 1;
+  int _cicloSeleccionadoSar = 1;
 
   @override
   void initState() {
@@ -42,11 +44,11 @@ class _AgrotecbanMokoPreventivoScreenState
     _fechaInicioPlan = DateTime(_now.year, _now.month, 1);
 
     _microorganismos = [
-      _PreventivoProducto('SAFERBACTER', ['250-500 gr', '2-4 lt', '5 kilos'], _ciclosMicro),
-      _PreventivoProducto('SAFERSOIL', ['250-500 gr', '2-4 lt', '5 kilos'], _ciclosMicro),
-      _PreventivoProducto('SAFERMIX', ['250-500 gr', '2-4 lt', '5 kilos'], _ciclosMicro),
-      _PreventivoProducto('GOLDEN', ['250-500 gr', '2-4 lt', '5 kilos'], _ciclosMicro),
-      _PreventivoProducto('PREBIOTIK', ['250-500 gr', '2-4 lt', '5 kilos'], _ciclosMicro),
+      _PreventivoProducto('SAFERBACTER', ['250 gr', '500 gr', '2-4 lt', '5 kilos'], _ciclosMicro),
+      _PreventivoProducto('SAFERSOIL', ['250 gr', '500 gr', '2-4 lt', '5 kilos'], _ciclosMicro),
+      _PreventivoProducto('SAFERMIX', ['250 gr', '500 gr', '2-4 lt', '5 kilos'], _ciclosMicro),
+      _PreventivoProducto('GOLDEN', ['250 gr', '500 gr', '2-4 lt', '5 kilos'], _ciclosMicro),
+      _PreventivoProducto('PREBIOTIK', ['250 gr', '500 gr', '2-4 lt', '5 kilos'], _ciclosMicro),
     ];
 
     _sar = [
@@ -123,30 +125,75 @@ class _AgrotecbanMokoPreventivoScreenState
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text('PROGRAMA PREVENTIVO (INOCULACION MICROORGANISMOS)', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
+                        const Text('MICROORGANISMOS', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
                         const SizedBox(height: 4),
                         const Text('Seleccione el ciclo y registre los productos aplicados.', style: TextStyle(color: Colors.grey, fontSize: 12)),
                         const SizedBox(height: 10),
                         DropdownButtonFormField<int>(
                           value: _cicloSeleccionadoMicro,
                           decoration: const InputDecoration(labelText: 'Ciclo', border: OutlineInputBorder()),
-                          items: List.generate(12, (i) => DropdownMenuItem(value: i+1, child: Text('Ciclo ${i+1}'))),
+                          items: _ciclosMicro
+                              .map((ciclo) => DropdownMenuItem(value: ciclo, child: Text('Ciclo $ciclo')))
+                              .toList(),
                           onChanged: (v) => setState(() => _cicloSeleccionadoMicro = v ?? 1),
                         ),
                         const SizedBox(height: 16),
-                        ..._microorganismos.map((producto) => _buildProductoCicloDropdown(producto)).toList(),
+                        ..._microorganismos
+                            .map((producto) => _buildProductoCicloDropdown(producto, _cicloSeleccionadoMicro))
+                            .toList(),
                       ],
                     ),
                   ),
                 ),
 
                 const SizedBox(height: 16),
-                _buildProgramaSection(
-                  titulo: 'PROGRAMA PREVENTIVO (SAR)',
-                  subtitulo:
-                      'Checklist bimestral: mismas validaciones de cumplimiento, con alerta por atraso.',
-                  productos: _sar,
-                  frecuenciaMeses: 2,
+                Card(
+                  elevation: 1,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.all(12),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'SAR',
+                          style: TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        const Text(
+                          'Seleccione el ciclo y registre las dosis para todos los productos SAR.',
+                          style: TextStyle(color: Colors.grey, fontSize: 12),
+                        ),
+                        const SizedBox(height: 10),
+                        DropdownButtonFormField<int>(
+                          value: _cicloSeleccionadoSar,
+                          decoration: const InputDecoration(
+                            labelText: 'Ciclo',
+                            border: OutlineInputBorder(),
+                          ),
+                          items: _ciclosSar
+                              .map(
+                                (ciclo) => DropdownMenuItem(
+                                  value: ciclo,
+                                  child: Text('Ciclo $ciclo'),
+                                ),
+                              )
+                              .toList(),
+                          onChanged: (v) =>
+                              setState(() => _cicloSeleccionadoSar = v ?? 1),
+                        ),
+                        const SizedBox(height: 16),
+                        ..._sar
+                            .map((producto) => _buildProductoCicloDropdown(producto, _cicloSeleccionadoSar))
+                            .toList(),
+                      ],
+                    ),
+                  ),
                 ),
               ],
             ),
@@ -229,13 +276,13 @@ class _AgrotecbanMokoPreventivoScreenState
           if (generatedId == tareaId) {
             producto.cumplimiento[ciclo] = completado;
             final observaciones = (config['observaciones'] ?? '').toString();
-            if (observaciones.isNotEmpty) {
-              producto.detalleController.text = observaciones;
-            }
+            _aplicarObservacionesGuardadas(producto, ciclo, observaciones);
           }
         }
       }
     }
+
+    _autoseleccionarCiclosPendientes();
 
     if (mounted) {
       setState(() {});
@@ -286,7 +333,7 @@ class _AgrotecbanMokoPreventivoScreenState
             'recordatorio': '08:00',
             'completado': completado,
             'fechaCreacion': nowIso,
-            'observaciones': producto.detalleController.text.trim(),
+            'observaciones': _buildObservaciones(producto, ciclo),
           };
 
           configuraciones.add(configuracion);
@@ -307,11 +354,19 @@ class _AgrotecbanMokoPreventivoScreenState
               .guardarConfiguracionesAplicacionBulk(configuraciones);
           totalServidor = (response['total'] as num?)?.toInt() ?? 0;
         } catch (_) {}
+
+        try {
+          await _service.guardarPreventivoCompleto(
+            _buildPreventivoPayload(focoId),
+          );
+        } catch (_) {}
       }
 
       if (!mounted) {
         return;
       }
+
+      setState(_autoseleccionarCiclosPendientes);
 
       final mensaje = focoId > 0
           ? 'Guardado: $totalGuardadas configuraciones, $totalServidor sincronizadas en servidor.'
@@ -411,23 +466,68 @@ class _AgrotecbanMokoPreventivoScreenState
     );
   }
 
-  Widget _buildProductoCicloDropdown(_PreventivoProducto producto) {
-    return Row(
-      children: [
-        Expanded(
-          child: DropdownButtonFormField<String>(
-            value: producto.dosisSeleccionada,
-            decoration: InputDecoration(
-              labelText: producto.nombre,
-              border: const OutlineInputBorder(),
+  Widget _buildProductoCicloDropdown(_PreventivoProducto producto, int ciclo) {
+    final checked = producto.cumplimiento[ciclo] ?? false;
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Row(
+        children: [
+          Expanded(
+            child: DropdownButtonFormField<String>(
+              value: producto.dosisPorCiclo[ciclo],
+              decoration: InputDecoration(
+                labelText: '${producto.nombre} - Ciclo $ciclo',
+                border: const OutlineInputBorder(),
+                helperText: checked ? 'Ciclo completado' : 'Ciclo pendiente',
+              ),
+              items: producto.dosisOpciones
+                  .map((d) => DropdownMenuItem(value: d, child: Text(d)))
+                  .toList(),
+              onChanged: (v) => setState(() => producto.dosisPorCiclo[ciclo] = v),
             ),
-            items: producto.dosisOpciones
-                .map((d) => DropdownMenuItem(value: d, child: Text(d)))
-                .toList(),
-            onChanged: (v) => setState(() => producto.dosisSeleccionada = v),
           ),
-        ),
-      ],
+          const SizedBox(width: 8),
+          InkWell(
+            onTap: () {
+              setState(() {
+                final nextValue = !(producto.cumplimiento[ciclo] ?? false);
+                producto.cumplimiento[ciclo] = nextValue;
+                producto.fechas[ciclo] = nextValue ? DateTime.now() : null;
+                _autoseleccionarCiclosPendientes();
+              });
+            },
+            borderRadius: BorderRadius.circular(12),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+              decoration: BoxDecoration(
+                color: checked ? const Color(0xFFDCF6E5) : const Color(0xFFF4F4F4),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: checked ? const Color(0xFF0F7B3C) : Colors.grey.shade400,
+                ),
+              ),
+              child: Column(
+                children: [
+                  Icon(
+                    checked ? Icons.check_circle : Icons.radio_button_unchecked,
+                    color: checked ? const Color(0xFF0F7B3C) : Colors.grey.shade600,
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    checked ? 'Hecho' : 'Pendiente',
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                      color: checked ? const Color(0xFF0F7B3C) : Colors.grey.shade700,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -471,6 +571,7 @@ class _AgrotecbanMokoPreventivoScreenState
     required int frecuenciaMeses,
   }) {
     final proximoPendiente = _nextPendingCycle(producto);
+    final cicloDosis = proximoPendiente ?? producto.ciclos.first;
 
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
@@ -488,7 +589,7 @@ class _AgrotecbanMokoPreventivoScreenState
             const Text('Dosis: ', style: TextStyle(fontSize: 12)),
             Expanded(
               child: DropdownButton<String>(
-                value: producto.dosisSeleccionada,
+                value: producto.dosisPorCiclo[cicloDosis],
                 items: producto.dosisOpciones
                     .map((d) => DropdownMenuItem<String>(
                           value: d,
@@ -497,7 +598,7 @@ class _AgrotecbanMokoPreventivoScreenState
                     .toList(),
                 onChanged: (value) {
                   setState(() {
-                    producto.dosisSeleccionada = value;
+                    producto.dosisPorCiclo[cicloDosis] = value;
                   });
                 },
                 isExpanded: true,
@@ -657,6 +758,93 @@ class _AgrotecbanMokoPreventivoScreenState
     return null;
   }
 
+  void _autoseleccionarCiclosPendientes() {
+    final siguienteMicro = _nextPendingCycleForGroup(_microorganismos, _ciclosMicro);
+    final siguienteSar = _nextPendingCycleForGroup(_sar, _ciclosSar);
+
+    if (siguienteMicro != null) {
+      _cicloSeleccionadoMicro = siguienteMicro;
+    }
+    if (siguienteSar != null) {
+      _cicloSeleccionadoSar = siguienteSar;
+    }
+  }
+
+  int? _nextPendingCycleForGroup(
+    List<_PreventivoProducto> productos,
+    List<int> ciclos,
+  ) {
+    for (final ciclo in ciclos) {
+      final cicloCompleto = productos.every(
+        (producto) => producto.cumplimiento[ciclo] == true,
+      );
+      if (!cicloCompleto) {
+        return ciclo;
+      }
+    }
+    return null;
+  }
+
+  String _buildObservaciones(_PreventivoProducto producto, int ciclo) {
+    return jsonEncode({
+      'dosis': producto.dosisPorCiclo[ciclo],
+      'detalle': producto.detalleController.text.trim(),
+    });
+  }
+
+  void _aplicarObservacionesGuardadas(
+    _PreventivoProducto producto,
+    int ciclo,
+    String observaciones,
+  ) {
+    if (observaciones.isEmpty) {
+      return;
+    }
+
+    try {
+      final decoded = jsonDecode(observaciones);
+      if (decoded is Map<String, dynamic>) {
+        final dosis = decoded['dosis']?.toString();
+        final detalle = decoded['detalle']?.toString() ?? '';
+
+        if (dosis != null && dosis.isNotEmpty) {
+          producto.dosisPorCiclo[ciclo] = dosis;
+        }
+        if (detalle.isNotEmpty) {
+          producto.detalleController.text = detalle;
+        }
+        return;
+      }
+    } catch (_) {}
+
+    producto.detalleController.text = observaciones;
+  }
+
+  Map<String, dynamic> _buildPreventivoPayload(int focoId) {
+    return {
+      'focoId': focoId,
+      'numeroFoco': widget.numeroFoco,
+      'fechaInicioPlan': _fechaInicioPlan.toIso8601String(),
+      'cicloSeleccionadoMicro': _cicloSeleccionadoMicro,
+      'cicloSeleccionadoSar': _cicloSeleccionadoSar,
+      'microorganismos': _microorganismos.map(_serializeProducto).toList(),
+      'sar': _sar.map(_serializeProducto).toList(),
+    };
+  }
+
+  Map<String, dynamic> _serializeProducto(_PreventivoProducto producto) {
+    return {
+      'nombre': producto.nombre,
+      'ciclos': producto.ciclos,
+      'dosisPorCiclo': producto.dosisPorCiclo,
+      'cumplimiento': producto.cumplimiento,
+      'fechas': producto.fechas.map(
+        (key, value) => MapEntry(key.toString(), value?.toIso8601String()),
+      ),
+      'detalle': producto.detalleController.text.trim(),
+    };
+  }
+
   bool _isCicloVencido({
     required int ciclo,
     required bool checked,
@@ -690,18 +878,19 @@ class _AgrotecbanMokoPreventivoScreenState
 
 class _PreventivoProducto {
   final String nombre;
-  String? dosisSeleccionada;
   final List<String> dosisOpciones;
   final List<int> ciclos;
   final Map<int, bool> cumplimiento = {};
   final Map<int, DateTime?> fechas = {};
+  final Map<int, String?> dosisPorCiclo = {};
   final TextEditingController detalleController = TextEditingController();
 
   _PreventivoProducto(this.nombre, this.dosisOpciones, this.ciclos, {String? dosisInicial}) {
-    dosisSeleccionada = dosisInicial ?? (dosisOpciones.isNotEmpty ? dosisOpciones[0] : null);
+    final dosisDefault = dosisInicial ?? (dosisOpciones.isNotEmpty ? dosisOpciones[0] : null);
     for (final ciclo in ciclos) {
       cumplimiento[ciclo] = false;
       fechas[ciclo] = null;
+      dosisPorCiclo[ciclo] = dosisDefault;
     }
   }
 

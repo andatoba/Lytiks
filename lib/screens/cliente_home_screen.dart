@@ -7,9 +7,9 @@ import '../services/auth_service.dart';
 import '../services/client_service.dart';
 import '../services/hacienda_service.dart';
 import '../services/lote_service.dart';
+import 'agrotecban_moko_midle.dart';
 import 'sigatoka_audit_screen.dart';
 import 'audit_screen.dart';
-import 'moko_audit_screen.dart';
 
 class ClienteHomeScreen extends StatefulWidget {
   final Map<String, dynamic> userData;
@@ -993,7 +993,7 @@ class _ClienteHomeScreenState extends State<ClienteHomeScreen> {
           context,
           MaterialPageRoute(
             builder: (context) =>
-                MokoAuditScreen(clientData: clientDataForEval),
+                AgrotecbanMokoMidleScreen(clientData: clientDataForEval),
           ),
         );
         break;

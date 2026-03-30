@@ -6,8 +6,8 @@ import 'package:connectivity_plus/connectivity_plus.dart';
 import '../services/sync_service.dart';
 import '../services/client_service.dart';
 import '../widgets/dynamic_logo_widget.dart';
+import 'agrotecban_moko_midle.dart';
 import 'audit_screen.dart';
-import 'agrotecban_moko_preventivo.dart';
 import 'sigatoka_audit_screen.dart';
 import 'plagas_screen.dart';
 import 'audit_consultation_screen.dart';
@@ -679,7 +679,7 @@ class _InicioTabState extends State<InicioTab> {
                     Navigator.push(
                       context,
                       MaterialPageRoute(
-                        builder: (context) => AgrotecbanMokoPreventivoScreen(
+                        builder: (context) => AgrotecbanMokoMidleScreen(
                           clientData: _selectedClient,
                         ),
                       ),

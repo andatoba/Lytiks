@@ -7,6 +7,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -406,6 +407,97 @@ public class PlanSeguimientoMokoController {
             Map<String, Object> error = new HashMap<>();
             error.put("error", "Error al contar configuraciones: " + e.getMessage());
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(error);
+        }
+    }
+
+    @PostMapping("/preventivo/guardar-completo")
+    public ResponseEntity<Map<String, Object>> guardarPreventivoCompleto(
+            @RequestBody Map<String, Object> payload) {
+        try {
+            Long focoId = toLong(payload.get("focoId"));
+            Integer numeroFoco = toInteger(payload.get("numeroFoco"));
+            LocalDateTime fechaInicioPlan = toDateTime(payload.get("fechaInicioPlan"));
+
+            if (focoId == null) {
+                Map<String, Object> error = new HashMap<>();
+                error.put("success", false);
+                error.put("error", "focoId es obligatorio");
+                return ResponseEntity.badRequest().body(error);
+            }
+
+            MokoPreventivoAuditoria auditoria = planService.guardarProgramaPreventivoCompleto(
+                    focoId,
+                    numeroFoco,
+                    fechaInicioPlan,
+                    payload
+            );
+
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", true);
+            response.put("message", "Programa preventivo guardado correctamente");
+            response.put("auditoria", auditoria);
+            return ResponseEntity.status(HttpStatus.CREATED).body(response);
+        } catch (Exception e) {
+            Map<String, Object> error = new HashMap<>();
+            error.put("success", false);
+            error.put("error", "Error al guardar preventivo completo: " + e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(error);
+        }
+    }
+
+    @GetMapping("/foco/{focoId}/preventivo/ultima-auditoria")
+    public ResponseEntity<Map<String, Object>> getUltimaAuditoriaPreventivo(@PathVariable Long focoId) {
+        return planService.getUltimoPreventivoPorFoco(focoId)
+                .<ResponseEntity<Map<String, Object>>>map(auditoria -> {
+                    Map<String, Object> response = new HashMap<>();
+                    response.put("success", true);
+                    response.put("auditoria", auditoria);
+                    return ResponseEntity.ok(response);
+                })
+                .orElseGet(() -> {
+                    Map<String, Object> response = new HashMap<>();
+                    response.put("success", false);
+                    response.put("message", "No existe auditoría preventiva para el foco");
+                    return ResponseEntity.status(HttpStatus.NOT_FOUND).body(response);
+                });
+    }
+
+    private Long toLong(Object value) {
+        if (value == null) {
+            return null;
+        }
+        if (value instanceof Number number) {
+            return number.longValue();
+        }
+        try {
+            return Long.parseLong(value.toString());
+        } catch (NumberFormatException e) {
+            return null;
+        }
+    }
+
+    private Integer toInteger(Object value) {
+        if (value == null) {
+            return null;
+        }
+        if (value instanceof Number number) {
+            return number.intValue();
+        }
+        try {
+            return Integer.parseInt(value.toString());
+        } catch (NumberFormatException e) {
+            return null;
+        }
+    }
+
+    private LocalDateTime toDateTime(Object value) {
+        if (value == null) {
+            return null;
+        }
+        try {
+            return LocalDateTime.parse(value.toString());
+        } catch (Exception e) {
+            return null;
         }
     }
 }

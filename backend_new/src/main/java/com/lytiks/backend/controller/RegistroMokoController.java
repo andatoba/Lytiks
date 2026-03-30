@@ -1,5 +1,7 @@
 package com.lytiks.backend.controller;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.lytiks.backend.entity.RegistroMoko;
 import com.lytiks.backend.entity.Client;
 import com.lytiks.backend.repository.ClientRepository;
@@ -7,6 +9,7 @@ import com.lytiks.backend.entity.Sintoma;
 import com.lytiks.backend.entity.ProductoContencion;
 import com.lytiks.backend.entity.Producto;
 import com.lytiks.backend.entity.Aplicacion;
+import com.lytiks.backend.entity.MokoContencionAuditoria;
 import com.lytiks.backend.entity.SeguimientoAplicacion;
 import com.lytiks.backend.entity.SeguimientoMoko;
 import com.lytiks.backend.service.RegistroMokoService;
@@ -16,6 +19,7 @@ import com.lytiks.backend.service.SeguimientoMokoService;
 import com.lytiks.backend.repository.ProductoContencionRepository;
 import com.lytiks.backend.repository.ProductoRepository;
 import com.lytiks.backend.repository.AplicacionRepository;
+import com.lytiks.backend.repository.MokoContencionAuditoriaRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -64,6 +68,12 @@ public class RegistroMokoController {
 
     @Autowired
     private SeguimientoMokoService seguimientoMokoService;
+
+    @Autowired
+    private MokoContencionAuditoriaRepository mokoContencionAuditoriaRepository;
+
+    @Autowired
+    private ObjectMapper objectMapper;
 
     private static final String UPLOAD_DIR = "photos/moko/";
 
@@ -707,12 +717,19 @@ public class RegistroMokoController {
                 seguimientoGuardado = seguimientoMokoService.save(seguimiento);
             }
 
+            MokoContencionAuditoria auditoriaGuardada = guardarAuditoriaContencion(
+                    focoId,
+                    numeroFoco,
+                    payload
+            );
+
             Map<String, Object> response = new HashMap<>();
             response.put("success", true);
             response.put("message", "Contención guardada correctamente");
             response.put("aplicacionesGuardadas", aplicacionesGuardadas);
             response.put("aplicacionesIds", aplicacionesIds);
             response.put("seguimientoId", seguimientoGuardado != null ? seguimientoGuardado.getId() : null);
+            response.put("auditoriaId", auditoriaGuardada.getId());
             return ResponseEntity.status(HttpStatus.CREATED).body(response);
         } catch (Exception e) {
             Map<String, Object> error = new HashMap<>();
@@ -720,6 +737,50 @@ public class RegistroMokoController {
             error.put("error", "Error al guardar contención completa: " + e.getMessage());
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(error);
         }
+    }
+
+    @GetMapping("/contencion/foco/{focoId}/ultima-auditoria")
+    public ResponseEntity<Map<String, Object>> getUltimaAuditoriaContencion(@PathVariable Long focoId) {
+        return mokoContencionAuditoriaRepository.findTopByFocoIdOrderByCreatedAtDesc(focoId)
+                .<ResponseEntity<Map<String, Object>>>map(auditoria -> {
+                    Map<String, Object> response = new HashMap<>();
+                    response.put("success", true);
+                    response.put("auditoria", auditoria);
+                    return ResponseEntity.ok(response);
+                })
+                .orElseGet(() -> {
+                    Map<String, Object> response = new HashMap<>();
+                    response.put("success", false);
+                    response.put("message", "No existe auditoría de contención para el foco");
+                    return ResponseEntity.status(HttpStatus.NOT_FOUND).body(response);
+                });
+    }
+
+    private MokoContencionAuditoria guardarAuditoriaContencion(
+            Long focoId,
+            Integer numeroFoco,
+            Map<String, Object> payload) throws JsonProcessingException {
+        MokoContencionAuditoria auditoria = mokoContencionAuditoriaRepository
+                .findTopByFocoIdOrderByCreatedAtDesc(focoId)
+                .orElseGet(MokoContencionAuditoria::new);
+
+        auditoria.setFocoId(focoId);
+        auditoria.setNumeroFoco(numeroFoco);
+        auditoria.setClienteId(toLong(payload.get("clienteId")));
+
+        Object auditoriaRaw = payload.get("auditoria");
+        if (auditoriaRaw instanceof Map<?, ?> auditoriaMapRaw) {
+            @SuppressWarnings("unchecked")
+            Map<String, Object> auditoriaMap = (Map<String, Object>) auditoriaMapRaw;
+            auditoria.setObservacionesGenerales(toStringValue(auditoriaMap.get("observacionesGenerales")));
+            auditoria.setRecomendaciones(toStringValue(auditoriaMap.get("recomendaciones")));
+        } else {
+            auditoria.setObservacionesGenerales(null);
+            auditoria.setRecomendaciones(null);
+        }
+
+        auditoria.setPayloadJson(objectMapper.writeValueAsString(payload));
+        return mokoContencionAuditoriaRepository.save(auditoria);
     }
 
     private String toStringValue(Object value) {
