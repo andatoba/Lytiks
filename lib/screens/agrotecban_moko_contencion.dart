@@ -703,11 +703,19 @@ Future<void> _guardarContencion() async {
   }
 
   try {
-    final focoId = _resolveFocoId();
+    int? focoId = _resolveFocoId();
+    int? numeroFoco = widget.numeroFoco;
+
+    // Si no hay focoId, obtener el próximo número de foco del servidor
     if (focoId == null || focoId <= 0) {
-      throw Exception(
-        'No hay un foco registrado asociado. Abra esta pantalla desde un foco existente.',
-      );
+      try {
+        final nextFoco = await _registroService.getNextFocoNumber();
+        numeroFoco = nextFoco;
+        // focoId se dejará nulo; el backend creará el registro automáticamente
+      } catch (_) {
+        // Si falla la conexión, usar un timestamp como número temporal
+        numeroFoco ??= DateTime.now().millisecondsSinceEpoch % 100000;
+      }
     }
 
     final clienteId = _resolveClienteId();
@@ -777,9 +785,11 @@ Future<void> _guardarContencion() async {
         ) ??
         750;
 
+    final efectivoNumeroFoco = numeroFoco ?? focoId ?? 0;
+
     final resumen = {
       'focoId': focoId,
-      'numeroFoco': widget.numeroFoco ?? focoId,
+      'numeroFoco': efectivoNumeroFoco,
       'semanaInicio': _isoWeek(DateTime.now()),
       'plantasAfectadas': plantasAfectadas,
       'plantasInyectadas': plantasInyectadas,
@@ -814,9 +824,9 @@ Future<void> _guardarContencion() async {
     };
 
     final payload = {
-      'focoId': focoId,
+      'focoId': focoId ?? 0,
       'clienteId': clienteId,
-      'numeroFoco': widget.numeroFoco ?? focoId,
+      'numeroFoco': efectivoNumeroFoco,
       'aplicaciones': aplicaciones,
       'seguimiento': resumen,
       'auditoria': _buildAuditoriaPayload(),
@@ -824,8 +834,8 @@ Future<void> _guardarContencion() async {
 
     // 1. GUARDAR LOCALMENTE PRIMERO
     await _offlineStorage.guardarMokoContencion({
-      'focoId': focoId,
-      'numeroFoco': widget.numeroFoco ?? focoId,
+      'focoId': focoId ?? 0,
+      'numeroFoco': efectivoNumeroFoco,
       'clienteId': clienteId,
       'aplicaciones': aplicaciones,
       'seguimiento': resumen,
