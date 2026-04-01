@@ -8,7 +8,7 @@ import 'package:flutter/foundation.dart';
 class OfflineStorageService {
   static Database? _database;
   static const String _databaseName = 'lytiks_offline.db';
-  static const int _databaseVersion = 7;
+  static const int _databaseVersion = 8;
 
   // Singleton
   static final OfflineStorageService _instance =
@@ -156,6 +156,22 @@ class OfflineStorageService {
       ''');
       debugPrint('✅ Tabla configuraciones_aplicacion añadida en upgrade');
     }
+    if (oldVersion < 8) {
+      // Crear tabla para contencion Moko pendiente
+      await db.execute('''
+        CREATE TABLE IF NOT EXISTS pending_moko_contencion (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          foco_id INTEGER,
+          numero_foco INTEGER,
+          cliente_id INTEGER,
+          contencion_data TEXT,
+          auditoria_data TEXT,
+          created_at TEXT,
+          is_synced INTEGER DEFAULT 0
+        )
+      ''');
+      debugPrint('✅ Tabla pending_moko_contencion añadida en upgrade');
+    }
   }
 
   Future<void> _onCreate(Database db, int version) async {
@@ -201,6 +217,21 @@ class OfflineStorageService {
         )
       ''');
       debugPrint('✅ Tabla pending_moko_audits creada');
+
+      // Tabla para contencion Moko pendiente
+      await db.execute('''
+        CREATE TABLE pending_moko_contencion (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          foco_id INTEGER,
+          numero_foco INTEGER,
+          cliente_id INTEGER,
+          contencion_data TEXT,
+          auditoria_data TEXT,
+          created_at TEXT,
+          is_synced INTEGER DEFAULT 0
+        )
+      ''');
+      debugPrint('✅ Tabla pending_moko_contencion creada');
 
       // Tabla para plan de seguimiento Moko pendiente
       await db.execute('''
@@ -705,6 +736,7 @@ class OfflineStorageService {
     final db = await database;
     await db.delete('pending_audits');
     await db.delete('pending_moko_audits');
+    await db.delete('pending_moko_contencion');
     await db.delete('pending_plan_moko_updates');
     await db.delete('pending_sigatoka_audits');
     await db.delete('pending_clients');
@@ -850,6 +882,69 @@ class OfflineStorageService {
       debugPrint('✅ Configuración eliminada: $id');
     } catch (e) {
       debugPrint('❌ Error eliminando configuración: $e');
+      rethrow;
+    }
+  }
+
+  // MOKO CONTENCION OFFLINE
+  Future<int> guardarMokoContencion(Map<String, dynamic> data) async {
+    try {
+      final db = await database;
+      
+      debugPrint('💾 Guardando Moko Contencion localmente: focoId=${data['focoId']}, numeroFoco=${data['numeroFoco']}');
+      
+      final id = await db.insert(
+        'pending_moko_contencion',
+        {
+          'foco_id': data['focoId'],
+          'numero_foco': data['numeroFoco'],
+          'cliente_id': data['clienteId'],
+          'contencion_data': jsonEncode(data),
+          'auditoria_data': jsonEncode(data['auditoria'] ?? {}),
+          'created_at': DateTime.now().toIso8601String(),
+          'is_synced': 0,
+        },
+      );
+      
+      debugPrint('✅ Contencion guardada localmente con ID: $id');
+      return id;
+    } catch (e) {
+      debugPrint('❌ Error guardando Moko Contencion: $e');
+      rethrow;
+    }
+  }
+
+  Future<List<Map<String, dynamic>>> obtenerMokoContencionPendiente() async {
+    try {
+      final db = await database;
+      
+      final registros = await db.query(
+        'pending_moko_contencion',
+        where: 'is_synced = ?',
+        whereArgs: [0],
+        orderBy: 'created_at DESC',
+      );
+      
+      debugPrint('📋 Moko Contencion pendientes: ${registros.length}');
+      return registros;
+    } catch (e) {
+      debugPrint('❌ Error obteniendo Moko Contencion pendiente: $e');
+      return [];
+    }
+  }
+
+  Future<void> marcarMokoContencionSincronizado(int id) async {
+    try {
+      final db = await database;
+      await db.update(
+        'pending_moko_contencion',
+        {'is_synced': 1},
+        where: 'id = ?',
+        whereArgs: [id],
+      );
+      debugPrint('✅ Moko Contencion marcada como sincronizada: $id');
+    } catch (e) {
+      debugPrint('❌ Error marcando Moko Contencion sincronizada: $e');
       rethrow;
     }
   }

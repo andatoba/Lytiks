@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'dart:convert';
 import '../services/offline_storage_service.dart';
 import '../services/plan_seguimiento_moko_service.dart';
-import 'agrotecban_moko_contencion.dart';
 
 class AgrotecbanMokoPreventivoScreen extends StatefulWidget {
   final int? focoId;
@@ -387,16 +386,7 @@ class _AgrotecbanMokoPreventivoScreenState
       );
 
       if (continuar) {
-        await Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (context) => AgrotecbanMokoContencionScreen(
-              focoId: _resolveFocoId(),
-              numeroFoco: widget.numeroFoco,
-              clientData: widget.clientData,
-            ),
-          ),
-        );
+        Navigator.pop(context);
       }
     } catch (e) {
       if (mounted) {

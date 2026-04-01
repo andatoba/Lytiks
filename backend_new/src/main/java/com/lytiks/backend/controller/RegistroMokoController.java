@@ -629,8 +629,22 @@ public class RegistroMokoController {
                 return buildErrorResponse(HttpStatus.BAD_REQUEST, "focoId es obligatorio y debe ser mayor a cero");
             }
 
-            if (registroMokoService.getRegistroById(focoId).isEmpty()) {
-                return buildErrorResponse(HttpStatus.NOT_FOUND, "No existe un foco registrado con id " + focoId);
+            // Si el foco no existe, crearlo automáticamente con auto-increment
+            Optional<RegistroMoko> registroExistente = registroMokoService.getRegistroById(focoId);
+            if (registroExistente.isEmpty() && numeroFoco != null && numeroFoco > 0) {
+                // Buscar por numeroFoco también
+                registroExistente = registroMokoService.getRegistroByNumeroFoco(numeroFoco);
+            }
+            
+            if (registroExistente.isEmpty()) {
+                RegistroMoko nuevoRegistro = new RegistroMoko();
+                nuevoRegistro.setNumeroFoco(numeroFoco != null ? numeroFoco : focoId.intValue());
+                nuevoRegistro.setClienteId(toLong(payload.get("clienteId")) != null ? toLong(payload.get("clienteId")) : 0L);
+                nuevoRegistro.setFechaDeteccion(LocalDateTime.now());
+                nuevoRegistro.setPlantasAfectadas(0);
+                RegistroMoko registroGuardado = registroMokoService.save(nuevoRegistro);
+                // Actualizar focoId con el ID que generó la BD
+                focoId = registroGuardado.getId();
             }
 
             int aplicacionesGuardadas = 0;

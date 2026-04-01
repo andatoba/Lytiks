@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../services/registro_moko_service.dart';
+import '../services/offline_storage_service.dart';
 
 class AgrotecbanMokoContencionScreen extends StatefulWidget {
   final int? focoId;
@@ -24,6 +25,7 @@ class _AgrotecbanMokoContencionScreenState
     extends State<AgrotecbanMokoContencionScreen> {
   final ImagePicker _picker = ImagePicker();
   final RegistroMokoService _registroService = RegistroMokoService();
+  final OfflineStorageService _offlineStorage = OfflineStorageService();
   final List<_ContencionFormulario> _formularios = [];
   List<Map<String, dynamic>> _productos = [];
   int _indiceActual = 0;
@@ -820,25 +822,31 @@ Future<void> _guardarContencion() async {
       'auditoria': _buildAuditoriaPayload(),
     };
 
-    final response = await _registroService.guardarContencionCompleta(payload);
-    final aplicacionesGuardadas =
-        (response['aplicacionesGuardadas'] as num?)?.toInt() ??
-            aplicaciones.length;
+    // 1. GUARDAR LOCALMENTE PRIMERO
+    await _offlineStorage.guardarMokoContencion({
+      'focoId': focoId,
+      'numeroFoco': widget.numeroFoco ?? focoId,
+      'clienteId': clienteId,
+      'payloadJson': payload.toString(),
+      'timestamp': DateTime.now().toIso8601String(),
+    });
 
+    // 2. MOSTRAR ÉXITO LOCAL
     if (!mounted) {
       return;
     }
 
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            'Contencion guardada. Aplicaciones enviadas: $aplicacionesGuardadas',
-          ),
-          backgroundColor: Colors.green,
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          'Guardado localmente: ${aplicaciones.length} aplicaciones registradas.',
         ),
-      );
-    }
+        backgroundColor: Colors.green,
+      ),
+    );
+
+    // 3. SINCRONIZAR AL SERVIDOR EN BACKGROUND (sin bloquear)
+    _sincronizarContencionAlServidor(payload);
   } catch (e) {
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -931,6 +939,38 @@ int _isoWeek(DateTime date) {
       1;
   return ((dayOfYear - date.weekday + 10) / 7).floor();
 }
+
+/// Sincroniza el contencion al servidor en background (sin bloquear)
+void _sincronizarContencionAlServidor(Map<String, dynamic> payload) {
+  // Ejecutar en background sin await
+  _registroService.guardarContencionCompleta(payload).then((response) {
+    if (mounted) {
+      final aplicacionesSync =
+          (response['aplicacionesGuardadas'] as num?)?.toInt() ?? 0;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Sincronizado: $aplicacionesSync aplicaciones enviadas al servidor.',
+          ),
+          backgroundColor: Colors.blue,
+          duration: const Duration(seconds: 3),
+        ),
+      );
+    }
+  }).catchError((e) {
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'No se pudo sincronizar al servidor: $e\nLos datos están guardados localmente.',
+          ),
+          backgroundColor: Colors.orange,
+          duration: const Duration(seconds: 5),
+        ),
+      );
+    }
+  });
+}
 }
 
 abstract class _ConFoto {
@@ -970,7 +1010,6 @@ class _Fase3Item extends _ConFoto {
     recomendacion.dispose();
     extra1.dispose();
     extra2.dispose();
-  }
 }
 
 class _ContencionFormulario {

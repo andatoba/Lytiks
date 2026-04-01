@@ -6,6 +6,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
+import java.util.Optional;
 
 @Repository
 public interface RegistroMokoRepository extends JpaRepository<RegistroMoko, Long> {
@@ -40,6 +41,8 @@ public interface RegistroMokoRepository extends JpaRepository<RegistroMoko, Long
     List<RegistroMoko> findTopNByOrderByFechaCreacionDesc(int limite);
     
     List<RegistroMoko> findByFotoPathIsNotNullOrderByFechaCreacionDesc();
+    
+    Optional<RegistroMoko> findByNumeroFoco(Integer numeroFoco);
     
     @Query("SELECT COUNT(r) FROM RegistroMoko r WHERE DATE(r.fechaDeteccion) = CURRENT_DATE")
     Long countRegistrosHoy();
