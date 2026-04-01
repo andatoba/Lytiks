@@ -55,6 +55,18 @@ public ResponseEntity<Map<String, Object>> createAudit(@RequestBody Map<String, 
         audit.setTecnicoId(auditData.get("tecnicoId") != null ? Long.valueOf(auditData.get("tecnicoId").toString()) : null);
         audit.setEstado(auditData.get("estado") != null ? auditData.get("estado").toString() : "PENDIENTE");
         audit.setObservaciones((String) auditData.get("observaciones"));
+        if (auditData.containsKey("evaluaciones") && auditData.get("evaluaciones") != null) {
+            Object evaluaciones = auditData.get("evaluaciones");
+            if (evaluaciones instanceof String) {
+                audit.setEvaluaciones((String) evaluaciones);
+            } else {
+                try {
+                    audit.setEvaluaciones(MAPPER.writeValueAsString(evaluaciones));
+                } catch (Exception e) {
+                    audit.setEvaluaciones(evaluaciones.toString());
+                }
+            }
+        }
         if (auditData.containsKey("trayectoUbicaciones") && auditData.get("trayectoUbicaciones") != null) {
             Object trayecto = auditData.get("trayectoUbicaciones");
             if (trayecto instanceof String) {
@@ -96,6 +108,9 @@ public ResponseEntity<Map<String, Object>> createAudit(@RequestBody Map<String, 
                 score.setAudit(savedAudit);
                 score.setCategoria((String) scoreData.get("categoria"));
                 score.setPuntuacion(Integer.valueOf(scoreData.get("puntuacion").toString()));
+                if (scoreData.containsKey("maxPuntuacion") && scoreData.get("maxPuntuacion") != null) {
+                    score.setMaxPuntuacion(Integer.valueOf(scoreData.get("maxPuntuacion").toString()));
+                }
                 score.setObservaciones((String) scoreData.get("observaciones"));
 
                 // Guardar foto si viene en base64

@@ -1,33 +1,37 @@
 import 'dart:convert';
+import 'dart:io';
 import 'package:http/http.dart' as http;
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter/foundation.dart';
 
 class AuditService {
-    // Obtener todas las auditorías (normales, moko, sigatoka) creadas por un usuario
-    Future<Map<String, dynamic>> getAllAuditsByUser(int userId) async {
-      try {
-        final headers = await _getHeaders();
-        final uri = (await baseUri).replace(path: '$_basePath/audits/user/$userId');
-        final response = await http.get(
-          uri,
-          headers: headers,
-        );
+  // Obtener todas las auditorías (normales, moko, sigatoka) creadas por un usuario
+  Future<Map<String, dynamic>> getAllAuditsByUser(int userId) async {
+    try {
+      final headers = await _getHeaders();
+      final uri =
+          (await baseUri).replace(path: '$_basePath/audits/user/$userId');
+      final response = await http.get(
+        uri,
+        headers: headers,
+      );
 
-        if (response.statusCode == 200) {
-          return json.decode(response.body);
-        } else if (response.statusCode == 401) {
-          throw Exception('Token expirado. Por favor, inicia sesión nuevamente.');
-        } else {
-          throw Exception('Error al obtener auditorías del usuario: ${response.body}');
-        }
-      } catch (e) {
-        if (e.toString().contains('SocketException')) {
-          throw Exception('No se puede conectar al servidor.');
-        }
-        rethrow;
+      if (response.statusCode == 200) {
+        return json.decode(response.body);
+      } else if (response.statusCode == 401) {
+        throw Exception('Token expirado. Por favor, inicia sesión nuevamente.');
+      } else {
+        throw Exception(
+            'Error al obtener auditorías del usuario: ${response.body}');
       }
+    } catch (e) {
+      if (e.toString().contains('SocketException')) {
+        throw Exception('No se puede conectar al servidor.');
+      }
+      rethrow;
     }
+  }
+
   static const String _host = '5.161.198.89';
   static const int _port = 8081;
   static const String _basePath = '/api';
@@ -80,6 +84,7 @@ class AuditService {
     required List<Map<String, dynamic>> scores,
     String? cedulaCliente,
     List<Map<String, dynamic>>? trayectoUbicaciones,
+    Map<String, dynamic>? evaluaciones,
   }) async {
     try {
       final headers = await _getHeaders();
@@ -98,6 +103,9 @@ class AuditService {
       }
       if (trayectoUbicaciones != null && trayectoUbicaciones.isNotEmpty) {
         body['trayectoUbicaciones'] = trayectoUbicaciones;
+      }
+      if (evaluaciones != null && evaluaciones.isNotEmpty) {
+        body['evaluaciones'] = evaluaciones;
       }
       final response = await http.post(
         uri,
@@ -120,20 +128,94 @@ class AuditService {
     }
   }
 
-  /// Helper to build scores for backend
-  static List<Map<String, dynamic>> buildBackendScores(
-    List<Map<String, dynamic>> details,
-  ) {
-    return details
-        .map(
-          (item) => {
-            'categoria': item['section'] ?? '',
-            'puntuacion': item['calculatedScore'] ?? 0,
-            'observaciones': '', // Add if you have per-item observations
-            'photoBase64': item['photoBase64'],
-          },
-        )
-        .toList();
+  static Future<List<Map<String, dynamic>>> buildBackendScoresFromAuditMap(
+    Map<String, dynamic> auditMap,
+  ) async {
+    final List<Map<String, dynamic>> scores = [];
+
+    for (final entry in auditMap.entries) {
+      final key = entry.key;
+      final value = entry.value;
+
+      if (value is List) {
+        for (final rawItem in value) {
+          if (rawItem is! Map) {
+            continue;
+          }
+          final item = Map<String, dynamic>.from(rawItem);
+          final int puntuacion =
+              int.tryParse((item['calculatedScore'] ?? 0).toString()) ?? 0;
+          final int maxPuntuacion =
+              int.tryParse((item['maxScore'] ?? 100).toString()) ?? 100;
+          final String? photoPath = item['photoPath']?.toString();
+          scores.add({
+            'categoria': '$key - ${item['name'] ?? 'Sin nombre'}',
+            'puntuacion': puntuacion,
+            'maxPuntuacion': maxPuntuacion,
+            'observaciones': item['observaciones']?.toString(),
+            'photoBase64': await _fileToBase64(photoPath),
+          });
+        }
+      }
+    }
+
+    final seleccionResumen = auditMap['SeleccionResumen'];
+    if (seleccionResumen is Map) {
+      final resumen = Map<String, dynamic>.from(seleccionResumen);
+      scores.add({
+        'categoria': 'SELECCION - CRITERIO',
+        'puntuacion': (100 - _toDouble(resumen['porcentajeMalSeleccionadas']))
+            .clamp(0, 100)
+            .round(),
+        'maxPuntuacion': 100,
+        'observaciones': 'Total plantas: ${resumen['totalPlantas'] ?? 0}, '
+            'Mal seleccionadas: ${resumen['plantasMalSeleccionadas'] ?? 0}, '
+            'Observacion: ${resumen['observacion'] ?? ''}',
+      });
+    }
+
+    final cosechaResumen = auditMap['CosechaResumen'];
+    if (cosechaResumen is Map) {
+      final resumen = Map<String, dynamic>.from(cosechaResumen);
+      scores.add({
+        'categoria': 'COSECHA - RESUMEN',
+        'puntuacion':
+            int.tryParse((resumen['calificacion'] ?? 0).toString()) ?? 0,
+        'maxPuntuacion': 100,
+        'observaciones': 'Bajo grado: ${resumen['porcentajeBajoGrado'] ?? 0}%, '
+            'Sobre grado: ${resumen['porcentajeSobreGrado'] ?? 0}%, '
+            'Cintas: ${jsonEncode(resumen['colorCintaPorSemana'] ?? {})}',
+        'photoBase64': await _fileToBase64(resumen['photoPath']?.toString()),
+      });
+    }
+
+    return scores;
+  }
+
+  static double _toDouble(dynamic value) {
+    if (value == null) {
+      return 0;
+    }
+    if (value is num) {
+      return value.toDouble();
+    }
+    return double.tryParse(value.toString()) ?? 0;
+  }
+
+  static Future<String?> _fileToBase64(String? path) async {
+    if (path == null || path.isEmpty || kIsWeb) {
+      return null;
+    }
+    try {
+      final file = File(path);
+      if (!await file.exists()) {
+        return null;
+      }
+      final bytes = await file.readAsBytes();
+      return base64Encode(bytes);
+    } catch (_) {
+      return null;
+    }
   }
 
   // Obtener todas las auditorías
@@ -166,7 +248,8 @@ class AuditService {
   Future<List<Map<String, dynamic>>> getAuditsByClient(int clientId) async {
     try {
       final headers = await _getHeaders();
-      final uri = (await baseUri).replace(path: '${_basePath}/audits/client/$clientId');
+      final uri =
+          (await baseUri).replace(path: '${_basePath}/audits/client/$clientId');
       final response = await http.get(
         uri,
         headers: headers,
@@ -221,7 +304,8 @@ class AuditService {
   Future<List<Map<String, dynamic>>> getAuditCategories() async {
     try {
       final headers = await _getHeaders();
-      final uri = (await baseUri).replace(path: '${_basePath}/audit-categories');
+      final uri =
+          (await baseUri).replace(path: '${_basePath}/audit-categories');
       final response = await http.get(
         uri,
         headers: headers,
@@ -247,7 +331,8 @@ class AuditService {
   Future<Map<String, dynamic>> updateAuditStatus(int id, String status) async {
     try {
       final headers = await _getHeaders();
-      final uri = (await baseUri).replace(path: '${_basePath}/audits/$id/status');
+      final uri =
+          (await baseUri).replace(path: '${_basePath}/audits/$id/status');
       final response = await http.put(
         uri,
         headers: headers,
@@ -275,7 +360,8 @@ class AuditService {
   Future<String> uploadAuditImage(String imagePath, int auditId) async {
     try {
       final token = await storage.read(key: 'token');
-      final uri = (await baseUri).replace(path: '${_basePath}/audits/$auditId/image');
+      final uri =
+          (await baseUri).replace(path: '${_basePath}/audits/$auditId/image');
       final request = http.MultipartRequest(
         'POST',
         uri,

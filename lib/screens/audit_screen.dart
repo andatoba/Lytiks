@@ -1,8 +1,12 @@
+import 'dart:convert';
 import 'dart:async' as dart_async;
 
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import '../services/audit_service.dart';
+import '../services/auth_service.dart';
 import '../services/offline_storage_service.dart';
 import '../services/client_service.dart';
 
@@ -27,11 +31,20 @@ class AuditScreen extends StatefulWidget {
   State<AuditScreen> createState() => _AuditScreenState();
 }
 
-class _AuditScreenState extends State<AuditScreen> {
+class _AuditScreenState extends State<AuditScreen> with WidgetsBindingObserver {
+  static const String _draftKey = 'audit_screen_draft';
   final OfflineStorageService _offlineStorageCampo = OfflineStorageService();
   final TextEditingController _nombreController = TextEditingController();
   final TextEditingController _loteController = TextEditingController();
+  final TextEditingController _seleccionTotalPlantasController =
+      TextEditingController();
+  final TextEditingController _seleccionMalSeleccionadasController =
+      TextEditingController();
+  final TextEditingController _seleccionObservacionController =
+      TextEditingController();
   final FocusNode _nombreFocusNode = FocusNode();
+  final AuditService _auditService = AuditService();
+  final AuthService _authService = AuthService();
   final ClientService _clientService = ClientService();
   final ImagePicker _picker = ImagePicker();
 
@@ -41,7 +54,7 @@ class _AuditScreenState extends State<AuditScreen> {
   String _lastQuery = '';
   bool _isBasicMode = true;
   String _selectedCrop = 'banano';
-  
+
   // Estado de expansión de las secciones (todas colapsadas por defecto)
   final Map<String, bool> _expandedSections = {};
 
@@ -50,54 +63,84 @@ class _AuditScreenState extends State<AuditScreen> {
   dart_async.Timer? _locationTimer;
   bool _isTrackingLocation = false;
   DateTime? _inicioEvaluacion;
-  
+
   // Modo cliente: bloquea búsqueda de cliente y seguimiento de ubicación
   bool _isClienteMode = false;
 
   // Variables para sección COSECHA personalizada
   final List<int> _cosechaEdades = [9, 10, 11, 12, 13];
-  final List<int> _cosechaCalibraciones = [38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50];
+  final List<int> _cosechaCalibraciones = [
+    38,
+    39,
+    40,
+    41,
+    42,
+    43,
+    44,
+    45,
+    46,
+    47,
+    48,
+    49,
+    50
+  ];
+  final List<String> _coloresCinta = const [
+    'Azul',
+    'Blanco',
+    'Amarillo',
+    'Morado',
+    'Rojo',
+    'Cafe',
+    'Negro',
+    'Verde',
+    'Gris',
+  ];
   final Map<int, Map<int, TextEditingController>> _cosechaControllers = {};
+  final Map<int, String?> _cosechaColorCinta = {};
   double _cosechaPorcentajeBajoGrado = 0;
   double _cosechaPorcentajeSobreGrado = 0;
   double _cosechaScore = 100;
   bool _cosechaExpanded = false;
+  String? _cosechaPhotoPath;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _initializeDatabase();
-    
+
     if (widget.clientData != null) {
       _selectedClient = widget.clientData;
       _nombreController.text = _formatClientName(widget.clientData!);
       _loteController.text = _formatFincaName(widget.clientData!);
       _clientService.saveSelectedClient(widget.clientData!);
-      
+
       // Verificar si es modo cliente (usuario con rol CLIENTE)
       _isClienteMode = widget.clientData!['isCliente'] == true;
     } else {
       _loadStoredClient();
     }
-    
+
     // Solo iniciar tracking si NO es modo cliente
     if (!_isClienteMode) {
       _iniciarTrackingUbicacion();
     }
 
-      // Inicializar controladores de grilla COSECHA
-      for (var edad in _cosechaEdades) {
-        _cosechaControllers[edad] = {};
-        for (var cal in _cosechaCalibraciones) {
-          _cosechaControllers[edad]![cal] = TextEditingController();
-          _cosechaControllers[edad]![cal]!.addListener(_recalcularCosecha);
-        }
+    // Inicializar controladores de grilla COSECHA
+    for (var edad in _cosechaEdades) {
+      _cosechaControllers[edad] = {};
+      _cosechaColorCinta[edad] = null;
+      for (var cal in _cosechaCalibraciones) {
+        _cosechaControllers[edad]![cal] = TextEditingController();
+        _cosechaControllers[edad]![cal]!.addListener(_recalcularCosecha);
       }
     }
+    _restaurarBorrador();
+  }
 
   Future<void> _loadStoredClient() async {
     final stored = await _clientService.getSelectedClient();
-    if (!mounted || stored == null) {
+    if (!mounted || stored == null || _selectedClient != null) {
       return;
     }
     setState(() {
@@ -111,23 +154,37 @@ class _AuditScreenState extends State<AuditScreen> {
 
   @override
   void dispose() {
-      _detenerTrackingUbicacion();
+    WidgetsBinding.instance.removeObserver(this);
+    _guardarBorrador();
+    _detenerTrackingUbicacion();
     _searchDebounce?.cancel();
     _nombreController.dispose();
-      _loteController.dispose();
+    _loteController.dispose();
+    _seleccionTotalPlantasController.dispose();
+    _seleccionMalSeleccionadasController.dispose();
+    _seleccionObservacionController.dispose();
     _nombreFocusNode.dispose();
-      for (var edadMap in _cosechaControllers.values) {
-        for (var ctrl in edadMap.values) {
-          ctrl.dispose();
-        }
+    for (var edadMap in _cosechaControllers.values) {
+      for (var ctrl in edadMap.values) {
+        ctrl.dispose();
       }
+    }
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.paused ||
+        state == AppLifecycleState.inactive ||
+        state == AppLifecycleState.hidden) {
+      _guardarBorrador();
+    }
   }
 
   /// Inicia el tracking de ubicación periódico
   Future<void> _iniciarTrackingUbicacion() async {
     _inicioEvaluacion = DateTime.now();
-    
+
     try {
       // Verificar permisos
       LocationPermission permission = await Geolocator.checkPermission();
@@ -149,9 +206,9 @@ class _AuditScreenState extends State<AuditScreen> {
       // Capturar ubicación inicial
       await _capturarUbicacion();
 
-      // Iniciar timer para capturar cada 30 segundos
+      // Iniciar timer para capturar cada 1 minuto
       _locationTimer = dart_async.Timer.periodic(
-        const Duration(seconds: 30),
+        const Duration(minutes: 1),
         (timer) => _capturarUbicacion(),
       );
 
@@ -178,7 +235,8 @@ class _AuditScreenState extends State<AuditScreen> {
         'timestamp': DateTime.now().toIso8601String(),
       });
 
-      debugPrint('📍 Ubicación capturada: ${position.latitude}, ${position.longitude} (Total: ${_trayectoUbicaciones.length})');
+      debugPrint(
+          '📍 Ubicación capturada: ${position.latitude}, ${position.longitude} (Total: ${_trayectoUbicaciones.length})');
     } catch (e) {
       debugPrint('❌ Error al capturar ubicación: $e');
     }
@@ -189,7 +247,8 @@ class _AuditScreenState extends State<AuditScreen> {
     _locationTimer?.cancel();
     _locationTimer = null;
     _isTrackingLocation = false;
-    debugPrint('⏹️ Tracking de ubicación detenido. Total puntos: ${_trayectoUbicaciones.length}');
+    debugPrint(
+        '⏹️ Tracking de ubicación detenido. Total puntos: ${_trayectoUbicaciones.length}');
   }
 
   dart_async.Future<void> _initializeDatabase() async {
@@ -241,7 +300,8 @@ class _AuditScreenState extends State<AuditScreen> {
         'UTILIZA ESTAQUILLA PARA MEJORAR ANGULO DENTRO DE LA PLANTACION Y CABLE VIA',
         20,
       ),
-      AuditItem('AMARRE EN HIJOS Y/O EN PLANTAS CON RACIMOS +9 SEM O RESIEMBRAS', 20),
+      AuditItem(
+          'AMARRE EN HIJOS Y/O EN PLANTAS CON RACIMOS +9 SEM O RESIEMBRAS', 20),
     ],
     'APUNTALAMIENTO CON PUNTAL': [
       AuditItem('PUNTAL FLOJO Y/O MAL ANGULO', 25),
@@ -307,16 +367,16 @@ class _AuditScreenState extends State<AuditScreen> {
               _buildConfigurationCard(),
               const SizedBox(height: 20),
               ..._auditSections.entries
-                    .take(2)
-                    .map((entry) => _buildAuditSection(entry.key, entry.value))
-                    .toList(),
-                  _buildCosechaSection(),
-                  ..._auditSections.entries
-                    .skip(2)
-                    .map((entry) => _buildAuditSection(entry.key, entry.value))
-                    .toList(),
-                  const SizedBox(height: 8),
-                  _buildFinalScoreCard(),
+                  .take(2)
+                  .map((entry) => _buildAuditSection(entry.key, entry.value))
+                  .toList(),
+              _buildCosechaSection(),
+              ..._auditSections.entries
+                  .skip(2)
+                  .map((entry) => _buildAuditSection(entry.key, entry.value))
+                  .toList(),
+              const SizedBox(height: 8),
+              _buildFinalScoreCard(),
               const SizedBox(height: 20),
               _buildSaveButton(),
             ],
@@ -501,13 +561,15 @@ class _AuditScreenState extends State<AuditScreen> {
                         ),
                         border: const OutlineInputBorder(),
                         filled: _isClienteMode,
-                        fillColor: _isClienteMode ? Colors.grey.withOpacity(0.1) : null,
-                        suffixIcon: _isClienteMode 
-                          ? const Icon(Icons.lock, color: Colors.grey)
-                          : IconButton(
-                              icon: const Icon(Icons.search),
-                              onPressed: _triggerSearch,
-                            ),
+                        fillColor: _isClienteMode
+                            ? Colors.grey.withOpacity(0.1)
+                            : null,
+                        suffixIcon: _isClienteMode
+                            ? const Icon(Icons.lock, color: Colors.grey)
+                            : IconButton(
+                                icon: const Icon(Icons.search),
+                                onPressed: _triggerSearch,
+                              ),
                       ),
                     );
                   },
@@ -527,7 +589,8 @@ class _AuditScreenState extends State<AuditScreen> {
                             padding: EdgeInsets.zero,
                             shrinkWrap: true,
                             itemCount: optionList.length,
-                            separatorBuilder: (_, __) => const Divider(height: 1),
+                            separatorBuilder: (_, __) =>
+                                const Divider(height: 1),
                             itemBuilder: (context, index) {
                               final client = optionList[index];
                               final nombre = _formatClientName(client);
@@ -542,7 +605,9 @@ class _AuditScreenState extends State<AuditScreen> {
                               }
                               return ListTile(
                                 title: Text(
-                                  nombre.isEmpty ? 'Cliente sin nombre' : nombre,
+                                  nombre.isEmpty
+                                      ? 'Cliente sin nombre'
+                                      : nombre,
                                 ),
                                 subtitle: subtitleParts.isEmpty
                                     ? null
@@ -761,7 +826,6 @@ class _AuditScreenState extends State<AuditScreen> {
             ],
           ),
           const SizedBox(height: 16),
-
           if (_selectedClient == null) ...[
             Container(
               padding: const EdgeInsets.all(12),
@@ -792,7 +856,6 @@ class _AuditScreenState extends State<AuditScreen> {
               ),
             ),
           ],
-
           TextField(
             controller: _loteController,
             decoration: const InputDecoration(
@@ -803,7 +866,6 @@ class _AuditScreenState extends State<AuditScreen> {
             ),
           ),
           const SizedBox(height: 16),
-
           _buildModeSelector(),
           const SizedBox(height: 16),
           _buildCropSelector(),
@@ -944,9 +1006,9 @@ class _AuditScreenState extends State<AuditScreen> {
   Widget _buildAuditSection(String sectionName, List<AuditItem> items) {
     // Inicializar estado de expansión si no existe
     _expandedSections.putIfAbsent(sectionName, () => false);
-    
+
     final isExpanded = _expandedSections[sectionName] ?? false;
-    
+
     // Calcular puntuación total de la sección
     int totalScore = 0;
     int maxScore = 0;
@@ -956,7 +1018,7 @@ class _AuditScreenState extends State<AuditScreen> {
         totalScore += item.calculatedScore!;
       }
     }
-    
+
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       decoration: BoxDecoration(
@@ -1022,7 +1084,13 @@ class _AuditScreenState extends State<AuditScreen> {
                     color: Colors.grey[500],
                   ),
                 ),
-          children: items.map((item) => _buildAuditItem(item, sectionName)).toList(),
+          children: [
+            if (sectionName == 'SELECCION') ...[
+              _buildSeleccionCriteriaCard(),
+              const SizedBox(height: 12),
+            ],
+            ...items.map((item) => _buildAuditItem(item, sectionName)),
+          ],
         ),
       ),
     );
@@ -1055,48 +1123,21 @@ class _AuditScreenState extends State<AuditScreen> {
                     border: OutlineInputBorder(),
                   ),
                   items: const [
-                    DropdownMenuItem(value: 'Muy buena', child: Text('Muy buena (90-100%)')),
-                    DropdownMenuItem(value: 'Buena', child: Text('Buena (70-89%)')),
-                    DropdownMenuItem(value: 'Regular', child: Text('Regular (50-69%)')),
-                    DropdownMenuItem(value: 'Mala', child: Text('Mala (0-49%)')),
+                    DropdownMenuItem(
+                        value: 'Muy buena', child: Text('Muy buena (90-100%)')),
+                    DropdownMenuItem(
+                        value: 'Buena', child: Text('Buena (70-89%)')),
+                    DropdownMenuItem(
+                        value: 'Regular', child: Text('Regular (50-69%)')),
+                    DropdownMenuItem(
+                        value: 'Mala', child: Text('Mala (0-49%)')),
                   ],
                   onChanged: (value) {
                     setState(() {
                       item.rating = value;
                       if (value != null) {
-                        // Lógica especial para COSECHA que se calcula diferente
-                        if (sectionName == 'COSECHA') {
-                          switch (value) {
-                            case 'Muy buena':
-                              item.calculatedScore = (item.maxScore * 0.95).round();
-                              break;
-                            case 'Buena':
-                              item.calculatedScore = (item.maxScore * 0.80).round();
-                              break;
-                            case 'Regular':
-                              item.calculatedScore = (item.maxScore * 0.60).round();
-                              break;
-                            case 'Mala':
-                              item.calculatedScore = (item.maxScore * 0.25).round();
-                              break;
-                          }
-                        } else {
-                          // Lógica estándar para todas las demás secciones
-                          switch (value) {
-                            case 'Muy buena':
-                              item.calculatedScore = (item.maxScore * 0.95).round();
-                              break;
-                            case 'Buena':
-                              item.calculatedScore = (item.maxScore * 0.80).round();
-                              break;
-                            case 'Regular':
-                              item.calculatedScore = (item.maxScore * 0.60).round();
-                              break;
-                            case 'Mala':
-                              item.calculatedScore = (item.maxScore * 0.25).round();
-                              break;
-                          }
-                        }
+                        item.calculatedScore =
+                            _calculateItemScore(item.maxScore, value);
                       }
                     });
                   },
@@ -1156,364 +1197,602 @@ class _AuditScreenState extends State<AuditScreen> {
     );
   }
 
-    void _recalcularCosecha() {
-      int total = 0;
-      int bajoGrado = 0;
-      int sobreGrado = 0;
-      for (var edad in _cosechaEdades) {
-        for (var cal in _cosechaCalibraciones) {
-          final val = int.tryParse(_cosechaControllers[edad]![cal]!.text.trim()) ?? 0;
-          total += val;
-          if (cal <= 42) bajoGrado += val;
-          if (cal >= 47) sobreGrado += val;
-        }
-      }
-      setState(() {
-        if (total > 0) {
-          _cosechaPorcentajeBajoGrado = (bajoGrado / total) * 100;
-          _cosechaPorcentajeSobreGrado = (sobreGrado / total) * 100;
-        } else {
-          _cosechaPorcentajeBajoGrado = 0;
-          _cosechaPorcentajeSobreGrado = 0;
-        }
-        final double sumaDesviacion =
-            _cosechaPorcentajeBajoGrado + _cosechaPorcentajeSobreGrado;
-
-        if (sumaDesviacion <= 6.0) {
-          _cosechaScore = 100;
-        } else if (sumaDesviacion < 8.0) {
-          _cosechaScore = 85;
-        } else if (sumaDesviacion <= 9.0) {
-          _cosechaScore = 70;
-        } else {
-          _cosechaScore = 0;
-        }
-      });
-    }
-
-    double _getSectionScore(String sectionName) {
-      final items = _auditSections[sectionName];
-      if (items == null) return 0;
-      int scored = 0;
-      int maxTotal = 0;
-      for (var item in items) {
-        maxTotal += item.maxScore;
-        if (item.calculatedScore != null) scored += item.calculatedScore!;
-      }
-      if (maxTotal == 0) return 0;
-      return (scored / maxTotal) * 100;
-    }
-
-    double _getGroupScore(List<String> sectionNames) {
-      double total = 0;
-      int count = 0;
-      for (var name in sectionNames) {
-        if (_auditSections.containsKey(name)) {
-          total += _getSectionScore(name);
-          count++;
-        }
-      }
-      return count > 0 ? total / count : 0;
-    }
-
-    double _calculateFinalWeightedScore() {
-      final bool enfundeEvaluado = _hasAnyRatedItem('ENFUNDE');
-      final bool cosechaEvaluada = _hasCosechaData();
-
-      final List<String> group1 = [
-        'DESHOJE FITOSANITARIO', 'DESHOJE NORMAL', 'DESVIO DE HIJOS',
-        'APUNTALAMIENTO CON ZUNCHO', 'APUNTALAMIENTO CON PUNTAL',
-      ];
-      final List<String> group2 = [
-        'MANEJO DE AGUAS (RIEGO)', 'MANEJO DE AGUAS (DRENAJE)',
-        'FERTILIZACION', 'CONTROL DE MALEZA',
-      ];
-
-      final bool group1Evaluado = _hasAnyRatedItemInSections(group1);
-      final bool group2Evaluado = _hasAnyRatedItemInSections(group2);
-
-      final double enfundeScore = _getSectionScore('ENFUNDE');
-      final double cosechaScore = _cosechaScore;
-      final double group1Score = _getGroupScore(group1);
-      final double group2Score = _getGroupScore(group2);
-
-      final double rawWeighted = (enfundeScore * 0.15) +
-          (cosechaScore * 0.35) +
-          (group1Score * 0.25) +
-          (group2Score * 0.25);
-
-      if (!_isBasicMode) {
-        return rawWeighted;
-      }
-
-      double usedWeight = 0;
-      if (enfundeEvaluado) usedWeight += 0.15;
-      if (cosechaEvaluada) usedWeight += 0.35;
-      if (group1Evaluado) usedWeight += 0.25;
-      if (group2Evaluado) usedWeight += 0.25;
-
-      if (usedWeight == 0) {
+  int _calculateItemScore(int maxScore, String rating) {
+    switch (rating) {
+      case 'Muy buena':
+        return maxScore;
+      case 'Buena':
+        return (maxScore * 0.80).round();
+      case 'Regular':
+        return (maxScore * 0.60).round();
+      case 'Mala':
         return 0;
-      }
+    }
+    return 0;
+  }
 
-      return (rawWeighted / usedWeight).clamp(0, 100);
+  void _recalcularCosecha() {
+    int total = 0;
+    int bajoGrado = 0;
+    int sobreGrado = 0;
+    for (var edad in _cosechaEdades) {
+      for (var cal in _cosechaCalibraciones) {
+        final val =
+            int.tryParse(_cosechaControllers[edad]![cal]!.text.trim()) ?? 0;
+        total += val;
+        if (cal <= 43) bajoGrado += val;
+        if (cal >= 48) sobreGrado += val;
+      }
+    }
+    setState(() {
+      if (total > 0) {
+        _cosechaPorcentajeBajoGrado = (bajoGrado / total) * 100;
+        _cosechaPorcentajeSobreGrado = (sobreGrado / total) * 100;
+      } else {
+        _cosechaPorcentajeBajoGrado = 0;
+        _cosechaPorcentajeSobreGrado = 0;
+      }
+      final double sumaDesviacion =
+          _cosechaPorcentajeBajoGrado + _cosechaPorcentajeSobreGrado;
+
+      if (sumaDesviacion <= 6.0) {
+        _cosechaScore = 100;
+      } else if (sumaDesviacion < 8.0) {
+        _cosechaScore = 85;
+      } else if (sumaDesviacion <= 9.0) {
+        _cosechaScore = 70;
+      } else {
+        _cosechaScore = 0;
+      }
+    });
+  }
+
+  double _getSectionScore(String sectionName) {
+    final items = _auditSections[sectionName];
+    if (items == null) return 0;
+    int scored = 0;
+    int maxTotal = 0;
+    for (var item in items) {
+      maxTotal += item.maxScore;
+      if (item.calculatedScore != null) scored += item.calculatedScore!;
+    }
+    if (maxTotal == 0) return 0;
+    return (scored / maxTotal) * 100;
+  }
+
+  double _getGroupScore(List<String> sectionNames) {
+    double total = 0;
+    int count = 0;
+    for (var name in sectionNames) {
+      if (_auditSections.containsKey(name)) {
+        total += _getSectionScore(name);
+        count++;
+      }
+    }
+    return count > 0 ? total / count : 0;
+  }
+
+  double _calculateFinalWeightedScore() {
+    final bool enfundeEvaluado = _hasAnyRatedItem('ENFUNDE');
+    final bool cosechaEvaluada = _hasCosechaData();
+
+    final List<String> group1 = [
+      'DESHOJE FITOSANITARIO',
+      'DESHOJE NORMAL',
+      'DESVIO DE HIJOS',
+      'APUNTALAMIENTO CON ZUNCHO',
+      'APUNTALAMIENTO CON PUNTAL',
+    ];
+    final List<String> group2 = [
+      'MANEJO DE AGUAS (RIEGO)',
+      'MANEJO DE AGUAS (DRENAJE)',
+      'FERTILIZACION',
+      'CONTROL DE MALEZA',
+    ];
+
+    final bool group1Evaluado = _hasAnyRatedItemInSections(group1);
+    final bool group2Evaluado = _hasAnyRatedItemInSections(group2);
+
+    final double enfundeScore = _getSectionScore('ENFUNDE');
+    final double cosechaScore = _cosechaScore;
+    final double group1Score = _getGroupScore(group1);
+    final double group2Score = _getGroupScore(group2);
+
+    final double rawWeighted = (enfundeScore * 0.15) +
+        (cosechaScore * 0.35) +
+        (group1Score * 0.25) +
+        (group2Score * 0.25);
+
+    if (!_isBasicMode) {
+      return rawWeighted;
     }
 
-    bool _hasAnyRatedItem(String sectionName) {
-      final items = _auditSections[sectionName];
-      if (items == null) return false;
-      for (final item in items) {
-        if (item.rating != null) {
+    double usedWeight = 0;
+    if (enfundeEvaluado) usedWeight += 0.15;
+    if (cosechaEvaluada) usedWeight += 0.35;
+    if (group1Evaluado) usedWeight += 0.25;
+    if (group2Evaluado) usedWeight += 0.25;
+
+    if (usedWeight == 0) {
+      return 0;
+    }
+
+    return (rawWeighted / usedWeight).clamp(0, 100);
+  }
+
+  bool _hasAnyRatedItem(String sectionName) {
+    final items = _auditSections[sectionName];
+    if (items == null) return false;
+    for (final item in items) {
+      if (item.rating != null) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  bool _hasAnyRatedItemInSections(List<String> sectionNames) {
+    for (final section in sectionNames) {
+      if (_hasAnyRatedItem(section)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  bool _hasCosechaData() {
+    for (var edad in _cosechaEdades) {
+      for (var cal in _cosechaCalibraciones) {
+        final val =
+            int.tryParse(_cosechaControllers[edad]![cal]!.text.trim()) ?? 0;
+        if (val > 0) {
           return true;
         }
       }
-      return false;
     }
+    return false;
+  }
 
-    bool _hasAnyRatedItemInSections(List<String> sectionNames) {
-      for (final section in sectionNames) {
-        if (_hasAnyRatedItem(section)) {
-          return true;
-        }
-      }
-      return false;
-    }
+  Color _scoreColor(double score) {
+    if (score >= 90) return Colors.green;
+    if (score >= 70) return Colors.blue;
+    if (score >= 50) return Colors.orange;
+    return Colors.red;
+  }
 
-    bool _hasCosechaData() {
-      for (var edad in _cosechaEdades) {
-        for (var cal in _cosechaCalibraciones) {
-          final val = int.tryParse(_cosechaControllers[edad]![cal]!.text.trim()) ?? 0;
-          if (val > 0) {
-            return true;
-          }
-        }
-      }
-      return false;
-    }
+  String _scoreLabel(double score) {
+    if (score >= 90) return 'Muy buena';
+    if (score >= 70) return 'Buena';
+    if (score >= 50) return 'Regular';
+    return 'Mala';
+  }
 
-    Color _scoreColor(double score) {
-      if (score >= 90) return Colors.green;
-      if (score >= 70) return Colors.blue;
-      if (score >= 50) return Colors.orange;
-      return Colors.red;
-    }
+  Widget _buildFinalScoreCard() {
+    final double enfundeScore = _getSectionScore('ENFUNDE');
+    final List<String> group1 = [
+      'DESHOJE FITOSANITARIO',
+      'DESHOJE NORMAL',
+      'DESVIO DE HIJOS',
+      'APUNTALAMIENTO CON ZUNCHO',
+      'APUNTALAMIENTO CON PUNTAL'
+    ];
+    final List<String> group2 = [
+      'MANEJO DE AGUAS (RIEGO)',
+      'MANEJO DE AGUAS (DRENAJE)',
+      'FERTILIZACION',
+      'CONTROL DE MALEZA'
+    ];
+    final double group1Score = _getGroupScore(group1);
+    final double group2Score = _getGroupScore(group2);
+    final double finalScore = _calculateFinalWeightedScore();
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color(0xFF004B63),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text('CALIFICACIÓN FINAL',
+              style: TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 16,
+                  letterSpacing: 1)),
+          const SizedBox(height: 16),
+          _buildScoreRow('Enfunde (15%)', enfundeScore),
+          _buildScoreRow('Cosecha (35%)', _cosechaScore),
+          _buildScoreRow('Labores de campo (25%)', group1Score),
+          _buildScoreRow('Manejo agronómico (25%)', group2Score),
+          const Divider(color: Colors.white38, height: 24),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text('TOTAL',
+                  style: TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 18)),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Text('${finalScore.toStringAsFixed(1)}%',
+                      style: TextStyle(
+                          color: _scoreColor(finalScore),
+                          fontWeight: FontWeight.bold,
+                          fontSize: 28)),
+                  Text(_scoreLabel(finalScore),
+                      style: TextStyle(
+                          color: _scoreColor(finalScore),
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600)),
+                ],
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
 
-    String _scoreLabel(double score) {
-      if (score >= 90) return 'Muy buena';
-      if (score >= 70) return 'Buena';
-      if (score >= 50) return 'Regular';
-      return 'Mala';
-    }
+  Widget _buildScoreRow(String label, double score) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(label,
+              style: const TextStyle(color: Colors.white70, fontSize: 13)),
+          Text('${score.toStringAsFixed(1)}%',
+              style: TextStyle(
+                  color: _scoreColor(score),
+                  fontWeight: FontWeight.w600,
+                  fontSize: 13)),
+        ],
+      ),
+    );
+  }
 
-    Widget _buildFinalScoreCard() {
-      final double enfundeScore = _getSectionScore('ENFUNDE');
-      final List<String> group1 = ['DESHOJE FITOSANITARIO', 'DESHOJE NORMAL', 'DESVIO DE HIJOS', 'APUNTALAMIENTO CON ZUNCHO', 'APUNTALAMIENTO CON PUNTAL'];
-      final List<String> group2 = ['MANEJO DE AGUAS (RIEGO)', 'MANEJO DE AGUAS (DRENAJE)', 'FERTILIZACION', 'CONTROL DE MALEZA'];
-      final double group1Score = _getGroupScore(group1);
-      final double group2Score = _getGroupScore(group2);
-      final double finalScore = _calculateFinalWeightedScore();
-      return Container(
-        margin: const EdgeInsets.only(bottom: 16),
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: const Color(0xFF004B63),
-          borderRadius: BorderRadius.circular(12),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+  Widget _buildCosechaSection() {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: [
+          BoxShadow(
+              color: Colors.grey.withOpacity(0.1),
+              spreadRadius: 1,
+              blurRadius: 4,
+              offset: const Offset(0, 2))
+        ],
+        border: Border.all(
+            color:
+                _cosechaExpanded ? const Color(0xFF004B63) : Colors.grey[300]!,
+            width: _cosechaExpanded ? 2 : 1),
+      ),
+      child: Theme(
+        data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+        child: ExpansionTile(
+          initiallyExpanded: false,
+          onExpansionChanged: (v) => setState(() => _cosechaExpanded = v),
+          tilePadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+          leading: Container(
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(
+              color:
+                  _cosechaExpanded ? const Color(0xFF004B63) : Colors.grey[200],
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Icon(
+                _cosechaExpanded ? Icons.check_circle : Icons.expand_more,
+                color: _cosechaExpanded ? Colors.white : Colors.grey[600]),
+          ),
+          title: Text('COSECHA',
+              style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  color: _cosechaExpanded
+                      ? const Color(0xFF004B63)
+                      : Colors.black87)),
+          subtitle: Text(
+            'Calificación: ${_cosechaScore.toStringAsFixed(0)}/100  |  Bajo grado: ${_cosechaPorcentajeBajoGrado.toStringAsFixed(1)}%  Sobre grado: ${_cosechaPorcentajeSobreGrado.toStringAsFixed(1)}%',
+            style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+          ),
           children: [
-            const Text('CALIFICACIÓN FINAL', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16, letterSpacing: 1)),
+            const Text(
+                'Ingrese cantidad de racimos por semana de edad y calibración:',
+                style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+            const SizedBox(height: 4),
+            Wrap(spacing: 12, runSpacing: 4, children: [
+              _buildCosechaLegend('Bajo grado ≤43', Colors.red[700]!),
+              _buildCosechaLegend('Normal 44-47', Colors.green[700]!),
+              _buildCosechaLegend('Sobre grado ≥48', Colors.orange[700]!),
+            ]),
+            const SizedBox(height: 12),
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Column(
+                children: [
+                  // Header
+                  Row(children: [
+                    _cosechaHeaderCell('Sem.', const Color(0xFF004B63)),
+                    _cosechaHeaderCell('Cinta', const Color(0xFF00903E),
+                        width: 108),
+                    ..._cosechaCalibraciones.map((cal) {
+                      Color c = cal <= 43
+                          ? Colors.red[700]!
+                          : cal >= 48
+                              ? Colors.orange[700]!
+                              : Colors.green[700]!;
+                      return _cosechaHeaderCell('$cal', c);
+                    }),
+                    _cosechaHeaderCell('Total', const Color(0xFF004B63)),
+                  ]),
+                  // Data rows
+                  ..._cosechaEdades.map((edad) {
+                    int rowTotal = _cosechaCalibraciones.fold(
+                        0,
+                        (s, cal) =>
+                            s +
+                            (int.tryParse(_cosechaControllers[edad]![cal]!
+                                    .text
+                                    .trim()) ??
+                                0));
+                    return Row(children: [
+                      SizedBox(
+                          width: 48,
+                          height: 40,
+                          child: Container(
+                              color: const Color(0xFF004B63).withOpacity(0.12),
+                              alignment: Alignment.center,
+                              child: Text('$edad',
+                                  style: const TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.bold)))),
+                      SizedBox(
+                        width: 108,
+                        height: 40,
+                        child: Container(
+                          color: Colors.green[50],
+                          padding: const EdgeInsets.symmetric(horizontal: 6),
+                          alignment: Alignment.center,
+                          child: DropdownButtonHideUnderline(
+                            child: DropdownButton<String>(
+                              value: _cosechaColorCinta[edad],
+                              hint: const Text('Color',
+                                  style: TextStyle(fontSize: 12)),
+                              isExpanded: true,
+                              items: _coloresCinta
+                                  .map(
+                                    (color) => DropdownMenuItem<String>(
+                                      value: color,
+                                      child: Text(
+                                        color,
+                                        style: const TextStyle(fontSize: 12),
+                                      ),
+                                    ),
+                                  )
+                                  .toList(),
+                              onChanged: (value) {
+                                setState(() {
+                                  _cosechaColorCinta[edad] = value;
+                                });
+                              },
+                            ),
+                          ),
+                        ),
+                      ),
+                      ..._cosechaCalibraciones.map((cal) {
+                        Color bg = cal <= 43
+                            ? Colors.red[50]!
+                            : cal >= 48
+                                ? Colors.orange[50]!
+                                : Colors.green[50]!;
+                        return SizedBox(
+                            width: 48,
+                            height: 40,
+                            child: Container(
+                                color: bg,
+                                padding: const EdgeInsets.all(2),
+                                child: TextField(
+                                  controller: _cosechaControllers[edad]![cal],
+                                  textAlign: TextAlign.center,
+                                  style: const TextStyle(fontSize: 12),
+                                  keyboardType: TextInputType.number,
+                                  decoration: const InputDecoration(
+                                      border: InputBorder.none,
+                                      isDense: true,
+                                      hintText: '0',
+                                      hintStyle: TextStyle(
+                                          fontSize: 11, color: Colors.grey)),
+                                )));
+                      }),
+                      SizedBox(
+                          width: 52,
+                          height: 40,
+                          child: Container(
+                              color: Colors.grey[100],
+                              alignment: Alignment.center,
+                              child: Text('$rowTotal',
+                                  style: const TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.bold)))),
+                    ]);
+                  }),
+                  // Totals row
+                  Row(children: [
+                    _cosechaHeaderCell('Total', const Color(0xFF004B63)),
+                    _cosechaHeaderCell('', Colors.green[100]!, width: 108),
+                    ..._cosechaCalibraciones.map((cal) {
+                      int colTotal = _cosechaEdades.fold(
+                          0,
+                          (s, edad) =>
+                              s +
+                              (int.tryParse(_cosechaControllers[edad]![cal]!
+                                      .text
+                                      .trim()) ??
+                                  0));
+                      Color bg = cal <= 43
+                          ? Colors.red[100]!
+                          : cal >= 48
+                              ? Colors.orange[100]!
+                              : Colors.green[100]!;
+                      return SizedBox(
+                          width: 48,
+                          height: 36,
+                          child: Container(
+                              color: bg,
+                              alignment: Alignment.center,
+                              child: Text('$colTotal',
+                                  style: const TextStyle(
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.bold))));
+                    }),
+                    Builder(builder: (ctx) {
+                      int grand = 0;
+                      for (var e in _cosechaEdades)
+                        for (var c in _cosechaCalibraciones) {
+                          grand += int.tryParse(
+                                  _cosechaControllers[e]![c]!.text.trim()) ??
+                              0;
+                        }
+                      return SizedBox(
+                          width: 52,
+                          height: 36,
+                          child: Container(
+                              color: Colors.grey[300],
+                              alignment: Alignment.center,
+                              child: Text('$grand',
+                                  style: const TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.bold))));
+                    }),
+                  ]),
+                ],
+              ),
+            ),
             const SizedBox(height: 16),
-            _buildScoreRow('Enfunde (15%)', enfundeScore),
-            _buildScoreRow('Cosecha (35%)', _cosechaScore),
-            _buildScoreRow('Labores de campo (25%)', group1Score),
-            _buildScoreRow('Manejo agronómico (25%)', group2Score),
-            const Divider(color: Colors.white38, height: 24),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                  color: Colors.grey[100],
+                  borderRadius: BorderRadius.circular(8)),
+              child: Column(children: [
+                Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text('% Bajo grado (≤43):',
+                          style: TextStyle(fontWeight: FontWeight.w600)),
+                      Text('${_cosechaPorcentajeBajoGrado.toStringAsFixed(1)}%',
+                          style: TextStyle(
+                              color: Colors.red[700],
+                              fontWeight: FontWeight.bold,
+                              fontSize: 15)),
+                    ]),
+                const SizedBox(height: 6),
+                Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text('% Sobre grado (≥48):',
+                          style: TextStyle(fontWeight: FontWeight.w600)),
+                      Text(
+                          '${_cosechaPorcentajeSobreGrado.toStringAsFixed(1)}%',
+                          style: TextStyle(
+                              color: Colors.orange[700],
+                              fontWeight: FontWeight.bold,
+                              fontSize: 15)),
+                    ]),
+                const SizedBox(height: 6),
+                Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text('Suma (% bajo + % sobre):',
+                          style: TextStyle(fontWeight: FontWeight.w600)),
+                      Text(
+                        '${(_cosechaPorcentajeBajoGrado + _cosechaPorcentajeSobreGrado).toStringAsFixed(1)}%',
+                        style: const TextStyle(
+                            fontWeight: FontWeight.bold, fontSize: 15),
+                      ),
+                    ]),
+                const Divider(height: 16),
+                Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text('Calificación COSECHA:',
+                          style: TextStyle(
+                              fontWeight: FontWeight.bold, fontSize: 15)),
+                      Text('${_cosechaScore.toStringAsFixed(0)}/100',
+                          style: TextStyle(
+                              color: _scoreColor(_cosechaScore),
+                              fontWeight: FontWeight.bold,
+                              fontSize: 18)),
+                    ]),
+              ]),
+            ),
+            const SizedBox(height: 12),
             Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                const Text('TOTAL', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18)),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: [
-                    Text('${finalScore.toStringAsFixed(1)}%', style: TextStyle(color: _scoreColor(finalScore), fontWeight: FontWeight.bold, fontSize: 28)),
-                    Text(_scoreLabel(finalScore), style: TextStyle(color: _scoreColor(finalScore), fontSize: 13, fontWeight: FontWeight.w600)),
-                  ],
+                Expanded(
+                  child: Text(
+                    _cosechaPhotoPath != null
+                        ? 'Foto de cosecha adjunta'
+                        : 'Adjunte una foto de la matriz de cosecha',
+                    style: TextStyle(
+                      color: _cosechaPhotoPath != null
+                          ? Colors.green[700]
+                          : Colors.grey[700],
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+                ElevatedButton.icon(
+                  onPressed: _takeCosechaPhoto,
+                  icon: const Icon(Icons.camera_alt, size: 16),
+                  label: Text(
+                    _cosechaPhotoPath != null ? 'Cambiar foto' : 'Tomar foto',
+                  ),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: _cosechaPhotoPath != null
+                        ? Colors.green
+                        : const Color(0xFF004B63),
+                    foregroundColor: Colors.white,
+                  ),
                 ),
               ],
             ),
           ],
         ),
-      );
-    }
+      ),
+    );
+  }
 
-    Widget _buildScoreRow(String label, double score) {
-      return Padding(
-        padding: const EdgeInsets.symmetric(vertical: 4),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Text(label, style: const TextStyle(color: Colors.white70, fontSize: 13)),
-            Text('${score.toStringAsFixed(1)}%', style: TextStyle(color: _scoreColor(score), fontWeight: FontWeight.w600, fontSize: 13)),
-          ],
-        ),
-      );
-    }
+  Widget _cosechaHeaderCell(String text, Color color, {double width = 48}) {
+    return SizedBox(
+        width: width,
+        height: 36,
+        child: Container(
+            color: color,
+            alignment: Alignment.center,
+            child: Text(text,
+                style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 11,
+                    fontWeight: FontWeight.bold),
+                textAlign: TextAlign.center)));
+  }
 
-    Widget _buildCosechaSection() {
-      return Container(
-        margin: const EdgeInsets.only(bottom: 12),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(12),
-          boxShadow: [BoxShadow(color: Colors.grey.withOpacity(0.1), spreadRadius: 1, blurRadius: 4, offset: const Offset(0, 2))],
-          border: Border.all(color: _cosechaExpanded ? const Color(0xFF004B63) : Colors.grey[300]!, width: _cosechaExpanded ? 2 : 1),
-        ),
-        child: Theme(
-          data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
-          child: ExpansionTile(
-            initiallyExpanded: false,
-            onExpansionChanged: (v) => setState(() => _cosechaExpanded = v),
-            tilePadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-            leading: Container(
-              width: 40, height: 40,
-              decoration: BoxDecoration(
-                color: _cosechaExpanded ? const Color(0xFF004B63) : Colors.grey[200],
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Icon(_cosechaExpanded ? Icons.check_circle : Icons.expand_more,
-                color: _cosechaExpanded ? Colors.white : Colors.grey[600]),
-            ),
-            title: Text('COSECHA', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold,
-              color: _cosechaExpanded ? const Color(0xFF004B63) : Colors.black87)),
-            subtitle: Text(
-              'Calificación: ${_cosechaScore.toStringAsFixed(0)}/100  |  Bajo grado: ${_cosechaPorcentajeBajoGrado.toStringAsFixed(1)}%  Sobre grado: ${_cosechaPorcentajeSobreGrado.toStringAsFixed(1)}%',
-              style: TextStyle(fontSize: 12, color: Colors.grey[600]),
-            ),
-            children: [
-              const Text('Ingrese cantidad de racimos por semana de edad y calibración:', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
-              const SizedBox(height: 4),
-              Wrap(spacing: 12, runSpacing: 4, children: [
-                _buildCosechaLegend('Bajo grado ≤42', Colors.red[700]!),
-                _buildCosechaLegend('Normal 43-46', Colors.green[700]!),
-                _buildCosechaLegend('Sobre grado ≥47', Colors.orange[700]!),
-              ]),
-              const SizedBox(height: 12),
-              SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                child: Column(
-                  children: [
-                    // Header
-                    Row(children: [
-                      _cosechaHeaderCell('Sem.', const Color(0xFF004B63)),
-                      ..._cosechaCalibraciones.map((cal) {
-                        Color c = cal <= 42 ? Colors.red[700]! : cal >= 47 ? Colors.orange[700]! : Colors.green[700]!;
-                        return _cosechaHeaderCell('$cal', c);
-                      }),
-                      _cosechaHeaderCell('Total', const Color(0xFF004B63)),
-                    ]),
-                    // Data rows
-                    ..._cosechaEdades.map((edad) {
-                      int rowTotal = _cosechaCalibraciones.fold(0, (s, cal) =>
-                        s + (int.tryParse(_cosechaControllers[edad]![cal]!.text.trim()) ?? 0));
-                      return Row(children: [
-                        SizedBox(width: 48, height: 40,
-                          child: Container(color: const Color(0xFF004B63).withOpacity(0.12),
-                            alignment: Alignment.center,
-                            child: Text('$edad', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)))),
-                        ..._cosechaCalibraciones.map((cal) {
-                          Color bg = cal <= 42 ? Colors.red[50]! : cal >= 47 ? Colors.orange[50]! : Colors.green[50]!;
-                          return SizedBox(width: 48, height: 40,
-                            child: Container(color: bg, padding: const EdgeInsets.all(2),
-                              child: TextField(
-                                controller: _cosechaControllers[edad]![cal],
-                                textAlign: TextAlign.center,
-                                style: const TextStyle(fontSize: 12),
-                                keyboardType: TextInputType.number,
-                                decoration: const InputDecoration(border: InputBorder.none, isDense: true, hintText: '0', hintStyle: TextStyle(fontSize: 11, color: Colors.grey)),
-                              )));
-                        }),
-                        SizedBox(width: 52, height: 40,
-                          child: Container(color: Colors.grey[100], alignment: Alignment.center,
-                            child: Text('$rowTotal', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)))),
-                      ]);
-                    }),
-                    // Totals row
-                    Row(children: [
-                      _cosechaHeaderCell('Total', const Color(0xFF004B63)),
-                      ..._cosechaCalibraciones.map((cal) {
-                        int colTotal = _cosechaEdades.fold(0, (s, edad) =>
-                          s + (int.tryParse(_cosechaControllers[edad]![cal]!.text.trim()) ?? 0));
-                        Color bg = cal <= 42 ? Colors.red[100]! : cal >= 47 ? Colors.orange[100]! : Colors.green[100]!;
-                        return SizedBox(width: 48, height: 36,
-                          child: Container(color: bg, alignment: Alignment.center,
-                            child: Text('$colTotal', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold))));
-                      }),
-                      Builder(builder: (ctx) {
-                        int grand = 0;
-                        for (var e in _cosechaEdades) for (var c in _cosechaCalibraciones) {
-                          grand += int.tryParse(_cosechaControllers[e]![c]!.text.trim()) ?? 0;
-                        }
-                        return SizedBox(width: 52, height: 36,
-                          child: Container(color: Colors.grey[300], alignment: Alignment.center,
-                            child: Text('$grand', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold))));
-                      }),
-                    ]),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 16),
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(color: Colors.grey[100], borderRadius: BorderRadius.circular(8)),
-                child: Column(children: [
-                  Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-                    const Text('% Bajo grado (≤42):', style: TextStyle(fontWeight: FontWeight.w600)),
-                    Text('${_cosechaPorcentajeBajoGrado.toStringAsFixed(1)}%',
-                      style: TextStyle(color: Colors.red[700], fontWeight: FontWeight.bold, fontSize: 15)),
-                  ]),
-                  const SizedBox(height: 6),
-                  Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-                    const Text('% Sobre grado (≥47):', style: TextStyle(fontWeight: FontWeight.w600)),
-                    Text('${_cosechaPorcentajeSobreGrado.toStringAsFixed(1)}%',
-                      style: TextStyle(color: Colors.orange[700], fontWeight: FontWeight.bold, fontSize: 15)),
-                  ]),
-                  const SizedBox(height: 6),
-                  Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-                    const Text('Suma (% bajo + % sobre):', style: TextStyle(fontWeight: FontWeight.w600)),
-                    Text(
-                      '${(_cosechaPorcentajeBajoGrado + _cosechaPorcentajeSobreGrado).toStringAsFixed(1)}%',
-                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
-                    ),
-                  ]),
-                  const Divider(height: 16),
-                  Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-                    const Text('Calificación COSECHA:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
-                    Text('${_cosechaScore.toStringAsFixed(0)}/100',
-                      style: TextStyle(color: _scoreColor(_cosechaScore), fontWeight: FontWeight.bold, fontSize: 18)),
-                  ]),
-                ]),
-              ),
-            ],
-          ),
-        ),
-      );
-    }
-
-    Widget _cosechaHeaderCell(String text, Color color) {
-      return SizedBox(width: 48, height: 36,
-        child: Container(color: color, alignment: Alignment.center,
-          child: Text(text, style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold), textAlign: TextAlign.center)));
-    }
-
-    Widget _buildCosechaLegend(String label, Color color) {
-      return Row(mainAxisSize: MainAxisSize.min, children: [
-        Container(width: 12, height: 12, color: color),
-        const SizedBox(width: 4),
-        Text(label, style: const TextStyle(fontSize: 11)),
-      ]);
-    }
+  Widget _buildCosechaLegend(String label, Color color) {
+    return Row(mainAxisSize: MainAxisSize.min, children: [
+      Container(width: 12, height: 12, color: color),
+      const SizedBox(width: 4),
+      Text(label, style: const TextStyle(fontSize: 11)),
+    ]);
+  }
 
   Widget _buildSaveButton() {
     return SizedBox(
@@ -1551,6 +1830,29 @@ class _AuditScreenState extends State<AuditScreen> {
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text('Error al tomar la foto: $e')));
+    }
+  }
+
+  Future<void> _takeCosechaPhoto() async {
+    try {
+      final XFile? photo = await _picker.pickImage(
+        source: ImageSource.camera,
+        imageQuality: 70,
+      );
+      if (photo != null) {
+        setState(() {
+          _cosechaPhotoPath = photo.path;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Foto de cosecha capturada exitosamente'),
+          ),
+        );
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error al tomar la foto de cosecha: $e')),
+      );
     }
   }
 
@@ -1594,7 +1896,8 @@ class _AuditScreenState extends State<AuditScreen> {
       if (completedItems < totalItems) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Debe completar todas las evaluaciones ($completedItems/$totalItems)'),
+            content: Text(
+                'Debe completar todas las evaluaciones ($completedItems/$totalItems)'),
           ),
         );
         return;
@@ -1628,7 +1931,8 @@ class _AuditScreenState extends State<AuditScreen> {
       final suffix = extraCount > 0 ? ' y $extraCount más' : '';
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Debe tomar foto para todas las evaluaciones. Faltan: $preview$suffix'),
+          content: Text(
+              'Debe tomar foto para todas las evaluaciones. Faltan: $preview$suffix'),
           backgroundColor: Colors.orange,
           duration: const Duration(seconds: 4),
         ),
@@ -1636,77 +1940,129 @@ class _AuditScreenState extends State<AuditScreen> {
       return;
     }
 
-      Map<String, dynamic> auditData = {};
-      for (final section in _auditSections.entries) {
-        auditData[section.key] = section.value
-            .map(
-              (item) => {
-                'name': item.name,
-                'maxScore': item.maxScore,
-                'rating': item.rating,
-                'calculatedScore': item.calculatedScore,
-                'photoPath': item.photoPath,
-                'observaciones': item.observaciones,
-              },
-            )
-            .toList();
-      }
-          auditData['Lote'] = loteEvaluacion;
-          auditData['CosechaResumen'] = {
-            'porcentajeBajoGrado': _cosechaPorcentajeBajoGrado,
-            'porcentajeSobreGrado': _cosechaPorcentajeSobreGrado,
-            'sumaPorcentajes':
-            _cosechaPorcentajeBajoGrado + _cosechaPorcentajeSobreGrado,
-            'calificacion': _cosechaScore,
-          };
+    if (_hasCosechaData() && _cosechaPhotoPath == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Debe tomar una foto para la matriz de cosecha'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
 
-      // Validaciones adicionales
-      if (_selectedClient == null) {
-        throw Exception('Cliente no seleccionado');
-      }
+    final String fincaCliente = _formatFincaName(_selectedClient!);
+    final String hacienda = fincaCliente.isNotEmpty
+        ? fincaCliente
+        : (_selectedClient!['hacienda']?.toString().isNotEmpty == true
+            ? _selectedClient!['hacienda'].toString()
+            : 'No especificada');
+    final String cultivo = _selectedCrop;
+    final String tipoAuditoria = _isBasicMode ? 'Básica' : 'Completa';
+    final String clienteNombre =
+        '${_selectedClient!['nombre']} ${_selectedClient!['apellidos']}';
+    final String cedulaCliente = _selectedClient!['cedula'] as String;
+    final String fechaAuditoria = DateTime.now().toIso8601String();
 
-      if (!_selectedClient!.containsKey('cedula') ||
-          _selectedClient!['cedula'] == null) {
-        throw Exception('Cliente sin cédula válida');
-      }
+    Map<String, dynamic> auditData = {};
+    for (final section in _auditSections.entries) {
+      auditData[section.key] = section.value
+          .map(
+            (item) => {
+              'name': item.name,
+              'maxScore': item.maxScore,
+              'rating': item.rating,
+              'calculatedScore': item.calculatedScore,
+              'photoPath': item.photoPath,
+              'observaciones': item.observaciones,
+            },
+          )
+          .toList();
+    }
+    auditData['Hacienda'] = hacienda;
+    auditData['Cultivo'] = cultivo;
+    auditData['TipoAuditoria'] = tipoAuditoria;
+    auditData['Lote'] = loteEvaluacion;
+    auditData['SeleccionResumen'] = {
+      'totalPlantas':
+          int.tryParse(_seleccionTotalPlantasController.text.trim()) ?? 0,
+      'plantasMalSeleccionadas':
+          int.tryParse(_seleccionMalSeleccionadasController.text.trim()) ?? 0,
+      'porcentajeMalSeleccionadas': _seleccionPorcentaje,
+      'observacion': _seleccionObservacionController.text.trim(),
+    };
+    auditData['CosechaResumen'] = {
+      'porcentajeBajoGrado': _cosechaPorcentajeBajoGrado,
+      'porcentajeSobreGrado': _cosechaPorcentajeSobreGrado,
+      'sumaPorcentajes':
+          _cosechaPorcentajeBajoGrado + _cosechaPorcentajeSobreGrado,
+      'calificacion': _cosechaScore,
+      'photoPath': _cosechaPhotoPath,
+      'colorCintaPorSemana': {
+        for (final edad in _cosechaEdades)
+          edad.toString(): _cosechaColorCinta[edad],
+      },
+    };
 
-      final clientId = _selectedClient!['id'] as int;
-      final categoryId = _selectedCrop == 'banano' ? 1 : 2;
+    // Validaciones adicionales
+    if (_selectedClient == null) {
+      throw Exception('Cliente no seleccionado');
+    }
 
+    if (!_selectedClient!.containsKey('cedula') ||
+        _selectedClient!['cedula'] == null) {
+      throw Exception('Cliente sin cédula válida');
+    }
+
+    final clientId = _selectedClient!['id'] as int;
+    final categoryId = _selectedCrop == 'banano' ? 1 : 2;
+
+    final int tecnicoId = await _authService.getUserId() ?? 1;
+    final String observacionesGenerales =
+        'Auditoría ${_isBasicMode ? 'básica' : 'completa'} de $_selectedCrop - Lote: $loteEvaluacion';
+
+    bool savedToBackend = false;
+    try {
+      final scores =
+          await AuditService.buildBackendScoresFromAuditMap(auditData);
+      final result = await _auditService.createAuditBackend(
+        hacienda: hacienda,
+        cultivo: cultivo,
+        fecha: fechaAuditoria,
+        tecnicoId: tecnicoId,
+        estado: 'COMPLETADA',
+        observaciones: observacionesGenerales,
+        scores: scores,
+        cedulaCliente: cedulaCliente,
+        trayectoUbicaciones: _trayectoUbicaciones,
+        evaluaciones: auditData,
+      );
+      savedToBackend = result['success'] == true;
+    } catch (_) {
+      savedToBackend = false;
+    }
+
+    if (!savedToBackend) {
       await _offlineStorageCampo.savePendingAudit(
-        cedulaCliente: _selectedClient!['cedula'] as String,
+        cedulaCliente: cedulaCliente,
         clientId: clientId,
         categoryId: categoryId,
-        auditDate: DateTime.now().toIso8601String(),
+        auditDate: fechaAuditoria,
         status: 'COMPLETADA',
-        auditData: [auditData], // Convertir el mapa en una lista
-        observations:
-        'Auditoría ${_isBasicMode ? 'básica' : 'completa'} de $_selectedCrop - Lote: $loteEvaluacion',
-        trayectoUbicaciones: _trayectoUbicaciones, // Agregar trayecto
+        auditData: [auditData],
+        observations: observacionesGenerales,
+        trayectoUbicaciones: _trayectoUbicaciones,
         inicioEvaluacion: _inicioEvaluacion?.toIso8601String(),
         finEvaluacion: DateTime.now().toIso8601String(),
       );
+    }
 
-      // Detener tracking después de guardar
-      _detenerTrackingUbicacion();
+    // Detener tracking después de guardar
+    _detenerTrackingUbicacion();
 
-      // Calcular puntuación solo sobre los ítems completados
-      final double percentage = _calculateFinalWeightedScore();
+    // Calcular puntuación solo sobre los ítems completados
+    final double percentage = _calculateFinalWeightedScore();
 
-          final String fincaCliente = _formatFincaName(_selectedClient!);
-          final String hacienda = fincaCliente.isNotEmpty
-            ? fincaCliente
-            : (_selectedClient!['hacienda']?.toString().isNotEmpty == true
-              ? _selectedClient!['hacienda'].toString()
-              : 'No especificada');
-      final String cultivo = _selectedCrop;
-      final String tipoAuditoria = _isBasicMode ? 'Básica' : 'Completa';
-      final String clienteNombre =
-          '${_selectedClient!['nombre']} ${_selectedClient!['apellidos']}';
-      final String cedulaCliente = _selectedClient!['cedula'] as String;
-
-        final String mensaje =
-          '''
+    final String mensaje = '''
     Auditoría guardada exitosamente:
 
     Cliente: $clienteNombre
@@ -1721,37 +2077,252 @@ class _AuditScreenState extends State<AuditScreen> {
     ───────────────────────────────
     Elementos evaluados: $completedItems/$totalItems
 
-    Los datos se han guardado localmente y se sincronizarán cuando haya conexión.
+    ${savedToBackend ? 'Los datos se guardaron en el backend.' : 'Los datos se guardaron localmente y se sincronizarán cuando haya conexión.'}
     ''';
 
-      // Cerrar diálogo de carga
-      Navigator.of(context).pop();
+    await _limpiarBorrador();
 
-      // Mostrar diálogo de éxito
-      showDialog(
-        context: context,
-        builder: (BuildContext context) {
-          return AlertDialog(
-            title: const Text('Auditoría Guardada'),
-            content: Text(mensaje),
-            actions: [
-              TextButton(
-                onPressed: () {
-                  Navigator.of(context).pop(); // Cerrar el diálogo
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('Guardado con éxito'),
-                      backgroundColor: Colors.green,
-                      duration: Duration(seconds: 2),
-                    ),
-                  );
-                },
-                child: const Text('Aceptar'),
-              ),
-            ],
-          );
-        },
-      );
+    // Mostrar diálogo de éxito
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text('Auditoría Guardada'),
+          content: Text(mensaje),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.of(context).pop(); // Cerrar el diálogo
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Guardado con éxito'),
+                    backgroundColor: Colors.green,
+                    duration: Duration(seconds: 2),
+                  ),
+                );
+              },
+              child: const Text('Aceptar'),
+            ),
+          ],
+        );
+      },
+    );
   }
 
+  double get _seleccionPorcentaje {
+    final total =
+        int.tryParse(_seleccionTotalPlantasController.text.trim()) ?? 0;
+    final mal =
+        int.tryParse(_seleccionMalSeleccionadasController.text.trim()) ?? 0;
+    if (total <= 0) {
+      return 0;
     }
+    return (mal / total) * 100;
+  }
+
+  Widget _buildSeleccionCriteriaCard() {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: const Color(0xFF004B63).withOpacity(0.06),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: const Color(0xFF004B63).withOpacity(0.18)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Criterio de selección',
+            style: TextStyle(
+              fontWeight: FontWeight.bold,
+              color: Color(0xFF004B63),
+            ),
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              Expanded(
+                child: TextField(
+                  controller: _seleccionTotalPlantasController,
+                  keyboardType: TextInputType.number,
+                  decoration: const InputDecoration(
+                    labelText: '# total de plantas',
+                    border: OutlineInputBorder(),
+                    isDense: true,
+                  ),
+                  onChanged: (_) => setState(() {}),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: TextField(
+                  controller: _seleccionMalSeleccionadasController,
+                  keyboardType: TextInputType.number,
+                  decoration: const InputDecoration(
+                    labelText: '# mal selectadas',
+                    border: OutlineInputBorder(),
+                    isDense: true,
+                  ),
+                  onChanged: (_) => setState(() {}),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          TextField(
+            controller: _seleccionObservacionController,
+            maxLines: 2,
+            decoration: const InputDecoration(
+              labelText: 'Observación',
+              border: OutlineInputBorder(),
+              isDense: true,
+            ),
+            onChanged: (_) => setState(() {}),
+          ),
+          const SizedBox(height: 10),
+          Text(
+            'Porcentaje: ${_seleccionPorcentaje.toStringAsFixed(1)}%  (# mal selectadas / # total de plantas)',
+            style: const TextStyle(
+              fontWeight: FontWeight.w600,
+              color: Color(0xFF004B63),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _guardarBorrador() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final draft = <String, dynamic>{
+        'selectedClient': _selectedClient,
+        'nombre': _nombreController.text,
+        'lote': _loteController.text,
+        'isBasicMode': _isBasicMode,
+        'selectedCrop': _selectedCrop,
+        'expandedSections': _expandedSections,
+        'seleccionTotalPlantas': _seleccionTotalPlantasController.text,
+        'seleccionMalSeleccionadas': _seleccionMalSeleccionadasController.text,
+        'seleccionObservacion': _seleccionObservacionController.text,
+        'cosechaPhotoPath': _cosechaPhotoPath,
+        'cosechaColorCinta': {
+          for (final edad in _cosechaEdades)
+            edad.toString(): _cosechaColorCinta[edad],
+        },
+        'auditSections': {
+          for (final entry in _auditSections.entries)
+            entry.key: entry.value
+                .map(
+                  (item) => {
+                    'rating': item.rating,
+                    'calculatedScore': item.calculatedScore,
+                    'photoPath': item.photoPath,
+                    'observaciones': item.observaciones,
+                  },
+                )
+                .toList(),
+        },
+        'cosechaValues': {
+          for (final edad in _cosechaEdades)
+            edad.toString(): {
+              for (final cal in _cosechaCalibraciones)
+                cal.toString(): _cosechaControllers[edad]![cal]!.text,
+            },
+        },
+      };
+      await prefs.setString(_draftKey, jsonEncode(draft));
+    } catch (_) {}
+  }
+
+  Future<void> _restaurarBorrador() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final raw = prefs.getString(_draftKey);
+      if (raw == null || raw.isEmpty || !mounted) {
+        return;
+      }
+
+      final draft = jsonDecode(raw) as Map<String, dynamic>;
+      setState(() {
+        final selectedClientRaw = draft['selectedClient'];
+        if (_selectedClient == null && selectedClientRaw is Map) {
+          _selectedClient = Map<String, dynamic>.from(selectedClientRaw);
+        }
+        _nombreController.text =
+            draft['nombre']?.toString() ?? _nombreController.text;
+        _loteController.text = draft['lote']?.toString() ?? '';
+        _isBasicMode = draft['isBasicMode'] as bool? ?? _isBasicMode;
+        _selectedCrop = draft['selectedCrop']?.toString() ?? _selectedCrop;
+        _seleccionTotalPlantasController.text =
+            draft['seleccionTotalPlantas']?.toString() ?? '';
+        _seleccionMalSeleccionadasController.text =
+            draft['seleccionMalSeleccionadas']?.toString() ?? '';
+        _seleccionObservacionController.text =
+            draft['seleccionObservacion']?.toString() ?? '';
+        _cosechaPhotoPath = draft['cosechaPhotoPath']?.toString();
+
+        final expandedSections = draft['expandedSections'];
+        if (expandedSections is Map) {
+          _expandedSections
+            ..clear()
+            ..addAll(
+              expandedSections.map(
+                (key, value) => MapEntry(key.toString(), value == true),
+              ),
+            );
+        }
+
+        final auditSections = draft['auditSections'];
+        if (auditSections is Map) {
+          for (final entry in _auditSections.entries) {
+            final savedItems = auditSections[entry.key];
+            if (savedItems is List) {
+              for (int i = 0;
+                  i < entry.value.length && i < savedItems.length;
+                  i++) {
+                final savedItem =
+                    Map<String, dynamic>.from(savedItems[i] as Map);
+                entry.value[i].rating = savedItem['rating']?.toString();
+                entry.value[i].calculatedScore = int.tryParse(
+                    (savedItem['calculatedScore'] ?? '').toString());
+                entry.value[i].photoPath = savedItem['photoPath']?.toString();
+                entry.value[i].observaciones =
+                    savedItem['observaciones']?.toString();
+              }
+            }
+          }
+        }
+
+        final cosechaValues = draft['cosechaValues'];
+        if (cosechaValues is Map) {
+          for (final edad in _cosechaEdades) {
+            final row = cosechaValues[edad.toString()];
+            if (row is Map) {
+              for (final cal in _cosechaCalibraciones) {
+                _cosechaControllers[edad]![cal]!.text =
+                    row[cal.toString()]?.toString() ?? '';
+              }
+            }
+          }
+        }
+
+        final colorCinta = draft['cosechaColorCinta'];
+        if (colorCinta is Map) {
+          for (final edad in _cosechaEdades) {
+            _cosechaColorCinta[edad] = colorCinta[edad.toString()]?.toString();
+          }
+        }
+      });
+
+      _recalcularCosecha();
+    } catch (_) {}
+  }
+
+  Future<void> _limpiarBorrador() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove(_draftKey);
+    } catch (_) {}
+  }
+}

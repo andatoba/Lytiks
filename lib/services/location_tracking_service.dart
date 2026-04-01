@@ -23,8 +23,8 @@ class LocationTrackingService {
   // Configuración de horario: 8 AM a 6 PM (18:00)
   static const int _startHour = 8;
   static const int _endHour = 18;
-  // Configuración de intervalo: cada 5 segundos
-  static const Duration _trackingInterval = Duration(seconds: 5);
+  // Configuración de intervalo: cada 1 minuto
+  static const Duration _trackingInterval = Duration(minutes: 1);
 
   /// Iniciar el seguimiento automático de ubicación
   Future<void> startTracking({

@@ -12,6 +12,7 @@ import 'sigatoka_audit_screen.dart';
 import 'plagas_screen.dart';
 import 'audit_consultation_screen.dart';
 import 'client_info_screen.dart';
+import 'productive_indicators_screen.dart';
 import 'profile_screen.dart';
 import 'location_tracking_screen.dart';
 
@@ -748,6 +749,29 @@ class _InicioTabState extends State<InicioTab> {
                   context,
                   MaterialPageRoute(
                     builder: (context) => PlagasScreen(
+                      clientData: _selectedClient,
+                    ),
+                  ),
+                );
+              },
+              isFullWidth: true,
+            ),
+          ),
+
+          const SizedBox(height: 12),
+
+          SizedBox(
+            width: double.infinity,
+            child: _buildActionButton(
+              context,
+              icon: Icons.insights,
+              title: 'Indicadores productivos',
+              color: const Color(0xFF1565C0),
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => ProductiveIndicatorsScreen(
                       clientData: _selectedClient,
                     ),
                   ),
