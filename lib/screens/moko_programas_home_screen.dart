@@ -23,6 +23,21 @@ class MokoProgramasHomeScreen extends StatelessWidget {
     return fullName.isEmpty ? 'Cliente seleccionado' : fullName;
   }
 
+  int? _resolveFocoId() {
+    final dynamic focoId = clientData?['focoId'];
+    if (focoId is int) return focoId;
+    if (focoId is String) return int.tryParse(focoId);
+    return null;
+  }
+
+  int? _resolveNumeroFoco() {
+    final dynamic numeroFoco =
+        clientData?['numeroFoco'] ?? clientData?['numero_foco'];
+    if (numeroFoco is int) return numeroFoco;
+    if (numeroFoco is String) return int.tryParse(numeroFoco);
+    return null;
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -71,7 +86,11 @@ class MokoProgramasHomeScreen extends StatelessWidget {
               Navigator.push(
                 context,
                 MaterialPageRoute(
-                  builder: (context) => const AgrotecbanMokoPreventivoScreen(),
+                  builder: (context) => AgrotecbanMokoPreventivoScreen(
+                    focoId: _resolveFocoId(),
+                    numeroFoco: _resolveNumeroFoco(),
+                    clientData: clientData,
+                  ),
                 ),
               );
             },
@@ -88,7 +107,11 @@ class MokoProgramasHomeScreen extends StatelessWidget {
               Navigator.push(
                 context,
                 MaterialPageRoute(
-                  builder: (context) => const AgrotecbanMokoContencionScreen(),
+                  builder: (context) => AgrotecbanMokoContencionScreen(
+                    focoId: _resolveFocoId(),
+                    numeroFoco: _resolveNumeroFoco(),
+                    clientData: clientData,
+                  ),
                 ),
               );
             },

@@ -151,11 +151,33 @@ class _AgrotecbanMokoMidleScreenState extends State<AgrotecbanMokoMidleScreen> {
         '';
   }
 
+  int? _toInt(dynamic value) {
+    if (value is int) return value;
+    if (value is String) return int.tryParse(value);
+    return null;
+  }
+
+  int? _resolveFocoIdFromClient(Map<String, dynamic> client) {
+    return _toInt(client['focoId']) ??
+        _toInt(client['idFoco']) ??
+        _toInt(client['foco_id']);
+  }
+
+  int? _resolveNumeroFocoFromClient(Map<String, dynamic> client) {
+    return _toInt(client['numeroFoco']) ??
+        _toInt(client['numero_foco']) ??
+        _toInt(client['focoNumero']) ??
+        _toInt(client['foco_numero']);
+  }
+
   Map<String, dynamic> _buildClientPayload() {
+    final selected = _selectedClient!;
     return {
-      ...?_selectedClient,
-      'clienteId': _selectedClient?['clienteId'] ?? _selectedClient?['id'],
-      'cliente': _formatClientName(_selectedClient!),
+      ...selected,
+      'clienteId': selected['clienteId'] ?? selected['id'],
+      'focoId': selected['focoId'] ?? _resolveFocoIdFromClient(selected),
+      'numeroFoco': selected['numeroFoco'] ?? _resolveNumeroFocoFromClient(selected),
+      'cliente': _formatClientName(selected),
       'lote': _loteController.text.trim(),
     };
   }

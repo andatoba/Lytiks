@@ -539,67 +539,22 @@ public class RegistroMokoController {
             productoContencionRepository.deleteAll();
             productoRepository.deleteAll();
 
-            // Crear productos con las especificaciones correctas
-            Producto goldenProducto = new Producto();
-            goldenProducto.setNombre("Golden Crop");
-            goldenProducto.setDetalle("Producto para contención");
-            goldenProducto.setCantidad(1);
-            goldenProducto.setPesoKg(1.0);
-            productoRepository.save(goldenProducto);
+            // Crear productos usando los nombres exactos del frontend actual
+            crearProductoContencion("SAFERBACTER", "250g", "250-500 gr", 0.25, "https://example.com/saferbacter");
+            crearProductoContencion("SAFERSOIL", "250g", "250-500 gr", 0.25, "https://example.com/safersoil");
+            crearProductoContencion("SAFERMIX", "250g", "250-500 gr", 0.25, "https://example.com/safermix");
+            crearProductoContencion("GOLDEN", "1L", "2-4 lt", 1.0, "https://example.com/golden");
+            crearProductoContencion("PREBIOTIK", "5kg", "5 kilos", 5.0, "https://example.com/prebiotik");
 
-            ProductoContencion golden = new ProductoContencion();
-            golden.setProducto(goldenProducto);
-            golden.setPresentacion("1L");
-            golden.setDosisSugerida("1L/400L/agua/ha");
-            golden.setUrl("https://example.com/golden-crop");
-            productoContencionRepository.save(golden);
-
-            Producto previotikProducto = new Producto();
-            previotikProducto.setNombre("Previotik Crop");
-            previotikProducto.setDetalle("Producto para contención");
-            previotikProducto.setCantidad(1);
-            previotikProducto.setPesoKg(6.6);
-            productoRepository.save(previotikProducto);
-
-            ProductoContencion previotik = new ProductoContencion();
-            previotik.setProducto(previotikProducto);
-            previotik.setPresentacion("6.6kg");
-            previotik.setDosisSugerida("6.6kg/ha (con fertilizante)");
-            previotik.setUrl("https://example.com/previotik-crop");
-            productoContencionRepository.save(previotik);
-
-            Producto saferbacterProducto = new Producto();
-            saferbacterProducto.setNombre("Saferbacter");
-            saferbacterProducto.setDetalle("Producto para contención");
-            saferbacterProducto.setCantidad(1);
-            saferbacterProducto.setPesoKg(0.25);
-            productoRepository.save(saferbacterProducto);
-
-            ProductoContencion saferbacter = new ProductoContencion();
-            saferbacter.setProducto(saferbacterProducto);
-            saferbacter.setPresentacion("250g");
-            saferbacter.setDosisSugerida("250g/400L/agua/ha");
-            saferbacter.setUrl("https://example.com/saferbacter");
-            productoContencionRepository.save(saferbacter);
-
-            Producto safersoilProducto = new Producto();
-            safersoilProducto.setNombre("Safersoil Trichoderma");
-            safersoilProducto.setDetalle("Producto para contención");
-            safersoilProducto.setCantidad(1);
-            safersoilProducto.setPesoKg(0.25);
-            productoRepository.save(safersoilProducto);
-
-            ProductoContencion safersoil = new ProductoContencion();
-            safersoil.setProducto(safersoilProducto);
-            safersoil.setPresentacion("250g");
-            safersoil.setDosisSugerida("250g/400L/agua/ha");
-            safersoil.setUrl("https://example.com/safersoil-trichoderma");
-            productoContencionRepository.save(safersoil);
+            crearProductoContencion("ARMUROX", "1L", "1 lt", 1.0, "https://example.com/armurox");
+            crearProductoContencion("AMINOALEXIN", "1L", "0,5-0,75 lt", 1.0, "https://example.com/aminoalexin");
+            crearProductoContencion("EQUILIBRIUM", "1L", "0,5-1 lt", 1.0, "https://example.com/equilibrium");
+            crearProductoContencion("TERRASORB T24", "1L", "0,5-1 lt", 1.0, "https://example.com/terrasorb-t24");
 
             Map<String, Object> response = new HashMap<>();
             response.put("success", true);
             response.put("message", "Productos inicializados correctamente");
-            response.put("total", 4);
+            response.put("total", 9);
 
             return ResponseEntity.ok(response);
         } catch (Exception e) {
@@ -608,6 +563,27 @@ public class RegistroMokoController {
             error.put("error", "Error inicializando productos: " + e.getMessage());
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(error);
         }
+    }
+
+    private void crearProductoContencion(
+            String nombre,
+            String presentacion,
+            String dosisSugerida,
+            double pesoKg,
+            String url) {
+        Producto producto = new Producto();
+        producto.setNombre(nombre);
+        producto.setDetalle("Producto para contencion");
+        producto.setCantidad(1);
+        producto.setPesoKg(pesoKg);
+        productoRepository.save(producto);
+
+        ProductoContencion contencion = new ProductoContencion();
+        contencion.setProducto(producto);
+        contencion.setPresentacion(presentacion);
+        contencion.setDosisSugerida(dosisSugerida);
+        contencion.setUrl(url);
+        productoContencionRepository.save(contencion);
     }
 
     @PostMapping("/aplicaciones-contencion")

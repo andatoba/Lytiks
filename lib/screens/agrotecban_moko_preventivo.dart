@@ -303,6 +303,7 @@ class _AgrotecbanMokoPreventivoScreenState
     int totalGuardadas = 0;
     int totalServidor = 0;
     final configuraciones = <Map<String, dynamic>>[];
+    String? syncError;
 
     Future<void> guardarGrupo({
       required List<_PreventivoProducto> productos,
@@ -353,13 +354,19 @@ class _AgrotecbanMokoPreventivoScreenState
           final response = await _service
               .guardarConfiguracionesAplicacionBulk(configuraciones);
           totalServidor = (response['total'] as num?)?.toInt() ?? 0;
-        } catch (_) {}
+        } catch (e) {
+          syncError = 'No se pudo sincronizar configuraciones: $e';
+        }
 
         try {
           await _service.guardarPreventivoCompleto(
             _buildPreventivoPayload(focoId),
           );
-        } catch (_) {}
+        } catch (e) {
+          syncError = syncError == null
+              ? 'No se pudo guardar preventivo completo: $e'
+              : '$syncError | No se pudo guardar preventivo completo: $e';
+        }
       }
 
       if (!mounted) {
@@ -373,7 +380,10 @@ class _AgrotecbanMokoPreventivoScreenState
           : 'Guardado local completado. Seleccione un foco para sincronizar al servidor.';
 
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(mensaje), backgroundColor: Colors.green),
+        SnackBar(
+          content: Text(syncError == null ? mensaje : '$mensaje\n$syncError'),
+          backgroundColor: syncError == null ? Colors.green : Colors.orange,
+        ),
       );
 
       if (continuar) {

@@ -637,10 +637,32 @@ String _nombreProducto(Map<String, dynamic> producto) {
   return (producto['nombre'] ?? '').toString();
 }
 
+String _normalizarTexto(String value) {
+  final lower = value.toLowerCase().trim();
+  final sinTildes = lower
+      .replaceAll('á', 'a')
+      .replaceAll('é', 'e')
+      .replaceAll('í', 'i')
+      .replaceAll('ó', 'o')
+      .replaceAll('ú', 'u')
+      .replaceAll('ü', 'u')
+      .replaceAll('ñ', 'n');
+  return sinTildes.replaceAll(RegExp(r'[^a-z0-9]'), '');
+}
+
+bool _nombreProductoCompatible(String seleccionado, String catalogo) {
+  final s = _normalizarTexto(seleccionado);
+  final c = _normalizarTexto(catalogo);
+  if (s.isEmpty || c.isEmpty) {
+    return false;
+  }
+  return s == c || c.contains(s) || s.contains(c);
+}
+
 int? _productoIdPorNombre(String nombre) {
   for (final producto in _productos) {
-    final pNombre = _nombreProducto(producto).toLowerCase().trim();
-    if (pNombre == nombre.toLowerCase().trim()) {
+    final pNombre = _nombreProducto(producto);
+    if (_nombreProductoCompatible(nombre, pNombre)) {
       final dynamic idRaw = producto['idProducto'] ?? producto['id'];
       if (idRaw is int) return idRaw;
       return int.tryParse(idRaw?.toString() ?? '');
@@ -692,6 +714,7 @@ Future<void> _guardarContencion() async {
     }
 
     final aplicaciones = <Map<String, dynamic>>[];
+    final productosSinMapeo = <String>[];
 
     for (final item in _form.fase3) {
       final parametro = item.parametro.toLowerCase();
@@ -699,22 +722,26 @@ Future<void> _guardarContencion() async {
         continue;
       }
 
-      final productoNombre = item.extra2.text.trim();
+      final productoNombre =
+          (item.productoSeleccionado ?? item.extra2.text).trim();
       if (productoNombre.isEmpty) {
         continue;
       }
 
       final productoId = _productoIdPorNombre(productoNombre);
       if (productoId == null) {
+        productosSinMapeo.add(productoNombre);
         continue;
       }
+
+      final dosis = (item.dosisSeleccionada ?? item.detalle.text).trim();
 
       final aplicacionData = {
         'clienteId': clienteId,
         'productoId': productoId,
         'productoNombre': productoNombre,
         'plan': 'Moko-Contencion',
-        'dosis': item.detalle.text.trim(),
+        'dosis': dosis,
         'fechaInicio': DateTime.now().toIso8601String(),
         'frecuenciaDias': 30,
         'repeticiones': 1,
@@ -723,6 +750,15 @@ Future<void> _guardarContencion() async {
       };
 
       aplicaciones.add(aplicacionData);
+    }
+
+    if (aplicaciones.isEmpty) {
+      final detalleProductos = productosSinMapeo.isNotEmpty
+          ? ' Productos no reconocidos: ${productosSinMapeo.join(', ')}'
+          : '';
+      throw Exception(
+        'No hay aplicaciones validas para guardar. Seleccione producto y dosis en Fase 3.$detalleProductos',
+      );
     }
 
     final plantasAfectadas = _contarSiEnLista(_form.fase1);
