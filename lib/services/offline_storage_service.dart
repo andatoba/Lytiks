@@ -891,13 +891,16 @@ class OfflineStorageService {
     try {
       final db = await database;
       
-      debugPrint('💾 Guardando Moko Contencion localmente: focoId=${data['focoId']}, numeroFoco=${data['numeroFoco']}');
+      final focoId = data['focoId'];
+      final numeroFoco = data['numeroFoco'];
+      
+      debugPrint('💾 Guardando Moko Contencion localmente: focoId=$focoId, numeroFoco=$numeroFoco');
       
       final id = await db.insert(
         'pending_moko_contencion',
         {
-          'foco_id': data['focoId'],
-          'numero_foco': data['numeroFoco'],
+          'foco_id': focoId,
+          'numero_foco': numeroFoco,
           'cliente_id': data['clienteId'],
           'contencion_data': jsonEncode(data),
           'auditoria_data': jsonEncode(data['auditoria'] ?? {}),
@@ -906,7 +909,7 @@ class OfflineStorageService {
         },
       );
       
-      debugPrint('✅ Contencion guardada localmente con ID: $id');
+      debugPrint('✅ Contencion guardada localmente con ID: $id | ${data['aplicaciones']?.length ?? 0} aplicaciones');
       return id;
     } catch (e) {
       debugPrint('❌ Error guardando Moko Contencion: $e');

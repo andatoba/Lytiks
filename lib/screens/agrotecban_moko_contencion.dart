@@ -827,7 +827,9 @@ Future<void> _guardarContencion() async {
       'focoId': focoId,
       'numeroFoco': widget.numeroFoco ?? focoId,
       'clienteId': clienteId,
-      'payloadJson': payload.toString(),
+      'aplicaciones': aplicaciones,
+      'seguimiento': resumen,
+      'auditoria': _buildAuditoriaPayload(),
       'timestamp': DateTime.now().toIso8601String(),
     });
 
