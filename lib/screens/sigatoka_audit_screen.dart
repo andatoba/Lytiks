@@ -1,8 +1,9 @@
 import 'dart:async';
-import 'package:flutter/material.dart';
 import 'dart:convert';
+import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:geolocator/geolocator.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../services/client_service.dart';
 import '../services/auth_service.dart';
 import '../services/sigatoka_evaluacion_service.dart';
@@ -53,7 +54,9 @@ class SigatokaAuditScreen extends StatefulWidget {
   State<SigatokaAuditScreen> createState() => _SigatokaAuditScreenState();
 }
 
-class _SigatokaAuditScreenState extends State<SigatokaAuditScreen> {
+class _SigatokaAuditScreenState extends State<SigatokaAuditScreen>
+    with WidgetsBindingObserver {
+  static const String _draftKey = 'sigatoka_audit_draft';
   // Cliente seleccionado
   Map<String, dynamic>? _selectedClient;
   final TextEditingController _nombreController = TextEditingController();
@@ -77,7 +80,8 @@ class _SigatokaAuditScreenState extends State<SigatokaAuditScreen> {
   final TextEditingController grado3eraController = TextEditingController();
   final TextEditingController grado4taController = TextEditingController();
   final TextEditingController grado5taController = TextEditingController();
-  final TextEditingController totalHojas3eraController = TextEditingController();
+  final TextEditingController totalHojas3eraController =
+      TextEditingController();
   final TextEditingController totalHojas4taController = TextEditingController();
   final TextEditingController totalHojas5taController = TextEditingController();
   final TextEditingController hvle0wController = TextEditingController();
@@ -97,10 +101,11 @@ class _SigatokaAuditScreenState extends State<SigatokaAuditScreen> {
   Map<String, dynamic>? stoverReal;
   bool isLoading = false;
   int? evaluacionId;
-  
+
   // Lista de muestras de la sesión actual (en memoria)
   List<Map<String, dynamic>> muestrasSesion = [];
-  final List<int> _muestraOptions = List<int>.generate(100, (index) => index + 1);
+  final List<int> _muestraOptions =
+      List<int>.generate(100, (index) => index + 1);
   static const String _defaultInfectionGrade = '-';
   static const List<String> _infectionGradeOptions = [
     _defaultInfectionGrade,
@@ -119,22 +124,23 @@ class _SigatokaAuditScreenState extends State<SigatokaAuditScreen> {
   double? _loteLatitud;
   double? _loteLongitud;
   bool _obteniendoUbicacion = false;
-  
+
   // Modo cliente: bloquea búsqueda de cliente y seguimiento de ubicación
   bool _isClienteMode = false;
-  
+
   // Key para forzar reconstrucción de dropdowns después de limpiar
   int _dropdownResetKey = 0;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     if (widget.clientData != null) {
       _selectedClient = widget.clientData;
       _nombreController.text = _formatClientName(widget.clientData!);
       haciendaController.text = _formatFincaName(widget.clientData!);
       _clientService.saveSelectedClient(widget.clientData!);
-      
+
       // Verificar si es modo cliente (usuario con rol CLIENTE)
       _isClienteMode = widget.clientData!['isCliente'] == true;
     } else {
@@ -146,12 +152,23 @@ class _SigatokaAuditScreenState extends State<SigatokaAuditScreen> {
     _resetInfectionGrades();
     _initializeDefaultDate();
     _prefillEvaluador();
+    _restoreDraft();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.inactive ||
+        state == AppLifecycleState.paused ||
+        state == AppLifecycleState.detached) {
+      _saveDraft();
+    }
   }
 
   /// Inicializa la fecha actual y calcula automáticamente semana epidemiológica y período
   void _initializeDefaultDate() {
     final now = DateTime.now();
-    fechaController.text = '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
+    fechaController.text =
+        '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
     _applyDateDerivedFields(now);
   }
 
@@ -159,7 +176,7 @@ class _SigatokaAuditScreenState extends State<SigatokaAuditScreen> {
   void _applyDateDerivedFields(DateTime date) {
     final semanaISO = SigatokaDateUtil.getSemanaEpidemiologicaISO(date);
     semanaController.text = semanaISO.toString();
-    
+
     final periodo = SigatokaDateUtil.getPeriodoSemanaDelMes(date);
     periodoController.text = periodo;
   }
@@ -176,6 +193,110 @@ class _SigatokaAuditScreenState extends State<SigatokaAuditScreen> {
     });
   }
 
+  Future<void> _saveDraft() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final draft = {
+        'selectedClient': _selectedClient,
+        'nombre': _nombreController.text.trim(),
+        'hacienda': haciendaController.text.trim(),
+        'fecha': fechaController.text.trim(),
+        'semana': semanaController.text.trim(),
+        'periodo': periodoController.text.trim(),
+        'evaluador': evaluadorController.text.trim(),
+        'muestraNumero': muestraNumController.text.trim(),
+        'loteCodigo': loteCodigoController.text.trim(),
+        'grado3era': grado3eraController.text.trim(),
+        'grado4ta': grado4taController.text.trim(),
+        'grado5ta': grado5taController.text.trim(),
+        'totalHojas3era': totalHojas3eraController.text.trim(),
+        'totalHojas4ta': totalHojas4taController.text.trim(),
+        'totalHojas5ta': totalHojas5taController.text.trim(),
+        'hvle0w': hvle0wController.text.trim(),
+        'hvlq0w': hvlq0wController.text.trim(),
+        'hvlq5_0w': hvlq5_0wController.text.trim(),
+        'th0w': th0wController.text.trim(),
+        'hvle10w': hvle10wController.text.trim(),
+        'hvlq10w': hvlq10wController.text.trim(),
+        'hvlq5_10w': hvlq5_10wController.text.trim(),
+        'th10w': th10wController.text.trim(),
+        'evaluacionId': evaluacionId,
+        'muestrasSesion': muestrasSesion,
+        'loteLatitud': _loteLatitud,
+        'loteLongitud': _loteLongitud,
+        'isClienteMode': _isClienteMode,
+        'dropdownResetKey': _dropdownResetKey,
+      };
+      await prefs.setString(_draftKey, jsonEncode(draft));
+    } catch (_) {}
+  }
+
+  Future<void> _restoreDraft() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final raw = prefs.getString(_draftKey);
+      if (raw == null || raw.isEmpty || !mounted) {
+        return;
+      }
+
+      final draft = jsonDecode(raw) as Map<String, dynamic>;
+      setState(() {
+        final selectedClientRaw = draft['selectedClient'];
+        if (selectedClientRaw is Map) {
+          _selectedClient = Map<String, dynamic>.from(selectedClientRaw);
+        }
+        _nombreController.text =
+            draft['nombre']?.toString() ?? _nombreController.text;
+        haciendaController.text =
+            draft['hacienda']?.toString() ?? haciendaController.text;
+        fechaController.text =
+            draft['fecha']?.toString() ?? fechaController.text;
+        semanaController.text =
+            draft['semana']?.toString() ?? semanaController.text;
+        periodoController.text =
+            draft['periodo']?.toString() ?? periodoController.text;
+        evaluadorController.text =
+            draft['evaluador']?.toString() ?? evaluadorController.text;
+        muestraNumController.text =
+            draft['muestraNumero']?.toString().isNotEmpty == true
+                ? draft['muestraNumero'].toString()
+                : muestraNumController.text;
+        loteCodigoController.text = draft['loteCodigo']?.toString() ?? '';
+        grado3eraController.text =
+            draft['grado3era']?.toString() ?? grado3eraController.text;
+        grado4taController.text =
+            draft['grado4ta']?.toString() ?? grado4taController.text;
+        grado5taController.text =
+            draft['grado5ta']?.toString() ?? grado5taController.text;
+        totalHojas3eraController.text =
+            draft['totalHojas3era']?.toString() ?? '';
+        totalHojas4taController.text = draft['totalHojas4ta']?.toString() ?? '';
+        totalHojas5taController.text = draft['totalHojas5ta']?.toString() ?? '';
+        hvle0wController.text = draft['hvle0w']?.toString() ?? '';
+        hvlq0wController.text = draft['hvlq0w']?.toString() ?? '';
+        hvlq5_0wController.text = draft['hvlq5_0w']?.toString() ?? '';
+        th0wController.text = draft['th0w']?.toString() ?? '';
+        hvle10wController.text = draft['hvle10w']?.toString() ?? '';
+        hvlq10wController.text = draft['hvlq10w']?.toString() ?? '';
+        hvlq5_10wController.text = draft['hvlq5_10w']?.toString() ?? '';
+        th10wController.text = draft['th10w']?.toString() ?? '';
+        evaluacionId = draft['evaluacionId'] as int?;
+        final muestrasRaw = draft['muestrasSesion'];
+        if (muestrasRaw is List) {
+          muestrasSesion = muestrasRaw
+              .whereType<Map>()
+              .map((item) => Map<String, dynamic>.from(item))
+              .toList();
+        }
+        _loteLatitud = (draft['loteLatitud'] as num?)?.toDouble();
+        _loteLongitud = (draft['loteLongitud'] as num?)?.toDouble();
+        _isClienteMode = draft['isClienteMode'] as bool? ?? _isClienteMode;
+        _dropdownResetKey =
+            draft['dropdownResetKey'] as int? ?? _dropdownResetKey;
+      });
+    } catch (_) {}
+  }
+
   Future<void> _fetchReporte(int evaluacionId) async {
     // Validar que haya muestras en la sesión
     if (muestrasSesion.isEmpty) {
@@ -190,15 +311,15 @@ class _SigatokaAuditScreenState extends State<SigatokaAuditScreen> {
       setState(() => isLoading = false);
       return;
     }
-    
+
     setState(() => isLoading = true);
-    
+
     try {
       final service = SigatokaEvaluacionService();
-      
+
       // Enviar todas las muestras de la sesión al backend
       print('📤 Enviando ${muestrasSesion.length} muestras al backend...');
-      
+
       for (var muestra in muestrasSesion) {
         final result = await service.agregarMuestraCompleta(
           evaluacionId: evaluacionId,
@@ -225,24 +346,25 @@ class _SigatokaAuditScreenState extends State<SigatokaAuditScreen> {
           hvlq5_10w: muestra['hvlq5_10w'],
           th10w: muestra['th10w'],
         );
-        
+
         if (!result['success']) {
-          throw Exception('Error al guardar muestra #${muestra['numeroMuestra']}: ${result['message']}');
+          throw Exception(
+              'Error al guardar muestra #${muestra['numeroMuestra']}: ${result['message']}');
         }
       }
-      
+
       print('✅ Todas las muestras guardadas en el backend');
-      
+
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('✅ ${muestrasSesion.length} muestras guardadas exitosamente'),
+          content: Text(
+              '✅ ${muestrasSesion.length} muestras guardadas exitosamente'),
           backgroundColor: Colors.green,
           duration: const Duration(seconds: 3),
         ),
       );
-      
+
       setState(() => isLoading = false);
-      
     } catch (e) {
       print('❌ Error al guardar muestras: $e');
       setState(() => isLoading = false);
@@ -261,7 +383,8 @@ class _SigatokaAuditScreenState extends State<SigatokaAuditScreen> {
     if (muestrasSesion.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Debe agregar al menos una muestra antes de calcular el resumen'),
+          content: Text(
+              'Debe agregar al menos una muestra antes de calcular el resumen'),
           backgroundColor: Colors.orange,
           duration: Duration(seconds: 3),
         ),
@@ -292,12 +415,13 @@ class _SigatokaAuditScreenState extends State<SigatokaAuditScreen> {
       return;
     }
 
-    if (haciendaController.text.isEmpty || 
-        fechaController.text.isEmpty || 
+    if (haciendaController.text.isEmpty ||
+        fechaController.text.isEmpty ||
         evaluadorController.text.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Complete los campos obligatorios (Hacienda, Fecha, Evaluador)'),
+          content: Text(
+              'Complete los campos obligatorios (Hacienda, Fecha, Evaluador)'),
           backgroundColor: Colors.orange,
         ),
       );
@@ -315,20 +439,21 @@ class _SigatokaAuditScreenState extends State<SigatokaAuditScreen> {
           'clienteId': _selectedClient!['id'],
           'hacienda': haciendaController.text,
           'fecha': fechaController.text,
-          'semanaEpidemiologica': semanaController.text.isNotEmpty 
-            ? int.tryParse(semanaController.text) 
-            : null,
-          'periodo': periodoController.text.isNotEmpty ? periodoController.text : null,
+          'semanaEpidemiologica': semanaController.text.isNotEmpty
+              ? int.tryParse(semanaController.text)
+              : null,
+          'periodo':
+              periodoController.text.isNotEmpty ? periodoController.text : null,
           'evaluador': evaluadorController.text,
         }),
       );
-      
+
       print('Response status: ${response.statusCode}');
       print('Response body: ${response.body}');
-      
+
       if (response.statusCode == 200 || response.statusCode == 201) {
         final data = jsonDecode(response.body);
-        
+
         // El backend nuevo devuelve la estructura completa
         if (data['evaluacion'] != null && data['evaluacion']['id'] != null) {
           evaluacionId = data['evaluacion']['id'];
@@ -337,7 +462,7 @@ class _SigatokaAuditScreenState extends State<SigatokaAuditScreen> {
         } else if (data['evaluacionId'] != null) {
           evaluacionId = data['evaluacionId'];
         }
-        
+
         if (evaluacionId != null) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
@@ -345,7 +470,8 @@ class _SigatokaAuditScreenState extends State<SigatokaAuditScreen> {
               backgroundColor: Colors.green,
             ),
           );
-          
+          _saveDraft();
+
           // Cargar reporte si hay muestras
           await _fetchReporte(evaluacionId!);
         } else {
@@ -356,7 +482,8 @@ class _SigatokaAuditScreenState extends State<SigatokaAuditScreen> {
         String errorMessage = 'Error ${response.statusCode}';
         try {
           final errorData = jsonDecode(response.body);
-          errorMessage += ': ${errorData['message'] ?? errorData['error'] ?? response.body}';
+          errorMessage +=
+              ': ${errorData['message'] ?? errorData['error'] ?? response.body}';
         } catch (e) {
           errorMessage += ': ${response.body}';
         }
@@ -400,7 +527,8 @@ class _SigatokaAuditScreenState extends State<SigatokaAuditScreen> {
       if (permission == LocationPermission.deniedForever) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Los permisos de ubicación están permanentemente denegados'),
+            content: Text(
+                'Los permisos de ubicación están permanentemente denegados'),
             backgroundColor: Colors.red,
           ),
         );
@@ -416,6 +544,7 @@ class _SigatokaAuditScreenState extends State<SigatokaAuditScreen> {
         _loteLatitud = position.latitude;
         _loteLongitud = position.longitude;
       });
+      _saveDraft();
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -496,7 +625,7 @@ class _SigatokaAuditScreenState extends State<SigatokaAuditScreen> {
     setState(() {
       muestrasSesion.add(muestraData);
       muestraNumController.text = nextMuestra.toString();
-      
+
       // Limpiar completamente todos los campos de la muestra
       _resetInfectionGrades();
       totalHojas3eraController.text = '';
@@ -510,18 +639,20 @@ class _SigatokaAuditScreenState extends State<SigatokaAuditScreen> {
       hvlq10wController.text = '';
       hvlq5_10wController.text = '';
       th10wController.text = '';
-      
+
       // Resetear coordenadas GPS para la siguiente muestra
       _loteLatitud = null;
       _loteLongitud = null;
-      
+
       // Incrementar key para forzar reconstrucción de dropdowns
       _dropdownResetKey++;
     });
+    _saveDraft();
 
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text('✅ Muestra #${muestraData['numeroMuestra']} agregada (${muestrasSesion.length} en sesión)'),
+        content: Text(
+            '✅ Muestra #${muestraData['numeroMuestra']} agregada (${muestrasSesion.length} en sesión)'),
         backgroundColor: Colors.green,
         duration: const Duration(seconds: 2),
       ),
@@ -532,6 +663,7 @@ class _SigatokaAuditScreenState extends State<SigatokaAuditScreen> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _searchDebounce?.cancel();
     _nombreController.dispose();
     _nombreFocusNode.dispose();
@@ -735,6 +867,7 @@ class _SigatokaAuditScreenState extends State<SigatokaAuditScreen> {
                       _clientSuggestions = [];
                     });
                     _clientService.saveSelectedClient(client);
+                    _saveDraft();
                   },
                   fieldViewBuilder: (
                     BuildContext context,
@@ -751,20 +884,24 @@ class _SigatokaAuditScreenState extends State<SigatokaAuditScreen> {
                       enabled: !_isClienteMode,
                       decoration: InputDecoration(
                         labelText: 'Nombre y Apellido del Cliente',
-                        hintText: _isClienteMode ? 'Cliente autenticado' : 'Ingrese nombre y apellido',
+                        hintText: _isClienteMode
+                            ? 'Cliente autenticado'
+                            : 'Ingrese nombre y apellido',
                         prefixIcon: Icon(
                           Icons.person,
                           color: _isClienteMode ? Colors.grey : null,
                         ),
                         border: const OutlineInputBorder(),
                         filled: _isClienteMode,
-                        fillColor: _isClienteMode ? Colors.grey.withOpacity(0.1) : null,
-                        suffixIcon: _isClienteMode 
-                          ? const Icon(Icons.lock, color: Colors.grey)
-                          : IconButton(
-                              icon: const Icon(Icons.search),
-                              onPressed: _triggerSearch,
-                            ),
+                        fillColor: _isClienteMode
+                            ? Colors.grey.withOpacity(0.1)
+                            : null,
+                        suffixIcon: _isClienteMode
+                            ? const Icon(Icons.lock, color: Colors.grey)
+                            : IconButton(
+                                icon: const Icon(Icons.search),
+                                onPressed: _triggerSearch,
+                              ),
                       ),
                     );
                   },
@@ -784,7 +921,8 @@ class _SigatokaAuditScreenState extends State<SigatokaAuditScreen> {
                             padding: EdgeInsets.zero,
                             shrinkWrap: true,
                             itemCount: optionList.length,
-                            separatorBuilder: (_, __) => const Divider(height: 1),
+                            separatorBuilder: (_, __) =>
+                                const Divider(height: 1),
                             itemBuilder: (context, index) {
                               final client = optionList[index];
                               final nombre = _formatClientName(client);
@@ -798,7 +936,9 @@ class _SigatokaAuditScreenState extends State<SigatokaAuditScreen> {
                                 subtitleParts.add('Finca: $finca');
                               }
                               return ListTile(
-                                title: Text(nombre.isEmpty ? 'Cliente sin nombre' : nombre),
+                                title: Text(nombre.isEmpty
+                                    ? 'Cliente sin nombre'
+                                    : nombre),
                                 subtitle: subtitleParts.isEmpty
                                     ? null
                                     : Text(subtitleParts.join(' | ')),
@@ -882,7 +1022,8 @@ class _SigatokaAuditScreenState extends State<SigatokaAuditScreen> {
         ? currentValue
         : _defaultInfectionGrade;
     return DropdownButtonFormField<String>(
-      key: ValueKey('${label}_$_dropdownResetKey'), // Key para forzar reconstrucción
+      key: ValueKey(
+          '${label}_$_dropdownResetKey'), // Key para forzar reconstrucción
       value: selectedValue,
       isExpanded: true,
       decoration: InputDecoration(
@@ -956,6 +1097,10 @@ class _SigatokaAuditScreenState extends State<SigatokaAuditScreen> {
         if (firstName != null && firstName.isNotEmpty) firstName,
         if (lastName != null && lastName.isNotEmpty) lastName,
       ].join(' ').trim();
+
+      if (evaluadorController.text.trim().isNotEmpty) {
+        return;
+      }
 
       if (fullName.isNotEmpty) {
         evaluadorController.text = fullName;
@@ -1050,6 +1195,7 @@ class _SigatokaAuditScreenState extends State<SigatokaAuditScreen> {
       _clientService.saveSelectedClient(client);
       _nombreController.text = _formatClientName(client);
       _nombreFocusNode.unfocus();
+      _saveDraft();
       return;
     }
 
@@ -1073,7 +1219,8 @@ class _SigatokaAuditScreenState extends State<SigatokaAuditScreen> {
                     color: Colors.blue[50],
                     borderRadius: BorderRadius.circular(8),
                   ),
-                  child: Icon(Icons.description, color: Colors.blue[700], size: 28),
+                  child: Icon(Icons.description,
+                      color: Colors.blue[700], size: 28),
                 ),
                 const SizedBox(width: 12),
                 const Text(
@@ -1087,7 +1234,7 @@ class _SigatokaAuditScreenState extends State<SigatokaAuditScreen> {
               ],
             ),
             const SizedBox(height: 20),
-            
+
             // HACIENDA
             TextField(
               controller: haciendaController,
@@ -1099,7 +1246,7 @@ class _SigatokaAuditScreenState extends State<SigatokaAuditScreen> {
               ),
             ),
             const SizedBox(height: 16),
-            
+
             // FECHA CON CALENDARIO VISUAL
             InkWell(
               onTap: () async {
@@ -1128,7 +1275,8 @@ class _SigatokaAuditScreenState extends State<SigatokaAuditScreen> {
                 );
                 if (picked != null) {
                   setState(() {
-                    fechaController.text = '${picked.year}-${picked.month.toString().padLeft(2, '0')}-${picked.day.toString().padLeft(2, '0')}';
+                    fechaController.text =
+                        '${picked.year}-${picked.month.toString().padLeft(2, '0')}-${picked.day.toString().padLeft(2, '0')}';
                     _applyDateDerivedFields(picked);
                   });
                 }
@@ -1164,13 +1312,17 @@ class _SigatokaAuditScreenState extends State<SigatokaAuditScreen> {
                             ),
                             const SizedBox(height: 4),
                             Text(
-                              fechaController.text.isEmpty 
-                                ? 'Toque para seleccionar fecha' 
-                                : fechaController.text,
+                              fechaController.text.isEmpty
+                                  ? 'Toque para seleccionar fecha'
+                                  : fechaController.text,
                               style: TextStyle(
                                 fontSize: 16,
-                                color: fechaController.text.isEmpty ? Colors.grey : Colors.black,
-                                fontWeight: fechaController.text.isEmpty ? FontWeight.normal : FontWeight.bold,
+                                color: fechaController.text.isEmpty
+                                    ? Colors.grey
+                                    : Colors.black,
+                                fontWeight: fechaController.text.isEmpty
+                                    ? FontWeight.normal
+                                    : FontWeight.bold,
                               ),
                             ),
                           ],
@@ -1186,7 +1338,7 @@ class _SigatokaAuditScreenState extends State<SigatokaAuditScreen> {
               ),
             ),
             const SizedBox(height: 16),
-            
+
             // SEMANA Y PERÍODO
             Row(
               children: [
@@ -1217,7 +1369,7 @@ class _SigatokaAuditScreenState extends State<SigatokaAuditScreen> {
               ],
             ),
             const SizedBox(height: 16),
-            
+
             // EVALUADOR
             TextField(
               controller: evaluadorController,
@@ -1229,7 +1381,7 @@ class _SigatokaAuditScreenState extends State<SigatokaAuditScreen> {
               ),
             ),
             const SizedBox(height: 20),
-            
+
             // BOTÓN GUARDAR
             SizedBox(
               width: double.infinity,
@@ -1241,12 +1393,13 @@ class _SigatokaAuditScreenState extends State<SigatokaAuditScreen> {
                   padding: const EdgeInsets.symmetric(vertical: 16),
                   backgroundColor: const Color(0xFF00903E),
                   foregroundColor: Colors.white,
-                  textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                  textStyle: const TextStyle(
+                      fontSize: 16, fontWeight: FontWeight.bold),
                 ),
               ),
             ),
             const SizedBox(height: 12),
-            
+
             // NOTA INFORMATIVA
             Container(
               padding: const EdgeInsets.all(12),
@@ -1268,7 +1421,7 @@ class _SigatokaAuditScreenState extends State<SigatokaAuditScreen> {
                 ],
               ),
             ),
-            
+
             // SECCIÓN AGREGAR MUESTRAS (solo visible si hay evaluacionId)
             if (evaluacionId != null) ...[
               const SizedBox(height: 30),
@@ -1281,7 +1434,7 @@ class _SigatokaAuditScreenState extends State<SigatokaAuditScreen> {
       ),
     );
   }
-  
+
   // Nueva sección para agregar muestras completas
   Widget _buildAgregarMuestraSection() {
     return Card(
@@ -1306,7 +1459,7 @@ class _SigatokaAuditScreenState extends State<SigatokaAuditScreen> {
               ],
             ),
             const SizedBox(height: 20),
-            
+
             // Muestra # y Lote #
             Row(
               children: [
@@ -1350,9 +1503,11 @@ class _SigatokaAuditScreenState extends State<SigatokaAuditScreen> {
                             hintText: 'A1',
                             border: const OutlineInputBorder(),
                             prefixIcon: const Icon(Icons.location_on),
-                            suffixIcon: _loteLatitud != null && _loteLongitud != null
-                                ? const Icon(Icons.check_circle, color: Colors.green)
-                                : null,
+                            suffixIcon:
+                                _loteLatitud != null && _loteLongitud != null
+                                    ? const Icon(Icons.check_circle,
+                                        color: Colors.green)
+                                    : null,
                           ),
                         ),
                       ),
@@ -1363,7 +1518,9 @@ class _SigatokaAuditScreenState extends State<SigatokaAuditScreen> {
                           borderRadius: BorderRadius.circular(8),
                         ),
                         child: IconButton(
-                          onPressed: _obteniendoUbicacion ? null : _obtenerUbicacionLote,
+                          onPressed: _obteniendoUbicacion
+                              ? null
+                              : _obtenerUbicacionLote,
                           icon: _obteniendoUbicacion
                               ? const SizedBox(
                                   width: 24,
@@ -1373,7 +1530,8 @@ class _SigatokaAuditScreenState extends State<SigatokaAuditScreen> {
                                     strokeWidth: 2,
                                   ),
                                 )
-                              : const Icon(Icons.my_location, color: Colors.white),
+                              : const Icon(Icons.my_location,
+                                  color: Colors.white),
                           tooltip: 'Obtener ubicación GPS',
                         ),
                       ),
@@ -1398,7 +1556,8 @@ class _SigatokaAuditScreenState extends State<SigatokaAuditScreen> {
                     Expanded(
                       child: Text(
                         'Lat: ${_loteLatitud!.toStringAsFixed(6)}, Lng: ${_loteLongitud!.toStringAsFixed(6)}',
-                        style: TextStyle(fontSize: 12, color: Colors.green[700]),
+                        style:
+                            TextStyle(fontSize: 12, color: Colors.green[700]),
                       ),
                     ),
                   ],
@@ -1406,9 +1565,10 @@ class _SigatokaAuditScreenState extends State<SigatokaAuditScreen> {
               ),
             ],
             const SizedBox(height: 16),
-            
+
             // Grados de infección
-            const Text('🍃 Grado de Infección', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+            const Text('🍃 Grado de Infección',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
             const SizedBox(height: 8),
             Row(
               children: [
@@ -1438,53 +1598,123 @@ class _SigatokaAuditScreenState extends State<SigatokaAuditScreen> {
               ],
             ),
             const SizedBox(height: 16),
-            
+
             // Total hojas
-            const Text('🍀 Total de Hojas en Planta', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+            const Text('🍀 Total de Hojas en Planta',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
             const SizedBox(height: 8),
             Row(
               children: [
-                Expanded(child: TextField(controller: totalHojas3eraController, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Total hojas en 3era', hintText: '8', border: OutlineInputBorder()))),
+                Expanded(
+                    child: TextField(
+                        controller: totalHojas3eraController,
+                        keyboardType: TextInputType.number,
+                        decoration: const InputDecoration(
+                            labelText: 'Total hojas en 3era',
+                            hintText: '8',
+                            border: OutlineInputBorder()))),
                 const SizedBox(width: 8),
-                Expanded(child: TextField(controller: totalHojas4taController, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Total hojas en 4ta', hintText: '8', border: OutlineInputBorder()))),
+                Expanded(
+                    child: TextField(
+                        controller: totalHojas4taController,
+                        keyboardType: TextInputType.number,
+                        decoration: const InputDecoration(
+                            labelText: 'Total hojas en 4ta',
+                            hintText: '8',
+                            border: OutlineInputBorder()))),
                 const SizedBox(width: 8),
-                Expanded(child: TextField(controller: totalHojas5taController, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Total hojas en 5ta', hintText: '8', border: OutlineInputBorder()))),
+                Expanded(
+                    child: TextField(
+                        controller: totalHojas5taController,
+                        keyboardType: TextInputType.number,
+                        decoration: const InputDecoration(
+                            labelText: 'Total hojas en 5ta',
+                            hintText: '8',
+                            border: OutlineInputBorder()))),
               ],
             ),
             const SizedBox(height: 16),
-            
+
             // Variables Stover 0 semanas
-            const Text('📈 Variables Stover "0 semanas"', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+            const Text('📈 Variables Stover "0 semanas"',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
             const SizedBox(height: 8),
             Row(
               children: [
-                Expanded(child: TextField(controller: hvle0wController, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'H.V.L.E.', border: OutlineInputBorder()))),
+                Expanded(
+                    child: TextField(
+                        controller: hvle0wController,
+                        keyboardType: TextInputType.number,
+                        decoration: const InputDecoration(
+                            labelText: 'H.V.L.E.',
+                            border: OutlineInputBorder()))),
                 const SizedBox(width: 8),
-                Expanded(child: TextField(controller: hvlq0wController, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'H.V.L.Q.', border: OutlineInputBorder()))),
+                Expanded(
+                    child: TextField(
+                        controller: hvlq0wController,
+                        keyboardType: TextInputType.number,
+                        decoration: const InputDecoration(
+                            labelText: 'H.V.L.Q.',
+                            border: OutlineInputBorder()))),
                 const SizedBox(width: 8),
-                Expanded(child: TextField(controller: hvlq5_0wController, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'H.V.L.Q.5%', border: OutlineInputBorder()))),
+                Expanded(
+                    child: TextField(
+                        controller: hvlq5_0wController,
+                        keyboardType: TextInputType.number,
+                        decoration: const InputDecoration(
+                            labelText: 'H.V.L.Q.5%',
+                            border: OutlineInputBorder()))),
                 const SizedBox(width: 8),
-                Expanded(child: TextField(controller: th0wController, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'T.H.', border: OutlineInputBorder()))),
+                Expanded(
+                    child: TextField(
+                        controller: th0wController,
+                        keyboardType: TextInputType.number,
+                        decoration: const InputDecoration(
+                            labelText: 'T.H.', border: OutlineInputBorder()))),
               ],
             ),
             const SizedBox(height: 16),
-            
+
             // Variables Stover 10 semanas
-            const Text('📈 Variables Stover "10 semanas"', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+            const Text('📈 Variables Stover "10 semanas"',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
             const SizedBox(height: 8),
             Row(
               children: [
-                Expanded(child: TextField(controller: hvle10wController, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'H.V.L.E.', border: OutlineInputBorder()))),
+                Expanded(
+                    child: TextField(
+                        controller: hvle10wController,
+                        keyboardType: TextInputType.number,
+                        decoration: const InputDecoration(
+                            labelText: 'H.V.L.E.',
+                            border: OutlineInputBorder()))),
                 const SizedBox(width: 8),
-                Expanded(child: TextField(controller: hvlq10wController, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'H.V.L.Q.', border: OutlineInputBorder()))),
+                Expanded(
+                    child: TextField(
+                        controller: hvlq10wController,
+                        keyboardType: TextInputType.number,
+                        decoration: const InputDecoration(
+                            labelText: 'H.V.L.Q.',
+                            border: OutlineInputBorder()))),
                 const SizedBox(width: 8),
-                Expanded(child: TextField(controller: hvlq5_10wController, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'H.V.L.Q.5%', border: OutlineInputBorder()))),
+                Expanded(
+                    child: TextField(
+                        controller: hvlq5_10wController,
+                        keyboardType: TextInputType.number,
+                        decoration: const InputDecoration(
+                            labelText: 'H.V.L.Q.5%',
+                            border: OutlineInputBorder()))),
                 const SizedBox(width: 8),
-                Expanded(child: TextField(controller: th10wController, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'T.H.', border: OutlineInputBorder()))),
+                Expanded(
+                    child: TextField(
+                        controller: th10wController,
+                        keyboardType: TextInputType.number,
+                        decoration: const InputDecoration(
+                            labelText: 'T.H.', border: OutlineInputBorder()))),
               ],
             ),
             const SizedBox(height: 20),
-            
+
             // Botón Guardar Muestra
             SizedBox(
               width: double.infinity,
@@ -1496,7 +1726,8 @@ class _SigatokaAuditScreenState extends State<SigatokaAuditScreen> {
                   padding: const EdgeInsets.symmetric(vertical: 18),
                   backgroundColor: Colors.green[700],
                   foregroundColor: Colors.white,
-                  textStyle: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                  textStyle: const TextStyle(
+                      fontSize: 18, fontWeight: FontWeight.bold),
                 ),
               ),
             ),
@@ -1513,7 +1744,8 @@ class _SigatokaAuditScreenState extends State<SigatokaAuditScreen> {
                     padding: const EdgeInsets.symmetric(vertical: 16),
                     backgroundColor: const Color(0xFF00903E),
                     foregroundColor: Colors.white,
-                    textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                    textStyle: const TextStyle(
+                        fontSize: 16, fontWeight: FontWeight.bold),
                   ),
                 ),
               ),

@@ -5,16 +5,38 @@ import 'package:http/http.dart' as http;
 class HaciendaService {
   final storage = const FlutterSecureStorage();
 
-  Future<String> _getBaseUrl() async {
+  Future<Uri> _buildUri(
+    String path, {
+    Map<String, dynamic>? queryParameters,
+  }) async {
     final savedUrl = await storage.read(key: 'server_url');
-    return savedUrl ?? 'http://5.161.198.89:8081/api';
+    final rawUrl = (savedUrl == null || savedUrl.trim().isEmpty)
+        ? 'http://5.161.198.89:8081/api'
+        : savedUrl.trim();
+    final baseUri = Uri.parse(rawUrl);
+    final baseSegments = List<String>.from(baseUri.pathSegments);
+
+    if (!baseSegments.contains('api')) {
+      baseSegments.add('api');
+    }
+
+    final fullPath = [
+      ...baseSegments,
+      ...path.split('/').where((segment) => segment.isNotEmpty),
+    ].join('/');
+
+    return baseUri.replace(
+      path: '/$fullPath',
+      queryParameters: queryParameters?.map(
+        (key, value) => MapEntry(key, value.toString()),
+      ),
+    );
   }
 
   Future<List<Map<String, dynamic>>> getAllHaciendas() async {
     try {
-      final baseUrl = await _getBaseUrl();
       final response = await http.get(
-        Uri.parse('$baseUrl/haciendas/activas'),
+        await _buildUri('haciendas/activas'),
         headers: {'Content-Type': 'application/json'},
       ).timeout(const Duration(seconds: 10));
 
@@ -31,9 +53,8 @@ class HaciendaService {
 
   Future<List<Map<String, dynamic>>> getHaciendasByCliente(int clienteId) async {
     try {
-      final baseUrl = await _getBaseUrl();
       final response = await http.get(
-        Uri.parse('$baseUrl/haciendas/cliente/$clienteId'),
+        await _buildUri('haciendas/cliente/$clienteId'),
         headers: {'Content-Type': 'application/json'},
       ).timeout(const Duration(seconds: 10));
 
@@ -50,9 +71,11 @@ class HaciendaService {
 
   Future<List<Map<String, dynamic>>> searchHaciendas(String nombre) async {
     try {
-      final baseUrl = await _getBaseUrl();
       final response = await http.get(
-        Uri.parse('$baseUrl/haciendas/search?nombre=$nombre'),
+        await _buildUri(
+          'haciendas/search',
+          queryParameters: {'nombre': nombre},
+        ),
         headers: {'Content-Type': 'application/json'},
       ).timeout(const Duration(seconds: 10));
 
@@ -76,9 +99,8 @@ class HaciendaService {
     String? usuarioCreacion,
   }) async {
     try {
-      final baseUrl = await _getBaseUrl();
       final response = await http.post(
-        Uri.parse('$baseUrl/haciendas'),
+        await _buildUri('haciendas'),
         headers: {'Content-Type': 'application/json'},
         body: json.encode({
           'nombre': nombre,
@@ -108,9 +130,8 @@ class HaciendaService {
     String? usuarioActualizacion,
   }) async {
     try {
-      final baseUrl = await _getBaseUrl();
       final response = await http.put(
-        Uri.parse('$baseUrl/haciendas/$id'),
+        await _buildUri('haciendas/$id'),
         headers: {'Content-Type': 'application/json'},
         body: json.encode({
           'nombre': nombre,
@@ -131,9 +152,8 @@ class HaciendaService {
 
   Future<Map<String, dynamic>> deleteHacienda(int id) async {
     try {
-      final baseUrl = await _getBaseUrl();
       final response = await http.delete(
-        Uri.parse('$baseUrl/haciendas/$id'),
+        await _buildUri('haciendas/$id'),
         headers: {'Content-Type': 'application/json'},
       ).timeout(const Duration(seconds: 10));
 

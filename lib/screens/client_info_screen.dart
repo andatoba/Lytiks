@@ -19,6 +19,7 @@ class _ClientInfoScreenState extends State<ClientInfoScreen>
     with WidgetsBindingObserver {
   static const String _draftKey = 'client_info_draft';
   final Set<int> _loadedFincaIds = <int>{};
+  int? _capturingGpsFincaIndex;
   void _enviarSmsExitoso() {
     final telefono = _telefonoController.text.trim();
     if (telefono.isNotEmpty) {
@@ -42,7 +43,6 @@ class _ClientInfoScreenState extends State<ClientInfoScreen>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    _obtenerUbicacion();
     _restaurarBorrador();
   }
 
@@ -101,6 +101,56 @@ class _ClientInfoScreenState extends State<ClientInfoScreen>
               content: Text('Error al obtener ubicación: $e'),
               backgroundColor: Colors.red),
         );
+      }
+    }
+  }
+
+  String _buildDetalleWithGps(String currentText, Position position) {
+    final gpsText =
+        '${position.latitude.toStringAsFixed(6)}, ${position.longitude.toStringAsFixed(6)}';
+    final trimmed = currentText.trim();
+
+    if (trimmed.isEmpty) {
+      return gpsText;
+    }
+
+    if (trimmed.contains('| GPS:')) {
+      return trimmed.replaceFirst(
+        RegExp(r'\s*\| GPS:.*$'),
+        ' | GPS: $gpsText',
+      );
+    }
+
+    return '$trimmed | GPS: $gpsText';
+  }
+
+  Future<void> _capturarGpsParaFinca(int index, _FincaEntry finca) async {
+    setState(() {
+      _capturingGpsFincaIndex = index;
+    });
+
+    try {
+      await _obtenerUbicacion();
+      if (!mounted || _currentPosition == null) {
+        return;
+      }
+
+      finca.detalleController.text = _buildDetalleWithGps(
+        finca.detalleController.text,
+        _currentPosition!,
+      );
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Coordenadas GPS capturadas en la ubicación de la finca.'),
+          backgroundColor: Color(0xFF00903E),
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _capturingGpsFincaIndex = null;
+        });
       }
     }
   }
@@ -891,10 +941,24 @@ class _ClientInfoScreenState extends State<ClientInfoScreen>
         const SizedBox(height: 8),
         TextField(
           controller: finca.detalleController,
-          decoration: const InputDecoration(
+          decoration: InputDecoration(
             labelText: 'Detalle / Ubicación',
-            prefixIcon: Icon(Icons.info_outline),
-            border: OutlineInputBorder(),
+            prefixIcon: const Icon(Icons.info_outline),
+            suffixIcon: _capturingGpsFincaIndex == index
+                ? const Padding(
+                    padding: EdgeInsets.all(12),
+                    child: SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    ),
+                  )
+                : IconButton(
+                    icon: const Icon(Icons.my_location),
+                    tooltip: 'Capturar GPS',
+                    onPressed: () => _capturarGpsParaFinca(index, finca),
+                  ),
+            border: const OutlineInputBorder(),
             isDense: true,
           ),
         ),

@@ -1,6 +1,8 @@
 import 'dart:async' as dart_async;
+import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../services/client_service.dart';
 import '../services/plagas_service.dart';
@@ -43,6 +45,25 @@ class _PlagaSample {
     medianaController.dispose();
     grandeController.dispose();
   }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'numero': numero,
+      'huevo': huevoController.text.trim(),
+      'pequena': pequenaController.text.trim(),
+      'mediana': medianaController.text.trim(),
+      'grande': grandeController.text.trim(),
+    };
+  }
+
+  factory _PlagaSample.fromJson(Map<String, dynamic> json) {
+    final sample = _PlagaSample(json['numero'] as int? ?? 1);
+    sample.huevoController.text = json['huevo']?.toString() ?? '';
+    sample.pequenaController.text = json['pequena']?.toString() ?? '';
+    sample.medianaController.text = json['mediana']?.toString() ?? '';
+    sample.grandeController.text = json['grande']?.toString() ?? '';
+    return sample;
+  }
 }
 
 class PlagasScreen extends StatefulWidget {
@@ -54,7 +75,9 @@ class PlagasScreen extends StatefulWidget {
   State<PlagasScreen> createState() => _PlagasScreenState();
 }
 
-class _PlagasScreenState extends State<PlagasScreen> {
+class _PlagasScreenState extends State<PlagasScreen>
+    with WidgetsBindingObserver {
+  static const String _draftKey = 'plagas_screen_draft';
   final ClientService _clientService = ClientService();
   final PlagasService _plagasService = PlagasService();
   static const List<String> _plagasDisponibles = [
@@ -83,6 +106,7 @@ class _PlagasScreenState extends State<PlagasScreen> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _initializeDefaultDate();
 
     for (final sample in _samples) {
@@ -98,10 +122,12 @@ class _PlagasScreenState extends State<PlagasScreen> {
     } else {
       _loadStoredClient();
     }
+    _restoreDraft();
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _searchDebounce?.cancel();
     _nombreController.dispose();
     _nombreFocusNode.dispose();
@@ -112,6 +138,15 @@ class _PlagasScreenState extends State<PlagasScreen> {
       sample.dispose();
     }
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.inactive ||
+        state == AppLifecycleState.paused ||
+        state == AppLifecycleState.detached) {
+      _saveDraft();
+    }
   }
 
   void _initializeDefaultDate() {
@@ -143,6 +178,7 @@ class _PlagasScreenState extends State<PlagasScreen> {
       _fechaController.text =
           '${selectedDate.year}-${selectedDate.month.toString().padLeft(2, '0')}-${selectedDate.day.toString().padLeft(2, '0')}';
     });
+    _saveDraft();
   }
 
   Future<void> _loadStoredClient() async {
@@ -159,11 +195,93 @@ class _PlagasScreenState extends State<PlagasScreen> {
     });
   }
 
+  Future<void> _saveDraft() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final draft = {
+        'selectedClient': _selectedClient,
+        'nombre': _nombreController.text.trim(),
+        'fecha': _fechaController.text.trim(),
+        'lote': _loteController.text.trim(),
+        'plaga': _plagaController.text.trim(),
+        'isClienteMode': _isClienteMode,
+        'samples': _samples.map((sample) => sample.toJson()).toList(),
+      };
+      await prefs.setString(_draftKey, jsonEncode(draft));
+    } catch (_) {}
+  }
+
+  Future<void> _restoreDraft() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final raw = prefs.getString(_draftKey);
+      if (raw == null || raw.isEmpty) {
+        return;
+      }
+
+      final draft = jsonDecode(raw) as Map<String, dynamic>;
+      final restoredSamples = <_PlagaSample>[];
+      final samplesRaw = draft['samples'];
+      if (samplesRaw is List) {
+        for (final sampleRaw in samplesRaw) {
+          if (sampleRaw is Map) {
+            final sample = _PlagaSample.fromJson(
+              Map<String, dynamic>.from(sampleRaw),
+            );
+            _registerSampleListeners(sample);
+            restoredSamples.add(sample);
+          }
+        }
+      }
+
+      if (!mounted) {
+        for (final sample in restoredSamples) {
+          sample.dispose();
+        }
+        return;
+      }
+
+      setState(() {
+        final selectedClientRaw = draft['selectedClient'];
+        if (selectedClientRaw is Map) {
+          _selectedClient = Map<String, dynamic>.from(selectedClientRaw);
+        }
+        _nombreController.text =
+            draft['nombre']?.toString() ?? _nombreController.text;
+        _fechaController.text =
+            draft['fecha']?.toString() ?? _fechaController.text;
+        _loteController.text = draft['lote']?.toString() ?? '';
+        final restoredPlaga = draft['plaga']?.toString() ?? '';
+        if (restoredPlaga.isNotEmpty) {
+          _plagaController.text = restoredPlaga;
+        }
+        _isClienteMode = draft['isClienteMode'] as bool? ?? _isClienteMode;
+
+        if (restoredSamples.isNotEmpty) {
+          for (final sample in _samples) {
+            sample.dispose();
+          }
+          _samples
+            ..clear()
+            ..addAll(restoredSamples);
+        }
+      });
+    } catch (_) {}
+  }
+
+  Future<void> _clearDraft() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove(_draftKey);
+    } catch (_) {}
+  }
+
   void _onSamplesChanged() {
     if (!mounted) {
       return;
     }
     setState(() {});
+    _saveDraft();
   }
 
   void _registerSampleListeners(_PlagaSample sample) {
@@ -179,6 +297,7 @@ class _PlagasScreenState extends State<PlagasScreen> {
     setState(() {
       _samples.add(sample);
     });
+    _saveDraft();
   }
 
   String _formatClientName(Map<String, dynamic> client) {
@@ -295,6 +414,7 @@ class _PlagasScreenState extends State<PlagasScreen> {
       _clientService.saveSelectedClient(client);
       _nombreController.text = _formatClientName(client);
       _nombreFocusNode.unfocus();
+      _saveDraft();
       return;
     }
 
@@ -305,20 +425,20 @@ class _PlagasScreenState extends State<PlagasScreen> {
       _samples.fold(0, (previousValue, sample) => previousValue + sample.huevo);
 
   int get _totalPequena => _samples.fold(
-    0,
-    (previousValue, sample) => previousValue + sample.pequena,
-  );
+        0,
+        (previousValue, sample) => previousValue + sample.pequena,
+      );
 
   int get _totalMediana => _samples.fold(
-    0,
-    (previousValue, sample) => previousValue + sample.mediana,
-  );
+        0,
+        (previousValue, sample) => previousValue + sample.mediana,
+      );
 
-  int get _totalGrande =>
-      _samples.fold(0, (previousValue, sample) => previousValue + sample.grande);
+  int get _totalGrande => _samples.fold(
+      0, (previousValue, sample) => previousValue + sample.grande);
 
-  int get _totalIndividuos =>
-      _samples.fold(0, (previousValue, sample) => previousValue + sample.totalIndividuos);
+  int get _totalIndividuos => _samples.fold(
+      0, (previousValue, sample) => previousValue + sample.totalIndividuos);
 
   double _avgInt(int total) {
     if (_samples.isEmpty) {
@@ -421,12 +541,14 @@ class _PlagasScreenState extends State<PlagasScreen> {
       };
 
       final result = await _plagasService.guardarResumen(payload);
+      await _clearDraft();
       if (!mounted) {
         return;
       }
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(result['message']?.toString() ?? 'Resumen de plagas guardado'),
+          content: Text(
+              result['message']?.toString() ?? 'Resumen de plagas guardado'),
           backgroundColor: Colors.green,
         ),
       );
@@ -436,7 +558,8 @@ class _PlagasScreenState extends State<PlagasScreen> {
       }
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Error al guardar resumen: ${e.toString().replaceAll('Exception: ', '')}'),
+          content: Text(
+              'Error al guardar resumen: ${e.toString().replaceAll('Exception: ', '')}'),
           backgroundColor: Colors.red,
         ),
       );
@@ -616,6 +739,7 @@ class _PlagasScreenState extends State<PlagasScreen> {
                 }
               });
               _clientService.saveSelectedClient(client);
+              _saveDraft();
             },
             fieldViewBuilder: (
               BuildContext context,
@@ -682,7 +806,8 @@ class _PlagasScreenState extends State<PlagasScreen> {
                           subtitleParts.add('Finca: $finca');
                         }
                         return ListTile(
-                          title: Text(nombre.isEmpty ? 'Cliente sin nombre' : nombre),
+                          title: Text(
+                              nombre.isEmpty ? 'Cliente sin nombre' : nombre),
                           subtitle: subtitleParts.isEmpty
                               ? null
                               : Text(subtitleParts.join(' | ')),
@@ -809,6 +934,7 @@ class _PlagasScreenState extends State<PlagasScreen> {
               setState(() {
                 _plagaController.text = value;
               });
+              _saveDraft();
             },
           ),
         ],
@@ -996,7 +1122,9 @@ class _PlagasScreenState extends State<PlagasScreen> {
           _summaryMeta('Lote', _loteResumen),
           _summaryMeta(
             'Plaga',
-            _plagaController.text.trim().isEmpty ? '-' : _plagaController.text.trim(),
+            _plagaController.text.trim().isEmpty
+                ? '-'
+                : _plagaController.text.trim(),
           ),
           const SizedBox(height: 10),
           SingleChildScrollView(
@@ -1018,7 +1146,9 @@ class _PlagasScreenState extends State<PlagasScreen> {
               rows: [
                 DataRow(
                   cells: [
-                    DataCell(Text(_plagaController.text.trim().isEmpty ? '-' : _plagaController.text.trim())),
+                    DataCell(Text(_plagaController.text.trim().isEmpty
+                        ? '-'
+                        : _plagaController.text.trim())),
                     DataCell(Text(_loteResumen)),
                     DataCell(Text(_totalHuevo.toString())),
                     DataCell(Text(_totalPequena.toString())),

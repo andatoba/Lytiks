@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 import 'dart:convert';
 import '../services/offline_storage_service.dart';
 import '../services/plan_seguimiento_moko_service.dart';
@@ -23,6 +24,7 @@ class AgrotecbanMokoPreventivoScreen extends StatefulWidget {
 class _AgrotecbanMokoPreventivoScreenState
     extends State<AgrotecbanMokoPreventivoScreen> {
   final DateTime _now = DateTime.now();
+  final ImagePicker _picker = ImagePicker();
   final PlanSeguimientoMokoService _service = PlanSeguimientoMokoService();
   final OfflineStorageService _offlineStorage = OfflineStorageService();
   late DateTime _fechaInicioPlan;
@@ -43,18 +45,20 @@ class _AgrotecbanMokoPreventivoScreenState
     _fechaInicioPlan = DateTime(_now.year, _now.month, 1);
 
     _microorganismos = [
-      _PreventivoProducto('SAFERBACTER', ['250 gr', '500 gr', '2-4 lt', '5 kilos'], _ciclosMicro),
-      _PreventivoProducto('SAFERSOIL', ['250 gr', '500 gr', '2-4 lt', '5 kilos'], _ciclosMicro),
-      _PreventivoProducto('SAFERMIX', ['250 gr', '500 gr', '2-4 lt', '5 kilos'], _ciclosMicro),
-      _PreventivoProducto('GOLDEN', ['250 gr', '500 gr', '2-4 lt', '5 kilos'], _ciclosMicro),
-      _PreventivoProducto('PREBIOTIK', ['250 gr', '500 gr', '2-4 lt', '5 kilos'], _ciclosMicro),
+      _PreventivoProducto(
+          'SAFERBACTER', ['250 gr', '500 gr', '2 lt', '4 lt', '5 kg'], _ciclosMicro),
+      _PreventivoProducto('SAFERSOIL', ['250 gr', '500 gr', '2 lt', '4 lt', '5 kg'], _ciclosMicro),
+      _PreventivoProducto('SAFERMIX', ['250 gr', '500 gr', '2 lt', '4 lt', '5 kg'], _ciclosMicro),
+      _PreventivoProducto('GOLDEN', ['250 gr', '500 gr', '2 lt', '4 lt', '5 kg'], _ciclosMicro),
+      _PreventivoProducto('PREBIOTIK', ['250 gr', '500 gr', '2 lt', '4 lt', '5 kg'], _ciclosMicro),
     ];
 
     _sar = [
-      _PreventivoProducto('ARMUROX', ['1 lt', '0,5-0,75 lt', '0,5-1 lt'], _ciclosSar),
-      _PreventivoProducto('AMINOALEXIN', ['1 lt', '0,5-0,75 lt', '0,5-1 lt'], _ciclosSar),
-      _PreventivoProducto('EQUILIBRIUM', ['1 lt', '0,5-0,75 lt', '0,5-1 lt'], _ciclosSar),
-      _PreventivoProducto('TERRASORB T24', ['1 lt', '0,5-0,75 lt', '0,5-1 lt'], _ciclosSar),
+      _PreventivoProducto('ARMUROX', ['0.5 lt', '0.75 lt', '1 lt'], _ciclosSar),
+      _PreventivoProducto('AMINOALEXIN', ['0.5 lt', '0.75 lt', '1 lt'], _ciclosSar),
+      _PreventivoProducto('EQUILIBRIUM', ['0.5 lt', '0.75 lt', '1 lt'], _ciclosSar),
+      _PreventivoProducto(
+          'TERRASORB T24', ['0.5 lt', '0.75 lt', '1 lt'], _ciclosSar),
     ];
 
     _cargarConfiguracionesExistentes();
@@ -118,33 +122,41 @@ class _AgrotecbanMokoPreventivoScreenState
               children: [
                 Card(
                   elevation: 1,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12)),
                   child: Padding(
                     padding: const EdgeInsets.all(12),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text('MICROORGANISMOS', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
+                        const Text('MICROORGANISMOS',
+                            style: TextStyle(
+                                fontSize: 15, fontWeight: FontWeight.bold)),
                         const SizedBox(height: 4),
-                        const Text('Seleccione el ciclo y registre los productos aplicados.', style: TextStyle(color: Colors.grey, fontSize: 12)),
+                        const Text(
+                            'Seleccione el ciclo y registre los productos aplicados.',
+                            style: TextStyle(color: Colors.grey, fontSize: 12)),
                         const SizedBox(height: 10),
                         DropdownButtonFormField<int>(
                           value: _cicloSeleccionadoMicro,
-                          decoration: const InputDecoration(labelText: 'Ciclo', border: OutlineInputBorder()),
+                          decoration: const InputDecoration(
+                              labelText: 'Ciclo', border: OutlineInputBorder()),
                           items: _ciclosMicro
-                              .map((ciclo) => DropdownMenuItem(value: ciclo, child: Text('Ciclo $ciclo')))
+                              .map((ciclo) => DropdownMenuItem(
+                                  value: ciclo, child: Text('Ciclo $ciclo')))
                               .toList(),
-                          onChanged: (v) => setState(() => _cicloSeleccionadoMicro = v ?? 1),
+                          onChanged: (v) =>
+                              setState(() => _cicloSeleccionadoMicro = v ?? 1),
                         ),
                         const SizedBox(height: 16),
                         ..._microorganismos
-                            .map((producto) => _buildProductoCicloDropdown(producto, _cicloSeleccionadoMicro))
+                            .map((producto) => _buildProductoCicloDropdown(
+                                producto, _cicloSeleccionadoMicro))
                             .toList(),
                       ],
                     ),
                   ),
                 ),
-
                 const SizedBox(height: 16),
                 Card(
                   elevation: 1,
@@ -188,7 +200,8 @@ class _AgrotecbanMokoPreventivoScreenState
                         ),
                         const SizedBox(height: 16),
                         ..._sar
-                            .map((producto) => _buildProductoCicloDropdown(producto, _cicloSeleccionadoSar))
+                            .map((producto) => _buildProductoCicloDropdown(
+                                producto, _cicloSeleccionadoSar))
                             .toList(),
                       ],
                     ),
@@ -468,62 +481,114 @@ class _AgrotecbanMokoPreventivoScreenState
 
   Widget _buildProductoCicloDropdown(_PreventivoProducto producto, int ciclo) {
     final checked = producto.cumplimiento[ciclo] ?? false;
+    final fotoPath = producto.fotoPath;
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
-      child: Row(
+      child: Column(
         children: [
-          Expanded(
-            child: DropdownButtonFormField<String>(
-              value: producto.dosisPorCiclo[ciclo],
-              decoration: InputDecoration(
-                labelText: '${producto.nombre} - Ciclo $ciclo',
-                border: const OutlineInputBorder(),
-                helperText: checked ? 'Ciclo completado' : 'Ciclo pendiente',
-              ),
-              items: producto.dosisOpciones
-                  .map((d) => DropdownMenuItem(value: d, child: Text(d)))
-                  .toList(),
-              onChanged: (v) => setState(() => producto.dosisPorCiclo[ciclo] = v),
-            ),
-          ),
-          const SizedBox(width: 8),
-          InkWell(
-            onTap: () {
-              setState(() {
-                final nextValue = !(producto.cumplimiento[ciclo] ?? false);
-                producto.cumplimiento[ciclo] = nextValue;
-                producto.fechas[ciclo] = nextValue ? DateTime.now() : null;
-                _autoseleccionarCiclosPendientes();
-              });
-            },
-            borderRadius: BorderRadius.circular(12),
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
-              decoration: BoxDecoration(
-                color: checked ? const Color(0xFFDCF6E5) : const Color(0xFFF4F4F4),
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(
-                  color: checked ? const Color(0xFF0F7B3C) : Colors.grey.shade400,
+          Row(
+            children: [
+              Expanded(
+                child: DropdownButtonFormField<String>(
+                  value: producto.dosisPorCiclo[ciclo],
+                  decoration: InputDecoration(
+                    labelText: '${producto.nombre} - Ciclo $ciclo',
+                    border: const OutlineInputBorder(),
+                    helperText:
+                        checked ? 'Ciclo completado' : 'Ciclo pendiente',
+                  ),
+                  items: producto.dosisOpciones
+                      .map((d) => DropdownMenuItem(value: d, child: Text(d)))
+                      .toList(),
+                  onChanged: (v) =>
+                      setState(() => producto.dosisPorCiclo[ciclo] = v),
                 ),
               ),
-              child: Column(
-                children: [
-                  Icon(
-                    checked ? Icons.check_circle : Icons.radio_button_unchecked,
-                    color: checked ? const Color(0xFF0F7B3C) : Colors.grey.shade600,
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    checked ? 'Hecho' : 'Pendiente',
-                    style: TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w600,
-                      color: checked ? const Color(0xFF0F7B3C) : Colors.grey.shade700,
+              const SizedBox(width: 8),
+              InkWell(
+                onTap: () {
+                  setState(() {
+                    final nextValue = !(producto.cumplimiento[ciclo] ?? false);
+                    producto.cumplimiento[ciclo] = nextValue;
+                    producto.fechas[ciclo] = nextValue ? DateTime.now() : null;
+                    _autoseleccionarCiclosPendientes();
+                  });
+                },
+                borderRadius: BorderRadius.circular(12),
+                child: Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+                  decoration: BoxDecoration(
+                    color: checked
+                        ? const Color(0xFFDCF6E5)
+                        : const Color(0xFFF4F4F4),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: checked
+                          ? const Color(0xFF0F7B3C)
+                          : Colors.grey.shade400,
                     ),
                   ),
-                ],
+                  child: Column(
+                    children: [
+                      Icon(
+                        checked
+                            ? Icons.check_circle
+                            : Icons.radio_button_unchecked,
+                        color: checked
+                            ? const Color(0xFF0F7B3C)
+                            : Colors.grey.shade600,
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        checked ? 'Hecho' : 'Pendiente',
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                          color: checked
+                              ? const Color(0xFF0F7B3C)
+                              : Colors.grey.shade700,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: () => _capturarFotoProducto(producto),
+                  icon: const Icon(Icons.camera_alt_outlined),
+                  label: Text(
+                    fotoPath == null || fotoPath.isEmpty
+                        ? 'Tomar foto'
+                        : 'Cambiar foto',
+                  ),
+                ),
+              ),
+              if (fotoPath != null && fotoPath.isNotEmpty) ...[
+                const SizedBox(width: 8),
+                const Icon(Icons.check_circle, color: Color(0xFF0F7B3C)),
+              ],
+            ],
+          ),
+          const SizedBox(height: 8),
+          TextField(
+            controller: producto.observacionController,
+            minLines: 2,
+            maxLines: 3,
+            decoration: InputDecoration(
+              labelText: 'Observacion ${producto.nombre}',
+              hintText: 'Describa la aplicacion realizada para este producto.',
+              border: const OutlineInputBorder(),
+              suffixIcon: fotoPath != null && fotoPath.isNotEmpty
+                  ? const Icon(Icons.photo, color: Color(0xFF0F7B3C))
+                  : null,
             ),
           ),
         ],
@@ -572,6 +637,7 @@ class _AgrotecbanMokoPreventivoScreenState
   }) {
     final proximoPendiente = _nextPendingCycle(producto);
     final cicloDosis = proximoPendiente ?? producto.ciclos.first;
+    final fotoPath = producto.fotoPath;
 
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
@@ -606,7 +672,8 @@ class _AgrotecbanMokoPreventivoScreenState
                 style: const TextStyle(fontSize: 12, color: Colors.black),
               ),
             ),
-            Text(' | Proximo ciclo: ${proximoPendiente ?? 'Completado'}', style: const TextStyle(fontSize: 12)),
+            Text(' | Proximo ciclo: ${proximoPendiente ?? 'Completado'}',
+                style: const TextStyle(fontSize: 12)),
           ],
         ),
         childrenPadding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
@@ -687,15 +754,37 @@ class _AgrotecbanMokoPreventivoScreenState
             ),
           ),
           const SizedBox(height: 8),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: () => _capturarFotoProducto(producto),
+                  icon: const Icon(Icons.camera_alt_outlined),
+                  label: Text(
+                    fotoPath == null || fotoPath.isEmpty
+                        ? 'Tomar foto'
+                        : 'Cambiar foto',
+                  ),
+                ),
+              ),
+              if (fotoPath != null && fotoPath.isNotEmpty) ...[
+                const SizedBox(width: 8),
+                const Icon(Icons.check_circle, color: Color(0xFF0F7B3C)),
+              ],
+            ],
+          ),
+          const SizedBox(height: 8),
           TextField(
-            controller: producto.detalleController,
+            controller: producto.observacionController,
             minLines: 2,
             maxLines: 3,
-            decoration: const InputDecoration(
-              labelText: 'Detalle del tecnico',
-              hintText:
-                  'Escriba que aplicaron en cada ciclo y observaciones para el proximo ciclo.',
-              border: OutlineInputBorder(),
+            decoration: InputDecoration(
+              labelText: 'Observacion ${producto.nombre}',
+              hintText: 'Escriba que aplicaron y cualquier novedad.',
+              border: const OutlineInputBorder(),
+              suffixIcon: fotoPath != null && fotoPath.isNotEmpty
+                  ? const Icon(Icons.photo, color: Color(0xFF0F7B3C))
+                  : null,
             ),
           ),
         ],
@@ -759,7 +848,8 @@ class _AgrotecbanMokoPreventivoScreenState
   }
 
   void _autoseleccionarCiclosPendientes() {
-    final siguienteMicro = _nextPendingCycleForGroup(_microorganismos, _ciclosMicro);
+    final siguienteMicro =
+        _nextPendingCycleForGroup(_microorganismos, _ciclosMicro);
     final siguienteSar = _nextPendingCycleForGroup(_sar, _ciclosSar);
 
     if (siguienteMicro != null) {
@@ -785,10 +875,25 @@ class _AgrotecbanMokoPreventivoScreenState
     return null;
   }
 
+  Future<void> _capturarFotoProducto(_PreventivoProducto producto) async {
+    final foto = await _picker.pickImage(
+      source: ImageSource.camera,
+      imageQuality: 80,
+    );
+    if (foto == null || !mounted) {
+      return;
+    }
+
+    setState(() {
+      producto.fotoPath = foto.path;
+    });
+  }
+
   String _buildObservaciones(_PreventivoProducto producto, int ciclo) {
     return jsonEncode({
       'dosis': producto.dosisPorCiclo[ciclo],
-      'detalle': producto.detalleController.text.trim(),
+      'observacion': producto.observacionController.text.trim(),
+      'fotoPath': producto.fotoPath,
     });
   }
 
@@ -805,19 +910,24 @@ class _AgrotecbanMokoPreventivoScreenState
       final decoded = jsonDecode(observaciones);
       if (decoded is Map<String, dynamic>) {
         final dosis = decoded['dosis']?.toString();
-        final detalle = decoded['detalle']?.toString() ?? '';
+        final observacion =
+            (decoded['observacion'] ?? decoded['detalle'] ?? '').toString();
+        final fotoPath = decoded['fotoPath']?.toString() ?? '';
 
         if (dosis != null && dosis.isNotEmpty) {
           producto.dosisPorCiclo[ciclo] = dosis;
         }
-        if (detalle.isNotEmpty) {
-          producto.detalleController.text = detalle;
+        if (observacion.isNotEmpty) {
+          producto.observacionController.text = observacion;
+        }
+        if (fotoPath.isNotEmpty) {
+          producto.fotoPath = fotoPath;
         }
         return;
       }
     } catch (_) {}
 
-    producto.detalleController.text = observaciones;
+    producto.observacionController.text = observaciones;
   }
 
   Map<String, dynamic> _buildPreventivoPayload(int focoId) {
@@ -841,7 +951,8 @@ class _AgrotecbanMokoPreventivoScreenState
       'fechas': producto.fechas.map(
         (key, value) => MapEntry(key.toString(), value?.toIso8601String()),
       ),
-      'detalle': producto.detalleController.text.trim(),
+      'observacion': producto.observacionController.text.trim(),
+      'fotoPath': producto.fotoPath,
     };
   }
 
@@ -883,10 +994,17 @@ class _PreventivoProducto {
   final Map<int, bool> cumplimiento = {};
   final Map<int, DateTime?> fechas = {};
   final Map<int, String?> dosisPorCiclo = {};
-  final TextEditingController detalleController = TextEditingController();
+  final TextEditingController observacionController = TextEditingController();
+  String? fotoPath;
 
-  _PreventivoProducto(this.nombre, this.dosisOpciones, this.ciclos, {String? dosisInicial}) {
-    final dosisDefault = dosisInicial ?? (dosisOpciones.isNotEmpty ? dosisOpciones[0] : null);
+  _PreventivoProducto(
+    this.nombre,
+    this.dosisOpciones,
+    this.ciclos, {
+    String? dosisInicial,
+  }) {
+    final dosisDefault =
+        dosisInicial ?? (dosisOpciones.isNotEmpty ? dosisOpciones[0] : null);
     for (final ciclo in ciclos) {
       cumplimiento[ciclo] = false;
       fechas[ciclo] = null;
@@ -895,6 +1013,6 @@ class _PreventivoProducto {
   }
 
   void dispose() {
-    detalleController.dispose();
+    observacionController.dispose();
   }
 }

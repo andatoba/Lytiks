@@ -1,5 +1,6 @@
 package com.lytiks.backend.entity;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
 import java.time.LocalDateTime;
 import java.util.Objects;
@@ -42,6 +43,7 @@ public class Lote {
     @Column(name = "hacienda_id", nullable = false)
     private Long haciendaId;
     
+    @JsonIgnore
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "hacienda_id", insertable = false, updatable = false)
     private Hacienda hacienda;

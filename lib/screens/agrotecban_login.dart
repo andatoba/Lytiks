@@ -3,6 +3,7 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 import '../services/auth_service.dart';
 import '../services/location_tracking_service.dart';
+import '../widgets/dynamic_logo_widget.dart';
 import 'cliente_home_screen.dart';
 import 'home_screen.dart';
 
@@ -29,7 +30,17 @@ class _AgrotecbanLoginState extends State<AgrotecbanLogin> {
     return Scaffold(
       body: Container(
         decoration: const BoxDecoration(
-          color: Color(0xFFF8FAF8),
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [
+              Color(0xFF00903E),
+              Color(0xFF0B7A36),
+              Color(0xFFF4F8F4),
+              Color(0xFFF4F8F4),
+            ],
+            stops: [0.0, 0.34, 0.34, 1.0],
+          ),
         ),
         child: SafeArea(
           child: LayoutBuilder(
@@ -40,31 +51,24 @@ class _AgrotecbanLoginState extends State<AgrotecbanLogin> {
                 padding: const EdgeInsets.all(24.0),
                 child: Column(
                   children: [
-                    // Logo y título
+                    // Encabezado de marca
                     const SizedBox(height: 40),
                     Container(
-                      height: 120,
-                      decoration: const BoxDecoration(
-                        color: Color(0xFF00903E),
-                        shape: BoxShape.circle,
+                      width: 176,
+                      height: 176,
+                      padding: const EdgeInsets.all(20),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(32),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.14),
+                            blurRadius: 30,
+                            offset: const Offset(0, 16),
+                          ),
+                        ],
                       ),
-                      child: const Center(
-                        child: Icon(
-                          Icons.agriculture,
-                          size: 60,
-                          color: Colors.white,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    const Text(
-                      'AGROTECBAN',
-                      style: TextStyle(
-                        fontSize: 28,
-                        fontWeight: FontWeight.bold,
-                        color: Color(0xFF0B3D25),
-                        letterSpacing: 2,
-                      ),
+                      child: const DynamicLogoWidget(fit: BoxFit.contain),
                     ),
                     const SizedBox(height: 8),
                     const Text(
@@ -72,8 +76,8 @@ class _AgrotecbanLoginState extends State<AgrotecbanLogin> {
                       textAlign: TextAlign.center,
                       style: TextStyle(
                         fontSize: 14,
-                        color: Color(0xFF0B3D25),
-                        fontWeight: FontWeight.w500,
+                        color: Colors.white,
+                        fontWeight: FontWeight.w600,
                       ),
                     ),
                     const SizedBox(height: 40),

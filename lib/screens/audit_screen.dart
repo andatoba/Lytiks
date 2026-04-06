@@ -9,6 +9,8 @@ import '../services/audit_service.dart';
 import '../services/auth_service.dart';
 import '../services/offline_storage_service.dart';
 import '../services/client_service.dart';
+import '../services/hacienda_service.dart';
+import '../services/lote_service.dart';
 
 class AuditItem {
   final String name;
@@ -46,14 +48,21 @@ class _AuditScreenState extends State<AuditScreen> with WidgetsBindingObserver {
   final AuditService _auditService = AuditService();
   final AuthService _authService = AuthService();
   final ClientService _clientService = ClientService();
+  final HaciendaService _haciendaService = HaciendaService();
+  final LoteService _loteService = LoteService();
   final ImagePicker _picker = ImagePicker();
 
   Map<String, dynamic>? _selectedClient;
   List<Map<String, dynamic>> _clientSuggestions = [];
+  List<Map<String, dynamic>> _haciendas = [];
+  List<Map<String, dynamic>> _lotes = [];
   dart_async.Timer? _searchDebounce;
   String _lastQuery = '';
   bool _isBasicMode = true;
   String _selectedCrop = 'banano';
+  bool _isLoadingClientLocations = false;
+  int? _selectedHaciendaId;
+  int? _selectedLoteId;
 
   // Estado de expansión de las secciones (todas colapsadas por defecto)
   final Map<String, bool> _expandedSections = {};
@@ -85,15 +94,15 @@ class _AuditScreenState extends State<AuditScreen> with WidgetsBindingObserver {
     50
   ];
   final List<String> _coloresCinta = const [
-    'Azul',
-    'Blanco',
-    'Amarillo',
-    'Morado',
-    'Rojo',
-    'Cafe',
-    'Negro',
-    'Verde',
-    'Gris',
+    'naranja',
+    'azul',
+    'blanco',
+    'amarillo',
+    'morado',
+    'rojo',
+    'cafe',
+    'negro',
+    'verde_oscuro',
   ];
   final Map<int, Map<int, TextEditingController>> _cosechaControllers = {};
   final Map<int, String?> _cosechaColorCinta = {};
@@ -101,7 +110,48 @@ class _AuditScreenState extends State<AuditScreen> with WidgetsBindingObserver {
   double _cosechaPorcentajeSobreGrado = 0;
   double _cosechaScore = 100;
   bool _cosechaExpanded = false;
+  String? _seleccionPhotoPath;
   String? _cosechaPhotoPath;
+
+  Color _colorCintaValue(String value) {
+    switch (value) {
+      case 'naranja':
+        return const Color(0xFFFF9800);
+      case 'azul':
+        return const Color(0xFF1E3A8A);
+      case 'blanco':
+        return Colors.white;
+      case 'amarillo':
+        return const Color(0xFFFFEB3B);
+      case 'morado':
+        return const Color(0xFF7B3F8C);
+      case 'rojo':
+        return const Color(0xFFD32F2F);
+      case 'cafe':
+        return const Color(0xFF6D4C41);
+      case 'negro':
+        return Colors.black;
+      case 'verde_oscuro':
+        return const Color(0xFF0B6E4F);
+      default:
+        return Colors.transparent;
+    }
+  }
+
+  Widget _colorCintaPreview(String value, {double size = 24}) {
+    final color = _colorCintaValue(value);
+    return Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(
+        color: color,
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(
+          color: value == 'blanco' ? Colors.grey.shade500 : Colors.black12,
+        ),
+      ),
+    );
+  }
 
   @override
   void initState() {
@@ -110,13 +160,9 @@ class _AuditScreenState extends State<AuditScreen> with WidgetsBindingObserver {
     _initializeDatabase();
 
     if (widget.clientData != null) {
-      _selectedClient = widget.clientData;
-      _nombreController.text = _formatClientName(widget.clientData!);
-      _loteController.text = _formatFincaName(widget.clientData!);
-      _clientService.saveSelectedClient(widget.clientData!);
-
       // Verificar si es modo cliente (usuario con rol CLIENTE)
       _isClienteMode = widget.clientData!['isCliente'] == true;
+      _selectClient(widget.clientData!);
     } else {
       _loadStoredClient();
     }
@@ -143,13 +189,7 @@ class _AuditScreenState extends State<AuditScreen> with WidgetsBindingObserver {
     if (!mounted || stored == null || _selectedClient != null) {
       return;
     }
-    setState(() {
-      _selectedClient = stored;
-      _nombreController.text = _formatClientName(stored);
-      if (_loteController.text.trim().isEmpty) {
-        _loteController.text = _formatFincaName(stored);
-      }
-    });
+    await _selectClient(stored, persistSelection: false);
   }
 
   @override
@@ -525,17 +565,7 @@ class _AuditScreenState extends State<AuditScreen> with WidgetsBindingObserver {
                     return _clientSuggestions;
                   },
                   onSelected: (client) {
-                    if (!mounted) {
-                      return;
-                    }
-                    setState(() {
-                      _selectedClient = client;
-                      _clientSuggestions = [];
-                      if (_loteController.text.trim().isEmpty) {
-                        _loteController.text = _formatFincaName(client);
-                      }
-                    });
-                    _clientService.saveSelectedClient(client);
+                    _selectClient(client);
                   },
                   fieldViewBuilder: (
                     BuildContext context,
@@ -682,6 +712,237 @@ class _AuditScreenState extends State<AuditScreen> with WidgetsBindingObserver {
     return (client['fincaNombre'] ?? client['nombreFinca'] ?? '').toString();
   }
 
+  int? _toInt(dynamic value) {
+    if (value is int) {
+      return value;
+    }
+    return int.tryParse(value?.toString() ?? '');
+  }
+
+  int? _resolveClientId(Map<String, dynamic> client) {
+    return _toInt(client['id'] ?? client['clienteId'] ?? client['clientId']);
+  }
+
+  String _formatHaciendaName(Map<String, dynamic> hacienda) {
+    return hacienda['nombre']?.toString().trim() ?? '';
+  }
+
+  String _formatLoteName(Map<String, dynamic> lote) {
+    final nombre = lote['nombre']?.toString().trim() ?? '';
+    final codigo = lote['codigo']?.toString().trim() ?? '';
+    if (nombre.isNotEmpty && codigo.isNotEmpty) {
+      return '$nombre ($codigo)';
+    }
+    return nombre.isNotEmpty ? nombre : codigo;
+  }
+
+  String _selectedHaciendaName() {
+    for (final hacienda in _haciendas) {
+      if (_toInt(hacienda['id']) == _selectedHaciendaId) {
+        return _formatHaciendaName(hacienda);
+      }
+    }
+    return '';
+  }
+
+  int? _resolveInitialHaciendaId({int? preferredHaciendaId}) {
+    if (preferredHaciendaId != null &&
+        _haciendas.any(
+          (hacienda) => _toInt(hacienda['id']) == preferredHaciendaId,
+        )) {
+      return preferredHaciendaId;
+    }
+
+    final fallbackName =
+        _selectedClient != null ? _formatFincaName(_selectedClient!) : '';
+    if (fallbackName.isNotEmpty) {
+      for (final hacienda in _haciendas) {
+        if (_formatHaciendaName(hacienda).toLowerCase() ==
+            fallbackName.toLowerCase()) {
+          return _toInt(hacienda['id']);
+        }
+      }
+    }
+
+    if (_haciendas.isNotEmpty) {
+      return _toInt(_haciendas.first['id']);
+    }
+
+    return null;
+  }
+
+  int? _resolveInitialLoteId({int? preferredLoteId}) {
+    if (preferredLoteId != null &&
+        _lotes.any((lote) => _toInt(lote['id']) == preferredLoteId)) {
+      return preferredLoteId;
+    }
+
+    final currentLote = _loteController.text.trim().toLowerCase();
+    if (currentLote.isNotEmpty) {
+      for (final lote in _lotes) {
+        if (_formatLoteName(lote).toLowerCase() == currentLote ||
+            (lote['nombre']?.toString().trim().toLowerCase() ?? '') ==
+                currentLote ||
+            (lote['codigo']?.toString().trim().toLowerCase() ?? '') ==
+                currentLote) {
+          return _toInt(lote['id']);
+        }
+      }
+    }
+
+    if (_lotes.isNotEmpty) {
+      return _toInt(_lotes.first['id']);
+    }
+
+    return null;
+  }
+
+  Future<void> _selectClient(
+    Map<String, dynamic> client, {
+    bool persistSelection = true,
+    int? preferredHaciendaId,
+    int? preferredLoteId,
+  }) async {
+    if (!mounted) {
+      return;
+    }
+
+    setState(() {
+      _selectedClient = client;
+      _clientSuggestions = [];
+      _haciendas = [];
+      _lotes = [];
+      _selectedHaciendaId = null;
+      _selectedLoteId = null;
+      _loteController.clear();
+    });
+
+    _nombreController.text = _formatClientName(client);
+
+    if (persistSelection) {
+      await _clientService.saveSelectedClient(client);
+    }
+
+    final clientId = _resolveClientId(client);
+    if (clientId != null) {
+      await _loadHaciendasByCliente(
+        clientId,
+        preferredHaciendaId: preferredHaciendaId,
+        preferredLoteId: preferredLoteId,
+      );
+    }
+  }
+
+  Future<void> _loadHaciendasByCliente(
+    int clienteId, {
+    int? preferredHaciendaId,
+    int? preferredLoteId,
+  }) async {
+    if (!mounted) {
+      return;
+    }
+
+    setState(() {
+      _isLoadingClientLocations = true;
+    });
+
+    try {
+      final haciendas = await _haciendaService.getHaciendasByCliente(clienteId);
+      if (!mounted) {
+        return;
+      }
+
+      _haciendas = haciendas;
+      final selectedHaciendaId =
+          _resolveInitialHaciendaId(preferredHaciendaId: preferredHaciendaId);
+
+      setState(() {
+        _haciendas = haciendas;
+        _selectedHaciendaId = selectedHaciendaId;
+        _lotes = [];
+        _selectedLoteId = null;
+        _loteController.clear();
+      });
+
+      if (selectedHaciendaId != null) {
+        await _loadLotesByHacienda(
+          selectedHaciendaId,
+          preferredLoteId: preferredLoteId,
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _haciendas = [];
+          _lotes = [];
+          _selectedHaciendaId = null;
+          _selectedLoteId = null;
+          _loteController.clear();
+        });
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoadingClientLocations = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _loadLotesByHacienda(
+    int haciendaId, {
+    int? preferredLoteId,
+  }) async {
+    if (!mounted) {
+      return;
+    }
+
+    setState(() {
+      _isLoadingClientLocations = true;
+    });
+
+    try {
+      final lotes = await _loteService.getLotesByHacienda(haciendaId);
+      if (!mounted) {
+        return;
+      }
+
+      _lotes = lotes;
+      final selectedLoteId =
+          _resolveInitialLoteId(preferredLoteId: preferredLoteId);
+
+      String loteNombre = '';
+      for (final lote in lotes) {
+        if (_toInt(lote['id']) == selectedLoteId) {
+          loteNombre = lote['nombre']?.toString().trim() ??
+              lote['codigo']?.toString().trim() ??
+              '';
+          break;
+        }
+      }
+
+      setState(() {
+        _lotes = lotes;
+        _selectedLoteId = selectedLoteId;
+        _loteController.text = loteNombre;
+      });
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _lotes = [];
+          _selectedLoteId = null;
+          _loteController.clear();
+        });
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoadingClientLocations = false;
+        });
+      }
+    }
+  }
+
   void _onNameChanged(String value) {
     final query = value.trim();
     _searchDebounce?.cancel();
@@ -693,6 +954,11 @@ class _AuditScreenState extends State<AuditScreen> with WidgetsBindingObserver {
       if (selectedName != query.toLowerCase()) {
         setState(() {
           _selectedClient = null;
+          _haciendas = [];
+          _lotes = [];
+          _selectedHaciendaId = null;
+          _selectedLoteId = null;
+          _loteController.clear();
         });
         _clientService.clearSelectedClient();
       }
@@ -777,15 +1043,7 @@ class _AuditScreenState extends State<AuditScreen> with WidgetsBindingObserver {
 
     if (_clientSuggestions.length == 1) {
       final client = _clientSuggestions.first;
-      setState(() {
-        _selectedClient = client;
-        _clientSuggestions = [];
-        if (_loteController.text.trim().isEmpty) {
-          _loteController.text = _formatFincaName(client);
-        }
-      });
-      _clientService.saveSelectedClient(client);
-      _nombreController.text = _formatClientName(client);
+      await _selectClient(client);
       _nombreFocusNode.unfocus();
       return;
     }
@@ -856,14 +1114,99 @@ class _AuditScreenState extends State<AuditScreen> with WidgetsBindingObserver {
               ),
             ),
           ],
-          TextField(
-            controller: _loteController,
-            decoration: const InputDecoration(
-              labelText: 'Lote de la evaluación',
-              hintText: 'Ingrese lote',
-              border: OutlineInputBorder(),
-              prefixIcon: Icon(Icons.agriculture),
+          DropdownButtonFormField<int>(
+            value: _haciendas.any(
+              (hacienda) => _toInt(hacienda['id']) == _selectedHaciendaId,
+            )
+                ? _selectedHaciendaId
+                : null,
+            decoration: InputDecoration(
+              labelText: 'Finca',
+              hintText: _selectedClient == null
+                  ? 'Seleccione cliente primero'
+                  : _isLoadingClientLocations
+                      ? 'Cargando fincas...'
+                      : 'Seleccione finca',
+              border: const OutlineInputBorder(),
+              prefixIcon: const Icon(Icons.home_work_outlined),
             ),
+            isExpanded: true,
+            items: _haciendas
+                .map(
+                  (hacienda) => DropdownMenuItem<int>(
+                    value: _toInt(hacienda['id']),
+                    child: Text(
+                      _formatHaciendaName(hacienda),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                )
+                .toList(),
+            onChanged: (_selectedClient == null ||
+                    _isLoadingClientLocations ||
+                    _haciendas.isEmpty)
+                ? null
+                : (value) async {
+                    if (value == null) {
+                      return;
+                    }
+                    setState(() {
+                      _selectedHaciendaId = value;
+                      _selectedLoteId = null;
+                      _lotes = [];
+                      _loteController.clear();
+                    });
+                    await _loadLotesByHacienda(value);
+                  },
+          ),
+          const SizedBox(height: 16),
+          DropdownButtonFormField<int>(
+            value: _lotes.any((lote) => _toInt(lote['id']) == _selectedLoteId)
+                ? _selectedLoteId
+                : null,
+            decoration: InputDecoration(
+              labelText: 'Lote de la evaluación',
+              hintText: _selectedClient == null
+                  ? 'Seleccione cliente primero'
+                  : _selectedHaciendaId == null
+                      ? 'Seleccione una finca'
+                      : _isLoadingClientLocations
+                          ? 'Cargando lotes...'
+                          : 'Seleccione lote',
+              border: const OutlineInputBorder(),
+              prefixIcon: const Icon(Icons.agriculture),
+            ),
+            isExpanded: true,
+            items: _lotes
+                .map(
+                  (lote) => DropdownMenuItem<int>(
+                    value: _toInt(lote['id']),
+                    child: Text(
+                      _formatLoteName(lote),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                )
+                .toList(),
+            onChanged: (_selectedClient == null ||
+                    _selectedHaciendaId == null ||
+                    _isLoadingClientLocations ||
+                    _lotes.isEmpty)
+                ? null
+                : (value) {
+                    setState(() {
+                      _selectedLoteId = value;
+                      for (final lote in _lotes) {
+                        if (_toInt(lote['id']) == value) {
+                          _loteController.text =
+                              lote['nombre']?.toString().trim() ??
+                                  lote['codigo']?.toString().trim() ??
+                                  '';
+                          break;
+                        }
+                      }
+                    });
+                  },
           ),
           const SizedBox(height: 16),
           _buildModeSelector(),
@@ -1008,6 +1351,8 @@ class _AuditScreenState extends State<AuditScreen> with WidgetsBindingObserver {
     _expandedSections.putIfAbsent(sectionName, () => false);
 
     final isExpanded = _expandedSections[sectionName] ?? false;
+    final sectionScore = _getSectionScore(sectionName);
+    final hasSectionData = _hasAnyRatedItem(sectionName);
 
     // Calcular puntuación total de la sección
     int totalScore = 0;
@@ -1068,9 +1413,11 @@ class _AuditScreenState extends State<AuditScreen> with WidgetsBindingObserver {
               color: isExpanded ? const Color(0xFF004B63) : Colors.black87,
             ),
           ),
-          subtitle: totalScore > 0
+          subtitle: hasSectionData
               ? Text(
-                  'Puntuación: $totalScore/$maxScore',
+                  sectionName == 'SELECCION'
+                      ? 'Calificación: ${sectionScore.toStringAsFixed(1)}/100'
+                      : 'Puntuación: $totalScore/$maxScore',
                   style: TextStyle(
                     fontSize: 13,
                     color: Colors.grey[600],
@@ -1248,6 +1595,10 @@ class _AuditScreenState extends State<AuditScreen> with WidgetsBindingObserver {
   }
 
   double _getSectionScore(String sectionName) {
+    if (sectionName == 'SELECCION') {
+      return _getSeleccionScore();
+    }
+
     final items = _auditSections[sectionName];
     if (items == null) return 0;
     int scored = 0;
@@ -1258,6 +1609,38 @@ class _AuditScreenState extends State<AuditScreen> with WidgetsBindingObserver {
     }
     if (maxTotal == 0) return 0;
     return (scored / maxTotal) * 100;
+  }
+
+  double _getSeleccionScore() {
+    final items = _auditSections['SELECCION'];
+    if (items == null || items.isEmpty) {
+      return 0;
+    }
+
+    double totalScore = _calculateSeleccionCriteriaScore();
+    for (final item in items) {
+      if (item.calculatedScore != null) {
+        totalScore += (item.calculatedScore! / item.maxScore) * 100;
+      }
+    }
+
+    return totalScore / (items.length + 1);
+  }
+
+  double _calculateSeleccionCriteriaScore() {
+    final total =
+        int.tryParse(_seleccionTotalPlantasController.text.trim()) ?? 0;
+    if (total <= 0) {
+      return 0;
+    }
+
+    final porcentaje = _seleccionPorcentaje;
+    if (porcentaje == 0) return 100;
+    if (porcentaje <= 5) return 90;
+    if (porcentaje <= 10) return 80;
+    if (porcentaje <= 15) return 70;
+    if (porcentaje <= 20) return 60;
+    return 0;
   }
 
   double _getGroupScore(List<String> sectionNames) {
@@ -1277,6 +1660,7 @@ class _AuditScreenState extends State<AuditScreen> with WidgetsBindingObserver {
     final bool cosechaEvaluada = _hasCosechaData();
 
     final List<String> group1 = [
+      'SELECCION',
       'DESHOJE FITOSANITARIO',
       'DESHOJE NORMAL',
       'DESVIO DE HIJOS',
@@ -1321,6 +1705,19 @@ class _AuditScreenState extends State<AuditScreen> with WidgetsBindingObserver {
   }
 
   bool _hasAnyRatedItem(String sectionName) {
+    if (sectionName == 'SELECCION') {
+      final total =
+          int.tryParse(_seleccionTotalPlantasController.text.trim()) ?? 0;
+      final mal =
+          int.tryParse(_seleccionMalSeleccionadasController.text.trim()) ?? 0;
+      if (total > 0 ||
+          mal > 0 ||
+          _seleccionObservacionController.text.trim().isNotEmpty ||
+          _seleccionPhotoPath != null) {
+        return true;
+      }
+    }
+
     final items = _auditSections[sectionName];
     if (items == null) return false;
     for (final item in items) {
@@ -1370,6 +1767,7 @@ class _AuditScreenState extends State<AuditScreen> with WidgetsBindingObserver {
   Widget _buildFinalScoreCard() {
     final double enfundeScore = _getSectionScore('ENFUNDE');
     final List<String> group1 = [
+      'SELECCION',
       'DESHOJE FITOSANITARIO',
       'DESHOJE NORMAL',
       'DESVIO DE HIJOS',
@@ -1564,20 +1962,39 @@ class _AuditScreenState extends State<AuditScreen> with WidgetsBindingObserver {
                           child: DropdownButtonHideUnderline(
                             child: DropdownButton<String>(
                               value: _cosechaColorCinta[edad],
-                              hint: const Text('Color',
-                                  style: TextStyle(fontSize: 12)),
+                              hint: const Icon(
+                                Icons.palette_outlined,
+                                size: 18,
+                                color: Color(0xFF004B63),
+                              ),
                               isExpanded: true,
                               items: _coloresCinta
                                   .map(
                                     (color) => DropdownMenuItem<String>(
                                       value: color,
-                                      child: Text(
-                                        color,
-                                        style: const TextStyle(fontSize: 12),
+                                      child: Align(
+                                        alignment: Alignment.centerLeft,
+                                        child: _colorCintaPreview(
+                                          color,
+                                          size: 26,
+                                        ),
                                       ),
                                     ),
                                   )
                                   .toList(),
+                              selectedItemBuilder: (context) {
+                                return _coloresCinta
+                                    .map(
+                                      (color) => Align(
+                                        alignment: Alignment.centerLeft,
+                                        child: _colorCintaPreview(
+                                          color,
+                                          size: 26,
+                                        ),
+                                      ),
+                                    )
+                                    .toList();
+                              },
                               onChanged: (value) {
                                 setState(() {
                                   _cosechaColorCinta[edad] = value;
@@ -1833,6 +2250,29 @@ class _AuditScreenState extends State<AuditScreen> with WidgetsBindingObserver {
     }
   }
 
+  Future<void> _takeSeleccionPhoto() async {
+    try {
+      final XFile? photo = await _picker.pickImage(
+        source: ImageSource.camera,
+        imageQuality: 70,
+      );
+      if (photo != null) {
+        setState(() {
+          _seleccionPhotoPath = photo.path;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Foto de selección capturada exitosamente'),
+          ),
+        );
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error al tomar la foto de selección: $e')),
+      );
+    }
+  }
+
   Future<void> _takeCosechaPhoto() async {
     try {
       final XFile? photo = await _picker.pickImage(
@@ -1950,7 +2390,7 @@ class _AuditScreenState extends State<AuditScreen> with WidgetsBindingObserver {
       return;
     }
 
-    final String fincaCliente = _formatFincaName(_selectedClient!);
+    final String fincaCliente = _selectedHaciendaName();
     final String hacienda = fincaCliente.isNotEmpty
         ? fincaCliente
         : (_selectedClient!['hacienda']?.toString().isNotEmpty == true
@@ -1989,6 +2429,7 @@ class _AuditScreenState extends State<AuditScreen> with WidgetsBindingObserver {
           int.tryParse(_seleccionMalSeleccionadasController.text.trim()) ?? 0,
       'porcentajeMalSeleccionadas': _seleccionPorcentaje,
       'observacion': _seleccionObservacionController.text.trim(),
+      'photoPath': _seleccionPhotoPath,
     };
     auditData['CosechaResumen'] = {
       'porcentajeBajoGrado': _cosechaPorcentajeBajoGrado,
@@ -2180,12 +2621,31 @@ class _AuditScreenState extends State<AuditScreen> with WidgetsBindingObserver {
             onChanged: (_) => setState(() {}),
           ),
           const SizedBox(height: 10),
-          Text(
-            'Porcentaje: ${_seleccionPorcentaje.toStringAsFixed(1)}%  (# mal selectadas / # total de plantas)',
-            style: const TextStyle(
-              fontWeight: FontWeight.w600,
-              color: Color(0xFF004B63),
-            ),
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  'Porcentaje: ${_seleccionPorcentaje.toStringAsFixed(1)}%',
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xFF004B63),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              IconButton(
+                onPressed: _takeSeleccionPhoto,
+                icon: Icon(
+                  Icons.camera_alt,
+                  color: _seleccionPhotoPath != null
+                      ? const Color(0xFF00903E)
+                      : const Color(0xFF004B63),
+                ),
+                tooltip: _seleccionPhotoPath != null
+                    ? 'Foto tomada'
+                    : 'Tomar foto',
+              ),
+            ],
           ),
         ],
       ),
@@ -2199,12 +2659,15 @@ class _AuditScreenState extends State<AuditScreen> with WidgetsBindingObserver {
         'selectedClient': _selectedClient,
         'nombre': _nombreController.text,
         'lote': _loteController.text,
+        'selectedHaciendaId': _selectedHaciendaId,
+        'selectedLoteId': _selectedLoteId,
         'isBasicMode': _isBasicMode,
         'selectedCrop': _selectedCrop,
         'expandedSections': _expandedSections,
         'seleccionTotalPlantas': _seleccionTotalPlantasController.text,
         'seleccionMalSeleccionadas': _seleccionMalSeleccionadasController.text,
         'seleccionObservacion': _seleccionObservacionController.text,
+        'seleccionPhotoPath': _seleccionPhotoPath,
         'cosechaPhotoPath': _cosechaPhotoPath,
         'cosechaColorCinta': {
           for (final edad in _cosechaEdades)
@@ -2244,6 +2707,8 @@ class _AuditScreenState extends State<AuditScreen> with WidgetsBindingObserver {
       }
 
       final draft = jsonDecode(raw) as Map<String, dynamic>;
+      final preferredHaciendaId = _toInt(draft['selectedHaciendaId']);
+      final preferredLoteId = _toInt(draft['selectedLoteId']);
       setState(() {
         final selectedClientRaw = draft['selectedClient'];
         if (_selectedClient == null && selectedClientRaw is Map) {
@@ -2260,6 +2725,7 @@ class _AuditScreenState extends State<AuditScreen> with WidgetsBindingObserver {
             draft['seleccionMalSeleccionadas']?.toString() ?? '';
         _seleccionObservacionController.text =
             draft['seleccionObservacion']?.toString() ?? '';
+        _seleccionPhotoPath = draft['seleccionPhotoPath']?.toString();
         _cosechaPhotoPath = draft['cosechaPhotoPath']?.toString();
 
         final expandedSections = draft['expandedSections'];
@@ -2314,6 +2780,17 @@ class _AuditScreenState extends State<AuditScreen> with WidgetsBindingObserver {
           }
         }
       });
+
+      if (_selectedClient != null) {
+        final clientId = _resolveClientId(_selectedClient!);
+        if (clientId != null) {
+          await _loadHaciendasByCliente(
+            clientId,
+            preferredHaciendaId: preferredHaciendaId,
+            preferredLoteId: preferredLoteId,
+          );
+        }
+      }
 
       _recalcularCosecha();
     } catch (_) {}

@@ -1,5 +1,6 @@
 package com.lytiks.backend.entity;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
 import java.time.LocalDateTime;
 import java.util.Objects;
@@ -33,6 +34,7 @@ public class Hacienda {
     @Column(name = "cliente_id", nullable = false)
     private Long clienteId;
     
+    @JsonIgnore
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "cliente_id", insertable = false, updatable = false)
     private Client cliente;
