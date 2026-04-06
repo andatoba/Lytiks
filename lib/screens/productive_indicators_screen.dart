@@ -5,6 +5,8 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../services/client_service.dart';
+import '../services/hacienda_service.dart';
+import '../services/lote_service.dart';
 
 class ProductiveIndicatorsScreen extends StatefulWidget {
   final Map<String, dynamic>? clientData;
@@ -21,14 +23,21 @@ class _ProductiveIndicatorsScreenState extends State<ProductiveIndicatorsScreen>
   static const String _draftKey = 'productive_indicators_draft';
 
   final ClientService _clientService = ClientService();
+  final HaciendaService _haciendaService = HaciendaService();
+  final LoteService _loteService = LoteService();
   final TextEditingController _clienteController = TextEditingController();
+  final TextEditingController _haciendaController = TextEditingController();
   final TextEditingController _loteController = TextEditingController();
   final FocusNode _clienteFocusNode = FocusNode();
 
   Timer? _searchDebounce;
   String _lastQuery = '';
   List<Map<String, dynamic>> _clientSuggestions = [];
+  List<Map<String, dynamic>> _haciendas = [];
+  List<Map<String, dynamic>> _lotes = [];
   Map<String, dynamic>? _selectedClient;
+  int? _selectedHaciendaId;
+  int? _selectedLoteId;
 
   @override
   void initState() {
@@ -42,6 +51,7 @@ class _ProductiveIndicatorsScreenState extends State<ProductiveIndicatorsScreen>
     WidgetsBinding.instance.removeObserver(this);
     _searchDebounce?.cancel();
     _clienteController.dispose();
+    _haciendaController.dispose();
     _loteController.dispose();
     _clienteFocusNode.dispose();
     super.dispose();
@@ -71,8 +81,18 @@ class _ProductiveIndicatorsScreenState extends State<ProductiveIndicatorsScreen>
             _selectedClient = Map<String, dynamic>.from(selectedClientRaw);
           }
           _clienteController.text = draft['clienteBusqueda']?.toString() ?? '';
+          _haciendaController.text = draft['hacienda']?.toString() ?? '';
           _loteController.text = draft['lote']?.toString() ?? '';
+          _selectedHaciendaId = draft['selectedHaciendaId'] as int?;
+          _selectedLoteId = draft['selectedLoteId'] as int?;
         });
+        if (_selectedClient != null) {
+          await _loadHaciendasByCliente(
+            _resolveClienteId(_selectedClient!),
+            preferredHaciendaId: _selectedHaciendaId,
+            preferredLoteId: _selectedLoteId,
+          );
+        }
         return;
       }
 
@@ -86,6 +106,7 @@ class _ProductiveIndicatorsScreenState extends State<ProductiveIndicatorsScreen>
         _selectedClient = Map<String, dynamic>.from(initialClient);
         _clienteController.text = _formatClientName(_selectedClient!);
       });
+      await _loadHaciendasByCliente(_resolveClienteId(_selectedClient!));
     } catch (_) {}
   }
 
@@ -94,7 +115,10 @@ class _ProductiveIndicatorsScreenState extends State<ProductiveIndicatorsScreen>
       final prefs = await SharedPreferences.getInstance();
       final draft = {
         'clienteBusqueda': _clienteController.text.trim(),
+        'hacienda': _haciendaController.text.trim(),
+        'selectedHaciendaId': _selectedHaciendaId,
         'lote': _loteController.text.trim(),
+        'selectedLoteId': _selectedLoteId,
         'selectedClient': _selectedClient,
       };
       await prefs.setString(_draftKey, jsonEncode(draft));
@@ -109,6 +133,161 @@ class _ProductiveIndicatorsScreenState extends State<ProductiveIndicatorsScreen>
 
   String _formatFincaName(Map<String, dynamic> client) {
     return (client['fincaNombre'] ?? client['nombreFinca'] ?? '').toString();
+  }
+
+  int? _toInt(dynamic value) {
+    if (value is int) return value;
+    if (value is String) return int.tryParse(value);
+    return null;
+  }
+
+  int? _resolveClienteId(Map<String, dynamic> client) {
+    return _toInt(client['clienteId']) ?? _toInt(client['id']);
+  }
+
+  String _formatLoteValue(Map<String, dynamic> lote) {
+    final codigo = lote['codigo']?.toString().trim() ?? '';
+    final nombre = lote['nombre']?.toString().trim() ?? '';
+    return nombre.isNotEmpty ? nombre : codigo;
+  }
+
+  String _formatHaciendaName(Map<String, dynamic> hacienda) {
+    return hacienda['nombre']?.toString().trim() ?? '';
+  }
+
+  int? _resolveInitialHaciendaId({int? preferredHaciendaId}) {
+    if (preferredHaciendaId != null &&
+        _haciendas.any((hacienda) => _toInt(hacienda['id']) == preferredHaciendaId)) {
+      return preferredHaciendaId;
+    }
+
+    final currentHacienda = _haciendaController.text.trim().toLowerCase();
+    if (currentHacienda.isNotEmpty) {
+      for (final hacienda in _haciendas) {
+        if (_formatHaciendaName(hacienda).toLowerCase() == currentHacienda) {
+          return _toInt(hacienda['id']);
+        }
+      }
+    }
+
+    if (_haciendas.isNotEmpty) {
+      return _toInt(_haciendas.first['id']);
+    }
+
+    return null;
+  }
+
+  int? _resolveInitialLoteId({int? preferredLoteId}) {
+    if (preferredLoteId != null &&
+        _lotes.any((lote) => _toInt(lote['id']) == preferredLoteId)) {
+      return preferredLoteId;
+    }
+
+    final currentLote = _loteController.text.trim().toLowerCase();
+    if (currentLote.isNotEmpty) {
+      for (final lote in _lotes) {
+        if (_formatLoteValue(lote).toLowerCase() == currentLote ||
+            (lote['codigo']?.toString().trim().toLowerCase() ?? '') == currentLote) {
+          return _toInt(lote['id']);
+        }
+      }
+    }
+
+    if (_lotes.isNotEmpty) {
+      return _toInt(_lotes.first['id']);
+    }
+
+    return null;
+  }
+
+  Future<void> _loadHaciendasByCliente(
+    int? clienteId, {
+    int? preferredHaciendaId,
+    int? preferredLoteId,
+  }) async {
+    if (clienteId == null) {
+      return;
+    }
+
+    try {
+      final haciendas = await _haciendaService.getHaciendasByCliente(clienteId);
+      if (!mounted) {
+        return;
+      }
+
+      _haciendas = haciendas;
+      final nextHaciendaId =
+          _resolveInitialHaciendaId(preferredHaciendaId: preferredHaciendaId);
+
+      setState(() {
+        _haciendas = haciendas;
+        _selectedHaciendaId = nextHaciendaId;
+        _haciendaController.text = nextHaciendaId == null
+            ? ''
+            : (haciendas
+                    .firstWhere((h) => h['id'] == nextHaciendaId)['nombre']
+                    ?.toString() ??
+                '');
+        _lotes = [];
+        _selectedLoteId = null;
+        _loteController.clear();
+      });
+
+      if (nextHaciendaId != null) {
+        await _loadLotesByHacienda(
+          nextHaciendaId,
+          preferredLoteId: preferredLoteId,
+        );
+      }
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _haciendas = [];
+        _lotes = [];
+        _selectedHaciendaId = null;
+        _selectedLoteId = null;
+        _haciendaController.clear();
+        _loteController.clear();
+      });
+    }
+  }
+
+  Future<void> _loadLotesByHacienda(
+    int haciendaId, {
+    int? preferredLoteId,
+  }) async {
+    try {
+      final lotes = await _loteService.getLotesByHacienda(haciendaId);
+      if (!mounted) {
+        return;
+      }
+
+      _lotes = lotes;
+      final nextLoteId =
+          _resolveInitialLoteId(preferredLoteId: preferredLoteId);
+
+      setState(() {
+        _lotes = lotes;
+        _selectedLoteId = nextLoteId;
+        if (nextLoteId != null) {
+          final lote = lotes.firstWhere((l) => l['id'] == nextLoteId);
+          _loteController.text = _formatLoteValue(lote);
+        } else {
+          _loteController.clear();
+        }
+      });
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _lotes = [];
+        _selectedLoteId = null;
+        _loteController.clear();
+      });
+    }
   }
 
   bool _isLikelyCedula(String value) {
@@ -126,6 +305,12 @@ class _ProductiveIndicatorsScreenState extends State<ProductiveIndicatorsScreen>
       if (selectedName != query.toLowerCase()) {
         setState(() {
           _selectedClient = null;
+          _selectedHaciendaId = null;
+          _selectedLoteId = null;
+          _haciendas = [];
+          _lotes = [];
+          _haciendaController.clear();
+          _loteController.clear();
         });
         _clientService.clearSelectedClient();
       }
@@ -205,10 +390,17 @@ class _ProductiveIndicatorsScreenState extends State<ProductiveIndicatorsScreen>
       setState(() {
         _selectedClient = client;
         _clientSuggestions = [];
+        _selectedHaciendaId = null;
+        _selectedLoteId = null;
+        _haciendas = [];
+        _lotes = [];
+        _haciendaController.clear();
+        _loteController.clear();
       });
       _clientService.saveSelectedClient(client);
       _clienteController.text = _formatClientName(client);
       _clienteFocusNode.unfocus();
+      await _loadHaciendasByCliente(_resolveClienteId(client));
       _saveDraft();
     }
   }
@@ -226,16 +418,97 @@ class _ProductiveIndicatorsScreenState extends State<ProductiveIndicatorsScreen>
         children: [
           _buildClientCard(),
           const SizedBox(height: 16),
-          TextField(
-            controller: _loteController,
-            decoration: const InputDecoration(
-              labelText: 'Lote',
-              hintText: 'Ingrese el lote',
-              border: OutlineInputBorder(),
-              prefixIcon: Icon(Icons.map_outlined),
+          if (_haciendas.isNotEmpty)
+            DropdownButtonFormField<int>(
+              value: _selectedHaciendaId,
+              decoration: const InputDecoration(
+                labelText: 'Finca',
+                border: OutlineInputBorder(),
+                prefixIcon: Icon(Icons.home_work_outlined),
+              ),
+              items: _haciendas
+                  .map(
+                    (hacienda) => DropdownMenuItem<int>(
+                      value: _toInt(hacienda['id']),
+                      child: Text(hacienda['nombre']?.toString() ?? ''),
+                    ),
+                  )
+                  .toList(),
+              onChanged: (value) {
+                setState(() {
+                  _selectedHaciendaId = value;
+                  _selectedLoteId = null;
+                  _lotes = [];
+                  _loteController.clear();
+                  _haciendaController.text = value == null
+                      ? ''
+                      : (_haciendas
+                              .firstWhere((h) => h['id'] == value)['nombre']
+                              ?.toString() ??
+                          '');
+                });
+                if (value != null) {
+                  _loadLotesByHacienda(value);
+                } else {
+                  _saveDraft();
+                }
+              },
+            )
+          else
+            TextField(
+              controller: _haciendaController,
+              readOnly: true,
+              decoration: const InputDecoration(
+                labelText: 'Finca',
+                hintText: 'Seleccione un cliente para cargar fincas',
+                border: OutlineInputBorder(),
+                prefixIcon: Icon(Icons.home_work_outlined),
+              ),
             ),
-            onChanged: (_) => _saveDraft(),
-          ),
+          const SizedBox(height: 16),
+          if (_lotes.isNotEmpty)
+            DropdownButtonFormField<int>(
+              value: _selectedLoteId,
+              decoration: const InputDecoration(
+                labelText: 'Lote',
+                hintText: 'Seleccione el lote',
+                border: OutlineInputBorder(),
+                prefixIcon: Icon(Icons.map_outlined),
+              ),
+              items: _lotes
+                  .map(
+                    (lote) => DropdownMenuItem<int>(
+                      value: _toInt(lote['id']),
+                      child: Text(
+                        '${lote['codigo'] ?? ''} - ${lote['nombre'] ?? ''}',
+                      ),
+                    ),
+                  )
+                  .toList(),
+              onChanged: (value) {
+                setState(() {
+                  _selectedLoteId = value;
+                  if (value == null) {
+                    _loteController.clear();
+                  } else {
+                    final lote = _lotes.firstWhere((l) => l['id'] == value);
+                    _loteController.text = _formatLoteValue(lote);
+                  }
+                });
+                _saveDraft();
+              },
+            )
+          else
+            TextField(
+              controller: _loteController,
+              readOnly: true,
+              decoration: const InputDecoration(
+                labelText: 'Lote',
+                hintText: 'Seleccione una finca para cargar lotes',
+                border: OutlineInputBorder(),
+                prefixIcon: Icon(Icons.map_outlined),
+              ),
+            ),
           const SizedBox(height: 16),
           Container(
             padding: const EdgeInsets.all(16),
@@ -315,8 +588,15 @@ class _ProductiveIndicatorsScreenState extends State<ProductiveIndicatorsScreen>
               setState(() {
                 _selectedClient = client;
                 _clientSuggestions = [];
+                _selectedHaciendaId = null;
+                _selectedLoteId = null;
+                _haciendas = [];
+                _lotes = [];
+                _haciendaController.clear();
+                _loteController.clear();
               });
               _clientService.saveSelectedClient(client);
+              _loadHaciendasByCliente(_resolveClienteId(client));
               _saveDraft();
             },
             fieldViewBuilder: (

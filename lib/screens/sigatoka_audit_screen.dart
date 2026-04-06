@@ -6,6 +6,8 @@ import 'package:geolocator/geolocator.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../services/client_service.dart';
 import '../services/auth_service.dart';
+import '../services/hacienda_service.dart';
+import '../services/lote_service.dart';
 import '../services/sigatoka_evaluacion_service.dart';
 import '../utils/sigatoka_date_util.dart';
 import 'resumen_sigatoka_screen.dart';
@@ -66,6 +68,13 @@ class _SigatokaAuditScreenState extends State<SigatokaAuditScreen>
   String _lastQuery = '';
   final ClientService _clientService = ClientService();
   final AuthService _authService = AuthService();
+  final HaciendaService _haciendaService = HaciendaService();
+  final LoteService _loteService = LoteService();
+  List<Map<String, dynamic>> _haciendas = [];
+  List<Map<String, dynamic>> _lotes = [];
+  int? _selectedHaciendaId;
+  int? _selectedLoteId;
+  bool _isLoadingClientLocations = false;
 
   // 1. Encabezado
   final TextEditingController haciendaController = TextEditingController();
@@ -140,6 +149,7 @@ class _SigatokaAuditScreenState extends State<SigatokaAuditScreen>
       _nombreController.text = _formatClientName(widget.clientData!);
       haciendaController.text = _formatFincaName(widget.clientData!);
       _clientService.saveSelectedClient(widget.clientData!);
+      _selectClient(widget.clientData!, persistSelection: true);
 
       // Verificar si es modo cliente (usuario con rol CLIENTE)
       _isClienteMode = widget.clientData!['isCliente'] == true;
@@ -186,11 +196,7 @@ class _SigatokaAuditScreenState extends State<SigatokaAuditScreen>
     if (!mounted || stored == null) {
       return;
     }
-    setState(() {
-      _selectedClient = stored;
-      _nombreController.text = _formatClientName(stored);
-      haciendaController.text = _formatFincaName(stored);
-    });
+    await _selectClient(stored, persistSelection: false);
   }
 
   Future<void> _saveDraft() async {
@@ -200,12 +206,14 @@ class _SigatokaAuditScreenState extends State<SigatokaAuditScreen>
         'selectedClient': _selectedClient,
         'nombre': _nombreController.text.trim(),
         'hacienda': haciendaController.text.trim(),
+        'selectedHaciendaId': _selectedHaciendaId,
         'fecha': fechaController.text.trim(),
         'semana': semanaController.text.trim(),
         'periodo': periodoController.text.trim(),
         'evaluador': evaluadorController.text.trim(),
         'muestraNumero': muestraNumController.text.trim(),
         'loteCodigo': loteCodigoController.text.trim(),
+        'selectedLoteId': _selectedLoteId,
         'grado3era': grado3eraController.text.trim(),
         'grado4ta': grado4taController.text.trim(),
         'grado5ta': grado5taController.text.trim(),
@@ -249,6 +257,7 @@ class _SigatokaAuditScreenState extends State<SigatokaAuditScreen>
             draft['nombre']?.toString() ?? _nombreController.text;
         haciendaController.text =
             draft['hacienda']?.toString() ?? haciendaController.text;
+        _selectedHaciendaId = draft['selectedHaciendaId'] as int?;
         fechaController.text =
             draft['fecha']?.toString() ?? fechaController.text;
         semanaController.text =
@@ -262,6 +271,7 @@ class _SigatokaAuditScreenState extends State<SigatokaAuditScreen>
                 ? draft['muestraNumero'].toString()
                 : muestraNumController.text;
         loteCodigoController.text = draft['loteCodigo']?.toString() ?? '';
+        _selectedLoteId = draft['selectedLoteId'] as int?;
         grado3eraController.text =
             draft['grado3era']?.toString() ?? grado3eraController.text;
         grado4taController.text =
@@ -294,6 +304,13 @@ class _SigatokaAuditScreenState extends State<SigatokaAuditScreen>
         _dropdownResetKey =
             draft['dropdownResetKey'] as int? ?? _dropdownResetKey;
       });
+      if (_selectedClient != null) {
+        await _loadHaciendasByCliente(
+          _resolveClientId(_selectedClient!),
+          preferredHaciendaId: _selectedHaciendaId,
+          preferredLoteId: _selectedLoteId,
+        );
+      }
     } catch (_) {}
   }
 
@@ -862,11 +879,7 @@ class _SigatokaAuditScreenState extends State<SigatokaAuditScreen>
                     if (!mounted) {
                       return;
                     }
-                    setState(() {
-                      _selectedClient = client;
-                      _clientSuggestions = [];
-                    });
-                    _clientService.saveSelectedClient(client);
+                    _selectClient(client, persistSelection: true);
                     _saveDraft();
                   },
                   fieldViewBuilder: (
@@ -1012,6 +1025,237 @@ class _SigatokaAuditScreenState extends State<SigatokaAuditScreen>
     return (client['fincaNombre'] ?? client['nombreFinca'] ?? '').toString();
   }
 
+  int? _toInt(dynamic value) {
+    if (value is int) {
+      return value;
+    }
+    return int.tryParse(value?.toString() ?? '');
+  }
+
+  int? _resolveClientId(Map<String, dynamic> client) {
+    return _toInt(client['id'] ?? client['clienteId'] ?? client['clientId']);
+  }
+
+  String _formatHaciendaName(Map<String, dynamic> hacienda) {
+    return hacienda['nombre']?.toString().trim() ?? '';
+  }
+
+  String _formatLoteName(Map<String, dynamic> lote) {
+    final nombre = lote['nombre']?.toString().trim() ?? '';
+    final codigo = lote['codigo']?.toString().trim() ?? '';
+    if (nombre.isNotEmpty && codigo.isNotEmpty) {
+      return '$nombre ($codigo)';
+    }
+    return nombre.isNotEmpty ? nombre : codigo;
+  }
+
+  int? _resolveInitialHaciendaId({int? preferredHaciendaId}) {
+    if (preferredHaciendaId != null &&
+        _haciendas.any(
+          (hacienda) => _toInt(hacienda['id']) == preferredHaciendaId,
+        )) {
+      return preferredHaciendaId;
+    }
+
+    final fallbackName = haciendaController.text.trim();
+    if (fallbackName.isNotEmpty) {
+      for (final hacienda in _haciendas) {
+        if (_formatHaciendaName(hacienda).toLowerCase() ==
+            fallbackName.toLowerCase()) {
+          return _toInt(hacienda['id']);
+        }
+      }
+    }
+
+    if (_haciendas.isNotEmpty) {
+      return _toInt(_haciendas.first['id']);
+    }
+
+    return null;
+  }
+
+  int? _resolveInitialLoteId({int? preferredLoteId}) {
+    if (preferredLoteId != null &&
+        _lotes.any((lote) => _toInt(lote['id']) == preferredLoteId)) {
+      return preferredLoteId;
+    }
+
+    final currentLote = loteCodigoController.text.trim().toLowerCase();
+    if (currentLote.isNotEmpty) {
+      for (final lote in _lotes) {
+        if (_formatLoteName(lote).toLowerCase() == currentLote ||
+            (lote['nombre']?.toString().trim().toLowerCase() ?? '') ==
+                currentLote ||
+            (lote['codigo']?.toString().trim().toLowerCase() ?? '') ==
+                currentLote) {
+          return _toInt(lote['id']);
+        }
+      }
+    }
+
+    if (_lotes.isNotEmpty) {
+      return _toInt(_lotes.first['id']);
+    }
+
+    return null;
+  }
+
+  Future<void> _selectClient(
+    Map<String, dynamic> client, {
+    required bool persistSelection,
+    int? preferredHaciendaId,
+    int? preferredLoteId,
+  }) async {
+    if (!mounted) {
+      return;
+    }
+
+    setState(() {
+      _selectedClient = client;
+      _clientSuggestions = [];
+      _haciendas = [];
+      _lotes = [];
+      _selectedHaciendaId = null;
+      _selectedLoteId = null;
+      haciendaController.text = _formatFincaName(client);
+      loteCodigoController.clear();
+    });
+
+    _nombreController.text = _formatClientName(client);
+
+    if (persistSelection) {
+      await _clientService.saveSelectedClient(client);
+    }
+
+    final clientId = _resolveClientId(client);
+    if (clientId != null) {
+      await _loadHaciendasByCliente(
+        clientId,
+        preferredHaciendaId: preferredHaciendaId,
+        preferredLoteId: preferredLoteId,
+      );
+    }
+  }
+
+  Future<void> _loadHaciendasByCliente(
+    int? clienteId, {
+    int? preferredHaciendaId,
+    int? preferredLoteId,
+  }) async {
+    if (clienteId == null || !mounted) {
+      return;
+    }
+
+    setState(() {
+      _isLoadingClientLocations = true;
+    });
+
+    try {
+      final haciendas = await _haciendaService.getHaciendasByCliente(clienteId);
+      if (!mounted) {
+        return;
+      }
+
+      _haciendas = haciendas;
+      final selectedHaciendaId =
+          _resolveInitialHaciendaId(preferredHaciendaId: preferredHaciendaId);
+
+      setState(() {
+        _haciendas = haciendas;
+        _selectedHaciendaId = selectedHaciendaId;
+        _lotes = [];
+        _selectedLoteId = null;
+        haciendaController.text = selectedHaciendaId == null
+            ? ''
+            : (_haciendas
+                    .firstWhere((h) => _toInt(h['id']) == selectedHaciendaId)['nombre']
+                    ?.toString() ??
+                '');
+        loteCodigoController.clear();
+      });
+
+      if (selectedHaciendaId != null) {
+        await _loadLotesByHacienda(
+          selectedHaciendaId,
+          preferredLoteId: preferredLoteId,
+        );
+      }
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _haciendas = [];
+        _lotes = [];
+        _selectedHaciendaId = null;
+        _selectedLoteId = null;
+        haciendaController.clear();
+        loteCodigoController.clear();
+      });
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoadingClientLocations = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _loadLotesByHacienda(
+    int haciendaId, {
+    int? preferredLoteId,
+  }) async {
+    if (!mounted) {
+      return;
+    }
+
+    setState(() {
+      _isLoadingClientLocations = true;
+    });
+
+    try {
+      final lotes = await _loteService.getLotesByHacienda(haciendaId);
+      if (!mounted) {
+        return;
+      }
+
+      _lotes = lotes;
+      final selectedLoteId =
+          _resolveInitialLoteId(preferredLoteId: preferredLoteId);
+
+      String loteNombre = '';
+      for (final lote in lotes) {
+        if (_toInt(lote['id']) == selectedLoteId) {
+          loteNombre = lote['nombre']?.toString().trim() ??
+              lote['codigo']?.toString().trim() ??
+              '';
+          break;
+        }
+      }
+
+      setState(() {
+        _lotes = lotes;
+        _selectedLoteId = selectedLoteId;
+        loteCodigoController.text = loteNombre;
+      });
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _lotes = [];
+        _selectedLoteId = null;
+        loteCodigoController.clear();
+      });
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoadingClientLocations = false;
+        });
+      }
+    }
+  }
+
   Widget _buildInfectionGradeDropdown({
     required TextEditingController controller,
     required String label,
@@ -1123,6 +1367,12 @@ class _SigatokaAuditScreenState extends State<SigatokaAuditScreen>
       if (selectedName != query.toLowerCase()) {
         setState(() {
           _selectedClient = null;
+          _haciendas = [];
+          _lotes = [];
+          _selectedHaciendaId = null;
+          _selectedLoteId = null;
+          haciendaController.clear();
+          loteCodigoController.clear();
         });
         _clientService.clearSelectedClient();
       }
@@ -1188,12 +1438,7 @@ class _SigatokaAuditScreenState extends State<SigatokaAuditScreen>
 
     if (_clientSuggestions.length == 1) {
       final client = _clientSuggestions.first;
-      setState(() {
-        _selectedClient = client;
-        _clientSuggestions = [];
-      });
-      _clientService.saveSelectedClient(client);
-      _nombreController.text = _formatClientName(client);
+      await _selectClient(client, persistSelection: true);
       _nombreFocusNode.unfocus();
       _saveDraft();
       return;
@@ -1236,15 +1481,60 @@ class _SigatokaAuditScreenState extends State<SigatokaAuditScreen>
             const SizedBox(height: 20),
 
             // HACIENDA
-            TextField(
-              controller: haciendaController,
-              decoration: const InputDecoration(
-                labelText: '🏡 Hacienda *',
-                hintText: 'Nombre de la finca o predio',
-                border: OutlineInputBorder(),
-                prefixIcon: Icon(Icons.home),
+            if (_haciendas.isNotEmpty)
+              DropdownButtonFormField<int>(
+                value: _haciendas.any(
+                  (hacienda) => _toInt(hacienda['id']) == _selectedHaciendaId,
+                )
+                    ? _selectedHaciendaId
+                    : null,
+                decoration: InputDecoration(
+                  labelText: '🏡 Hacienda *',
+                  hintText: _isLoadingClientLocations
+                      ? 'Cargando fincas...'
+                      : 'Seleccione finca',
+                  border: const OutlineInputBorder(),
+                  prefixIcon: const Icon(Icons.home),
+                ),
+                items: _haciendas
+                    .map(
+                      (hacienda) => DropdownMenuItem<int>(
+                        value: _toInt(hacienda['id']),
+                        child: Text(_formatHaciendaName(hacienda)),
+                      ),
+                    )
+                    .toList(),
+                onChanged: _isLoadingClientLocations
+                    ? null
+                    : (value) {
+                        setState(() {
+                          _selectedHaciendaId = value;
+                          _selectedLoteId = null;
+                          _lotes = [];
+                          loteCodigoController.clear();
+                          haciendaController.text = value == null
+                              ? ''
+                              : (_haciendas
+                                      .firstWhere((h) => _toInt(h['id']) == value)['nombre']
+                                      ?.toString() ??
+                                  '');
+                        });
+                        if (value != null) {
+                          _loadLotesByHacienda(value);
+                        }
+                      },
+              )
+            else
+              TextField(
+                controller: haciendaController,
+                readOnly: true,
+                decoration: const InputDecoration(
+                  labelText: '🏡 Hacienda *',
+                  hintText: 'Seleccione un cliente para cargar fincas',
+                  border: OutlineInputBorder(),
+                  prefixIcon: Icon(Icons.home),
+                ),
               ),
-            ),
             const SizedBox(height: 16),
 
             // FECHA CON CALENDARIO VISUAL
@@ -1496,20 +1786,70 @@ class _SigatokaAuditScreenState extends State<SigatokaAuditScreen>
                   child: Row(
                     children: [
                       Expanded(
-                        child: TextField(
-                          controller: loteCodigoController,
-                          decoration: InputDecoration(
-                            labelText: '🧭 Lote # *',
-                            hintText: 'A1',
-                            border: const OutlineInputBorder(),
-                            prefixIcon: const Icon(Icons.location_on),
-                            suffixIcon:
-                                _loteLatitud != null && _loteLongitud != null
-                                    ? const Icon(Icons.check_circle,
-                                        color: Colors.green)
+                        child: _lotes.isNotEmpty
+                            ? DropdownButtonFormField<int>(
+                                value: _lotes.any(
+                                  (lote) => _toInt(lote['id']) == _selectedLoteId,
+                                )
+                                    ? _selectedLoteId
                                     : null,
-                          ),
-                        ),
+                                decoration: InputDecoration(
+                                  labelText: '🧭 Lote # *',
+                                  hintText: _isLoadingClientLocations
+                                      ? 'Cargando lotes...'
+                                      : 'Seleccione lote',
+                                  border: const OutlineInputBorder(),
+                                  prefixIcon: const Icon(Icons.location_on),
+                                  suffixIcon:
+                                      _loteLatitud != null && _loteLongitud != null
+                                          ? const Icon(Icons.check_circle,
+                                              color: Colors.green)
+                                          : null,
+                                ),
+                                items: _lotes
+                                    .map(
+                                      (lote) => DropdownMenuItem<int>(
+                                        value: _toInt(lote['id']),
+                                        child: Text(_formatLoteName(lote)),
+                                      ),
+                                    )
+                                    .toList(),
+                                onChanged: _isLoadingClientLocations
+                                    ? null
+                                    : (value) {
+                                        setState(() {
+                                          _selectedLoteId = value;
+                                          if (value == null) {
+                                            loteCodigoController.clear();
+                                            return;
+                                          }
+                                          for (final lote in _lotes) {
+                                            if (_toInt(lote['id']) == value) {
+                                              loteCodigoController.text =
+                                                  lote['nombre']?.toString().trim() ??
+                                                      lote['codigo']?.toString().trim() ??
+                                                      '';
+                                              break;
+                                            }
+                                          }
+                                        });
+                                      },
+                              )
+                            : TextField(
+                                controller: loteCodigoController,
+                                readOnly: true,
+                                decoration: InputDecoration(
+                                  labelText: '🧭 Lote # *',
+                                  hintText: 'Seleccione una finca para cargar lotes',
+                                  border: const OutlineInputBorder(),
+                                  prefixIcon: const Icon(Icons.location_on),
+                                  suffixIcon:
+                                      _loteLatitud != null && _loteLongitud != null
+                                          ? const Icon(Icons.check_circle,
+                                              color: Colors.green)
+                                          : null,
+                                ),
+                              ),
                       ),
                       const SizedBox(width: 8),
                       Container(

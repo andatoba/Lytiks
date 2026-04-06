@@ -117,12 +117,7 @@ class _SigatokaEvaluacionFormScreenState extends State<SigatokaEvaluacionFormScr
     if (!mounted || stored == null) {
       return;
     }
-    setState(() {
-      _clienteId = stored['id'];
-      _clienteNombre = _formatClientName(stored);
-      _clienteSearchController.text = _clienteNombre ?? '';
-      _haciendaController.text = _formatFincaName(stored);
-    });
+    _selectClient(Map<String, dynamic>.from(stored));
   }
 
   @override
@@ -165,6 +160,72 @@ class _SigatokaEvaluacionFormScreenState extends State<SigatokaEvaluacionFormScr
 
   String _formatFincaName(Map<String, dynamic> client) {
     return (client['fincaNombre'] ?? client['nombreFinca'] ?? '').toString();
+  }
+
+  int? _toInt(dynamic value) {
+    if (value is int) {
+      return value;
+    }
+    return int.tryParse(value?.toString() ?? '');
+  }
+
+  String _formatHaciendaName(Map<String, dynamic> hacienda) {
+    return hacienda['nombre']?.toString().trim() ?? '';
+  }
+
+  String _formatLoteName(Map<String, dynamic> lote) {
+    final nombre = lote['nombre']?.toString().trim() ?? '';
+    final codigo = lote['codigo']?.toString().trim() ?? '';
+    if (nombre.isNotEmpty && codigo.isNotEmpty) {
+      return '$nombre ($codigo)';
+    }
+    return nombre.isNotEmpty ? nombre : codigo;
+  }
+
+  int? _resolveInitialHaciendaId({int? preferredHaciendaId}) {
+    if (preferredHaciendaId != null &&
+        _haciendas.any((hacienda) => _toInt(hacienda['id']) == preferredHaciendaId)) {
+      return preferredHaciendaId;
+    }
+
+    final fallbackName = _haciendaController.text.trim();
+    if (fallbackName.isNotEmpty) {
+      for (final hacienda in _haciendas) {
+        if (_formatHaciendaName(hacienda).toLowerCase() == fallbackName.toLowerCase()) {
+          return _toInt(hacienda['id']);
+        }
+      }
+    }
+
+    if (_haciendas.isNotEmpty) {
+      return _toInt(_haciendas.first['id']);
+    }
+
+    return null;
+  }
+
+  int? _resolveInitialLoteId({int? preferredLoteId}) {
+    if (preferredLoteId != null &&
+        _lotes.any((lote) => _toInt(lote['id']) == preferredLoteId)) {
+      return preferredLoteId;
+    }
+
+    final currentLote = _loteController.text.trim().toLowerCase();
+    if (currentLote.isNotEmpty) {
+      for (final lote in _lotes) {
+        if (_formatLoteName(lote).toLowerCase() == currentLote ||
+            (lote['nombre']?.toString().trim().toLowerCase() ?? '') == currentLote ||
+            (lote['codigo']?.toString().trim().toLowerCase() ?? '') == currentLote) {
+          return _toInt(lote['id']);
+        }
+      }
+    }
+
+    if (_lotes.isNotEmpty) {
+      return _toInt(_lotes.first['id']);
+    }
+
+    return null;
   }
 
   Future<void> _prefillEvaluador() async {
@@ -296,7 +357,12 @@ class _SigatokaEvaluacionFormScreenState extends State<SigatokaEvaluacionFormScr
       setState(() {
         _clienteId = null;
         _clienteNombre = null;
+        _haciendas = [];
+        _lotes = [];
+        _selectedHaciendaId = null;
+        _selectedLoteId = null;
         _haciendaController.text = '';
+        _loteController.clear();
       });
       _clientService.clearSelectedClient();
     }
@@ -341,7 +407,11 @@ class _SigatokaEvaluacionFormScreenState extends State<SigatokaEvaluacionFormScr
     }
   }
 
-  void _selectClient(Map<String, dynamic> client) {
+  void _selectClient(
+    Map<String, dynamic> client, {
+    int? preferredHaciendaId,
+    int? preferredLoteId,
+  }) {
     if (!mounted) {
       return;
     }
@@ -349,27 +419,53 @@ class _SigatokaEvaluacionFormScreenState extends State<SigatokaEvaluacionFormScr
       _clienteId = client['id'];
       _clienteNombre = _formatClientName(client);
       _haciendaController.text = _formatFincaName(client);
+      _selectedHaciendaId = null;
+      _selectedLoteId = null;
+      _haciendas = [];
+      _lotes = [];
+      _loteController.clear();
       _clientSuggestions = [];
     });
     _clientService.saveSelectedClient(client);
-    // Cargar haciendas del cliente seleccionado
-    _loadHaciendasByCliente();
+    _loadHaciendasByCliente(
+      preferredHaciendaId: preferredHaciendaId,
+      preferredLoteId: preferredLoteId,
+    );
   }
 
   /// Carga las haciendas del cliente seleccionado
-  Future<void> _loadHaciendasByCliente() async {
+  Future<void> _loadHaciendasByCliente({
+    int? preferredHaciendaId,
+    int? preferredLoteId,
+  }) async {
     if (_clienteId == null) return;
     
     setState(() => _isLoading = true);
     try {
       final haciendas = await _haciendaService.getHaciendasByCliente(_clienteId!);
       if (mounted) {
+        _haciendas = haciendas;
+        final selectedHaciendaId =
+            _resolveInitialHaciendaId(preferredHaciendaId: preferredHaciendaId);
         setState(() {
           _haciendas = haciendas;
-          _selectedHaciendaId = null;
+          _selectedHaciendaId = selectedHaciendaId;
+          _haciendaController.text = selectedHaciendaId == null
+              ? ''
+              : (_haciendas
+                      .firstWhere((h) => _toInt(h['id']) == selectedHaciendaId)['nombre']
+                      ?.toString() ??
+                  '');
           _lotes = [];
           _selectedLoteId = null;
+          _loteController.clear();
         });
+        if (selectedHaciendaId != null) {
+          await _loadLotesByHacienda(
+            selectedHaciendaId,
+            preferredLoteId: preferredLoteId,
+          );
+        }
       }
     } catch (e) {
       debugPrint('Error cargando haciendas: $e');
@@ -381,14 +477,30 @@ class _SigatokaEvaluacionFormScreenState extends State<SigatokaEvaluacionFormScr
   }
 
   /// Carga los lotes de la hacienda seleccionada
-  Future<void> _loadLotesByHacienda(int haciendaId) async {
+  Future<void> _loadLotesByHacienda(
+    int haciendaId, {
+    int? preferredLoteId,
+  }) async {
     setState(() => _isLoading = true);
     try {
       final lotes = await _loteService.getLotesByHacienda(haciendaId);
       if (mounted) {
+        _lotes = lotes;
+        final selectedLoteId =
+            _resolveInitialLoteId(preferredLoteId: preferredLoteId);
+        String loteNombre = '';
+        for (final lote in lotes) {
+          if (_toInt(lote['id']) == selectedLoteId) {
+            loteNombre = lote['nombre']?.toString().trim() ??
+                lote['codigo']?.toString().trim() ??
+                '';
+            break;
+          }
+        }
         setState(() {
           _lotes = lotes;
-          _selectedLoteId = null;
+          _selectedLoteId = selectedLoteId;
+          _loteController.text = loteNombre;
         });
       }
     } catch (e) {
@@ -795,7 +907,7 @@ class _SigatokaEvaluacionFormScreenState extends State<SigatokaEvaluacionFormScr
               ),
               items: _haciendas.map((hacienda) {
                 return DropdownMenuItem<int>(
-                  value: hacienda['id'],
+                  value: _toInt(hacienda['id']),
                   child: Text(hacienda['nombre'] ?? ''),
                 );
               }).toList(),
@@ -803,7 +915,7 @@ class _SigatokaEvaluacionFormScreenState extends State<SigatokaEvaluacionFormScr
                 setState(() {
                   _selectedHaciendaId = value;
                   _haciendaController.text = _haciendas
-                      .firstWhere((h) => h['id'] == value)['nombre'] ?? '';
+                      .firstWhere((h) => _toInt(h['id']) == value)['nombre'] ?? '';
                 });
                 if (value != null) {
                   _loadLotesByHacienda(value);
@@ -834,7 +946,7 @@ class _SigatokaEvaluacionFormScreenState extends State<SigatokaEvaluacionFormScr
               ),
               items: _lotes.map((lote) {
                 return DropdownMenuItem<int>(
-                  value: lote['id'],
+                  value: _toInt(lote['id']),
                   child: Text('${lote['codigo']} - ${lote['nombre']}'),
                 );
               }).toList(),
@@ -842,8 +954,8 @@ class _SigatokaEvaluacionFormScreenState extends State<SigatokaEvaluacionFormScr
                 setState(() {
                   _selectedLoteId = value;
                   if (value != null) {
-                    final lote = _lotes.firstWhere((l) => l['id'] == value);
-                    _loteController.text = lote['codigo'] ?? '';
+                    final lote = _lotes.firstWhere((l) => _toInt(l['id']) == value);
+                    _loteController.text = lote['nombre'] ?? lote['codigo'] ?? '';
                   }
                 });
               },

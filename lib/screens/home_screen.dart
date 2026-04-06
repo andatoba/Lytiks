@@ -736,49 +736,47 @@ class _InicioTabState extends State<InicioTab> {
 
           const SizedBox(height: 12),
 
-          // Tercera fila: Control de Plagas
-          SizedBox(
-            width: double.infinity,
-            child: _buildActionButton(
-              context,
-              icon: Icons.bug_report,
-              title: 'Control de Plagas',
-              color: const Color(0xFF8D6E63),
-              onTap: () {
-                Navigator.push(
+          // Tercera fila de botones
+          Row(
+            children: [
+              Expanded(
+                child: _buildActionButton(
                   context,
-                  MaterialPageRoute(
-                    builder: (context) => PlagasScreen(
-                      clientData: _selectedClient,
-                    ),
-                  ),
-                );
-              },
-              isFullWidth: true,
-            ),
-          ),
-
-          const SizedBox(height: 12),
-
-          SizedBox(
-            width: double.infinity,
-            child: _buildActionButton(
-              context,
-              icon: Icons.insights,
-              title: 'Indicadores productivos',
-              color: const Color(0xFF1565C0),
-              onTap: () {
-                Navigator.push(
+                  icon: Icons.bug_report,
+                  title: 'Control de Plagas',
+                  color: const Color(0xFF8D6E63),
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => PlagasScreen(
+                          clientData: _selectedClient,
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: _buildActionButton(
                   context,
-                  MaterialPageRoute(
-                    builder: (context) => ProductiveIndicatorsScreen(
-                      clientData: _selectedClient,
-                    ),
-                  ),
-                );
-              },
-              isFullWidth: true,
-            ),
+                  icon: Icons.insights,
+                  title: 'Indicadores productivos',
+                  color: const Color(0xFF1565C0),
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => ProductiveIndicatorsScreen(
+                          clientData: _selectedClient,
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ],
           ),
 
           const SizedBox(height: 12),
