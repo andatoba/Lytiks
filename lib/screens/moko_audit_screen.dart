@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import '../helpers/client_location_helper.dart';
 import '../services/client_service.dart';
 import 'audit_screen.dart';
 import 'registro_moko_screen.dart';
@@ -507,13 +508,11 @@ class _MokoAuditScreenState extends State<MokoAuditScreen> {
   }
 
   String _formatClientName(Map<String, dynamic> client) {
-    final nombre = client['nombre']?.toString() ?? '';
-    final apellidos = client['apellidos']?.toString() ?? '';
-    return '$nombre $apellidos'.trim();
+    return ClientLocationHelper.formatClientName(client);
   }
 
   String _formatFincaName(Map<String, dynamic> client) {
-    return (client['fincaNombre'] ?? client['nombreFinca'] ?? '').toString();
+    return ClientLocationHelper.formatFincaName(client);
   }
 
   void _onNameChanged(String value) {

@@ -85,13 +85,9 @@ class _AgrotecbanMokoContencionScreenState
             child: ListView(
               padding: const EdgeInsets.all(16),
               children: [
-                _buildBioseguridad(),
-                const SizedBox(height: 12),
                 _buildFase1(),
                 const SizedBox(height: 12),
                 _buildFase2(),
-                const SizedBox(height: 12),
-                _buildFase3(),
                 const SizedBox(height: 12),
                 _buildObservaciones(),
                 const SizedBox(height: 24),
@@ -187,27 +183,6 @@ class _AgrotecbanMokoContencionScreenState
     );
   }
 
-  Widget _buildBioseguridad() {
-    final items = _form.bioseguridad;
-
-    return _sectionCard(
-      titulo: 'BIOSEGURIDAD',
-      subtitulo: 'Seguir formato: Aplicar + evaluacion + observacion + foto.',
-      child: Column(
-        children: [
-          _buildItemCard(items[0],
-              ayuda: 'Concentracion de amonio recomendada: 750.'),
-          _buildItemCard(items[1]),
-          _buildItemCard(items[2]),
-          _buildItemCard(
-            items[3],
-            ayuda: 'Escala: Excelente (100%), Bueno (75%), Regular (25%).',
-          ),
-        ],
-      ),
-    );
-  }
-
   Widget _buildFase1() {
     return _sectionCard(
       titulo: 'CONTENCION - FASE 1',
@@ -229,19 +204,6 @@ class _AgrotecbanMokoContencionScreenState
         children: [
           for (final item in _form.fase2) _buildItemCard(item, maxFotos: 5),
           const SizedBox(height: 10),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildFase3() {
-    return _sectionCard(
-      titulo: 'CONTENCION - FASE 3',
-      subtitulo: 'Detalle + recomendacion + foto por actividad.',
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          for (final item in _form.fase3) _buildFase3Item(item),
         ],
       ),
     );
@@ -743,66 +705,13 @@ class _AgrotecbanMokoContencionScreenState
       }
 
       final aplicaciones = <Map<String, dynamic>>[];
-      final productosSinMapeo = <String>[];
-
-      for (final item in _form.fase3) {
-        final parametro = item.parametro.toLowerCase();
-        if (!(parametro.contains('aplicacion') || parametro == 'sar')) {
-          continue;
-        }
-
-        final productoNombre =
-            (item.productoSeleccionado ?? item.extra2.text).trim();
-        if (productoNombre.isEmpty) {
-          continue;
-        }
-
-        final productoId = _productoIdPorNombre(productoNombre);
-        if (productoId == null) {
-          productosSinMapeo.add(productoNombre);
-          continue;
-        }
-
-        final dosis = (item.dosisSeleccionada ?? item.detalle.text).trim();
-
-        final aplicacionData = {
-          'clienteId': clienteId,
-          'productoId': productoId,
-          'productoNombre': productoNombre,
-          'plan': 'Moko-Contencion',
-          'dosis': dosis,
-          'fechaInicio': DateTime.now().toIso8601String(),
-          'frecuenciaDias': 30,
-          'repeticiones': 1,
-          'recordatorioHora': '08:00',
-          'lote': _form.focoLabel,
-        };
-
-        aplicaciones.add(aplicacionData);
-      }
-
-      if (aplicaciones.isEmpty) {
-        final detalleProductos = productosSinMapeo.isNotEmpty
-            ? ' Productos no reconocidos: ${productosSinMapeo.join(', ')}'
-            : '';
-        throw Exception(
-          'No hay aplicaciones validas para guardar. Seleccione producto y dosis en Fase 3.$detalleProductos',
-        );
-      }
 
       final plantasAfectadas = _contarSiEnLista(_form.fase1);
       final plantasInyectadas =
           _itemPorTitulo(_form.fase1, 'Plantas inyectadas')?.aplicar == true
               ? plantasAfectadas
               : 0;
-      final ppm = int.tryParse(
-            (_itemPorTitulo(_form.bioseguridad, 'Concentracion Amonio')
-                        ?.evaluacion
-                        .text ??
-                    '')
-                .trim(),
-          ) ??
-          750;
+      const ppm = 750;
 
       final efectivoNumeroFoco = numeroFoco ?? focoId ?? 0;
 
@@ -837,10 +746,7 @@ class _AgrotecbanMokoContencionScreenState
             )?.aplicar ==
             true,
         'corteRiego': false,
-        'pediluvioActivo':
-            _itemPorTitulo(_form.bioseguridad, 'Concentracion Amonio')
-                    ?.aplicar ==
-                true,
+        'pediluvioActivo': false,
         'ppmSolucionDesinfectante': ppm,
         'observaciones': _buildResumenObservaciones(),
       };
@@ -874,9 +780,7 @@ class _AgrotecbanMokoContencionScreenState
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(
-            'Guardado localmente: ${aplicaciones.length} aplicaciones registradas.',
-          ),
+          content: const Text('Contencion del foco guardada localmente.'),
           backgroundColor: Colors.green,
         ),
       );
@@ -933,7 +837,7 @@ class _AgrotecbanMokoContencionScreenState
       'bioseguridad': _form.bioseguridad.map(_serializeCheckItem).toList(),
       'fase1': _form.fase1.map(_serializeCheckItem).toList(),
       'fase2': _form.fase2.map(_serializeCheckItem).toList(),
-      'fase3': _form.fase3.map(_serializeFase3Item).toList(),
+      'fase3': const [],
       'observacionesGenerales': _form.observacionesGenerales.text.trim(),
       'recomendaciones': _form.recomendaciones.text.trim(),
     };
@@ -986,7 +890,9 @@ class _AgrotecbanMokoContencionScreenState
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-              'Sincronizado: $aplicacionesSync aplicaciones enviadas al servidor.',
+              aplicacionesSync > 0
+                  ? 'Sincronizado: $aplicacionesSync aplicaciones enviadas al servidor.'
+                  : 'Sincronizado: contencion del foco enviada al servidor.',
             ),
             backgroundColor: Colors.blue,
             duration: const Duration(seconds: 3),
@@ -1075,7 +981,7 @@ class _AgrotecbanMokoContencionScreenState
       'bioseguridad': form.bioseguridad.map(_serializeCheckItem).toList(),
       'fase1': form.fase1.map(_serializeCheckItem).toList(),
       'fase2': form.fase2.map(_serializeCheckItem).toList(),
-      'fase3': form.fase3.map(_serializeFase3Item).toList(),
+      'fase3': const [],
       'observacionesGenerales': form.observacionesGenerales.text.trim(),
       'recomendaciones': form.recomendaciones.text.trim(),
     };

@@ -2,10 +2,12 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../helpers/client_location_helper.dart';
 import '../services/client_service.dart';
 import '../services/hacienda_service.dart';
-import '../services/lote_service.dart';
 import 'agrotecban_moko_contencion.dart';
+import 'agrotecban_moko_capacitacion.dart';
+import 'agrotecban_moko_muestras.dart';
 import 'agrotecban_moko_preventivo.dart';
 
 class AgrotecbanMokoMidleScreen extends StatefulWidget {
@@ -21,7 +23,7 @@ class AgrotecbanMokoMidleScreen extends StatefulWidget {
 class _AgrotecbanMokoMidleScreenState extends State<AgrotecbanMokoMidleScreen> {
   final ClientService _clientService = ClientService();
   final HaciendaService _haciendaService = HaciendaService();
-  final LoteService _loteService = LoteService();
+  final List<int> _loteOptions = List<int>.generate(20, (index) => index + 1);
 
   final TextEditingController _nombreController = TextEditingController();
   final TextEditingController _haciendaController = TextEditingController();
@@ -32,7 +34,6 @@ class _AgrotecbanMokoMidleScreenState extends State<AgrotecbanMokoMidleScreen> {
   Map<String, dynamic>? _selectedClient;
   List<Map<String, dynamic>> _clientSuggestions = [];
   List<Map<String, dynamic>> _haciendas = [];
-  List<Map<String, dynamic>> _lotes = [];
   String _lastQuery = '';
   bool _isClienteMode = false;
   int? _selectedHaciendaId;
@@ -77,7 +78,6 @@ class _AgrotecbanMokoMidleScreenState extends State<AgrotecbanMokoMidleScreen> {
       _haciendaController.clear();
       _loteController.clear();
       _haciendas = [];
-      _lotes = [];
       _selectedHaciendaId = null;
       _selectedLoteId = null;
     });
@@ -151,86 +151,34 @@ class _AgrotecbanMokoMidleScreenState extends State<AgrotecbanMokoMidleScreen> {
   }
 
   String _formatClientName(Map<String, dynamic> client) {
-    final nombre = client['nombre']?.toString().trim() ?? '';
-    final apellidos = client['apellidos']?.toString().trim() ?? '';
-    final fullName = '$nombre $apellidos'.trim();
-    if (fullName.isNotEmpty) {
-      return fullName;
-    }
-    final nombres = client['nombres']?.toString().trim() ?? '';
-    return nombres.isNotEmpty ? nombres : 'Cliente sin nombre';
+    return ClientLocationHelper.formatClientName(
+      client,
+      fallback: 'Cliente sin nombre',
+    );
   }
 
   String _formatFincaName(Map<String, dynamic> client) {
-    return client['fincaNombre']?.toString().trim() ??
-        client['finca_nombre']?.toString().trim() ??
-        client['hacienda']?.toString().trim() ??
-        '';
+    return ClientLocationHelper.formatFincaName(client);
   }
 
   int? _toInt(dynamic value) {
-    if (value is int) return value;
-    if (value is String) return int.tryParse(value);
-    return null;
+    return ClientLocationHelper.toInt(value);
   }
 
   int? _resolveClienteId(Map<String, dynamic> client) {
-    return _toInt(client['clienteId']) ?? _toInt(client['id']);
-  }
-
-  String _formatLoteValue(Map<String, dynamic> lote) {
-    final codigo = lote['codigo']?.toString().trim() ?? '';
-    final nombre = lote['nombre']?.toString().trim() ?? '';
-    return nombre.isNotEmpty ? nombre : codigo;
+    return ClientLocationHelper.resolveClienteId(client);
   }
 
   String _formatHaciendaName(Map<String, dynamic> hacienda) {
-    return hacienda['nombre']?.toString().trim() ?? '';
+    return ClientLocationHelper.formatHaciendaName(hacienda);
   }
 
   int? _resolveInitialHaciendaId({int? preferredHaciendaId}) {
-    if (preferredHaciendaId != null &&
-        _haciendas.any((hacienda) => _toInt(hacienda['id']) == preferredHaciendaId)) {
-      return preferredHaciendaId;
-    }
-
-    final currentHacienda = _haciendaController.text.trim().toLowerCase();
-    if (currentHacienda.isNotEmpty) {
-      for (final hacienda in _haciendas) {
-        if (_formatHaciendaName(hacienda).toLowerCase() == currentHacienda) {
-          return _toInt(hacienda['id']);
-        }
-      }
-    }
-
-    if (_haciendas.isNotEmpty) {
-      return _toInt(_haciendas.first['id']);
-    }
-
-    return null;
-  }
-
-  int? _resolveInitialLoteId({int? preferredLoteId}) {
-    if (preferredLoteId != null &&
-        _lotes.any((lote) => _toInt(lote['id']) == preferredLoteId)) {
-      return preferredLoteId;
-    }
-
-    final currentLote = _loteController.text.trim().toLowerCase();
-    if (currentLote.isNotEmpty) {
-      for (final lote in _lotes) {
-        if (_formatLoteValue(lote).toLowerCase() == currentLote ||
-            (lote['codigo']?.toString().trim().toLowerCase() ?? '') == currentLote) {
-          return _toInt(lote['id']);
-        }
-      }
-    }
-
-    if (_lotes.isNotEmpty) {
-      return _toInt(_lotes.first['id']);
-    }
-
-    return null;
+    return ClientLocationHelper.resolveInitialHaciendaId(
+      haciendas: _haciendas,
+      currentHaciendaText: _haciendaController.text,
+      preferredHaciendaId: preferredHaciendaId,
+    );
   }
 
   Future<void> _loadHaciendasByCliente(
@@ -261,16 +209,13 @@ class _AgrotecbanMokoMidleScreenState extends State<AgrotecbanMokoMidleScreen> {
                     .firstWhere((h) => h['id'] == nextHaciendaId)['nombre']
                     ?.toString() ??
                 '');
-        _lotes = [];
         _selectedLoteId = null;
         _loteController.clear();
       });
-
-      if (nextHaciendaId != null) {
-        await _loadLotesByHacienda(
-          nextHaciendaId,
-          preferredLoteId: preferredLoteId,
-        );
+      if (nextHaciendaId != null && preferredLoteId != null) {
+        final loteNumero = preferredLoteId.clamp(1, 20);
+        _selectedLoteId = loteNumero;
+        _loteController.text = loteNumero.toString();
       }
     } catch (_) {
       if (!mounted) {
@@ -278,46 +223,9 @@ class _AgrotecbanMokoMidleScreenState extends State<AgrotecbanMokoMidleScreen> {
       }
       setState(() {
         _haciendas = [];
-        _lotes = [];
         _selectedHaciendaId = null;
         _selectedLoteId = null;
         _haciendaController.clear();
-        _loteController.clear();
-      });
-    }
-  }
-
-  Future<void> _loadLotesByHacienda(
-    int haciendaId, {
-    int? preferredLoteId,
-  }) async {
-    try {
-      final lotes = await _loteService.getLotesByHacienda(haciendaId);
-      if (!mounted) {
-        return;
-      }
-
-      _lotes = lotes;
-      final nextLoteId =
-          _resolveInitialLoteId(preferredLoteId: preferredLoteId);
-
-      setState(() {
-        _lotes = lotes;
-        _selectedLoteId = nextLoteId;
-        if (nextLoteId != null) {
-          final lote = lotes.firstWhere((l) => l['id'] == nextLoteId);
-          _loteController.text = _formatLoteValue(lote);
-        } else {
-          _loteController.clear();
-        }
-      });
-    } catch (_) {
-      if (!mounted) {
-        return;
-      }
-      setState(() {
-        _lotes = [];
-        _selectedLoteId = null;
         _loteController.clear();
       });
     }
@@ -343,6 +251,7 @@ class _AgrotecbanMokoMidleScreenState extends State<AgrotecbanMokoMidleScreen> {
       'clienteId': selected['clienteId'] ?? selected['id'],
       'haciendaId': _selectedHaciendaId,
       'hacienda': _haciendaController.text.trim(),
+      'loteId': _selectedLoteId,
       'focoId': selected['focoId'] ?? _resolveFocoIdFromClient(selected),
       'numeroFoco': selected['numeroFoco'] ?? _resolveNumeroFocoFromClient(selected),
       'cliente': _formatClientName(selected),
@@ -372,6 +281,32 @@ class _AgrotecbanMokoMidleScreenState extends State<AgrotecbanMokoMidleScreen> {
       MaterialPageRoute(
         builder: (context) =>
             AgrotecbanMokoContencionScreen(clientData: _buildClientPayload()),
+      ),
+    );
+  }
+
+  void _openMuestras() {
+    if (_selectedClient == null || _loteController.text.trim().isEmpty) {
+      return;
+    }
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) =>
+            AgrotecbanMokoMuestrasScreen(clientData: _buildClientPayload()),
+      ),
+    );
+  }
+
+  void _openCapacitacion() {
+    if (_selectedClient == null || _loteController.text.trim().isEmpty) {
+      return;
+    }
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) =>
+            AgrotecbanMokoCapacitacionScreen(clientData: _buildClientPayload()),
       ),
     );
   }
@@ -609,7 +544,6 @@ class _AgrotecbanMokoMidleScreenState extends State<AgrotecbanMokoMidleScreen> {
                 setState(() {
                   _selectedHaciendaId = value;
                   _selectedLoteId = null;
-                  _lotes = [];
                   _loteController.clear();
                   _haciendaController.text = value == null
                       ? ''
@@ -618,9 +552,6 @@ class _AgrotecbanMokoMidleScreenState extends State<AgrotecbanMokoMidleScreen> {
                               ?.toString() ??
                           '');
                 });
-                if (value != null) {
-                  _loadLotesByHacienda(value);
-                }
               },
             ),
             const SizedBox(height: 12),
@@ -637,7 +568,7 @@ class _AgrotecbanMokoMidleScreenState extends State<AgrotecbanMokoMidleScreen> {
             ),
             const SizedBox(height: 12),
           ],
-          if (_lotes.isNotEmpty) ...[
+          if (_selectedHaciendaId != null) ...[
             DropdownButtonFormField<int>(
               value: _selectedLoteId,
               decoration: const InputDecoration(
@@ -645,13 +576,11 @@ class _AgrotecbanMokoMidleScreenState extends State<AgrotecbanMokoMidleScreen> {
                 border: OutlineInputBorder(),
                 prefixIcon: Icon(Icons.text_fields),
               ),
-              items: _lotes
+              items: _loteOptions
                   .map(
-                    (lote) => DropdownMenuItem<int>(
-                      value: _toInt(lote['id']),
-                      child: Text(
-                        '${lote['codigo'] ?? ''} - ${lote['nombre'] ?? ''}',
-                      ),
+                    (loteNumero) => DropdownMenuItem<int>(
+                      value: loteNumero,
+                      child: Text('Lote $loteNumero'),
                     ),
                   )
                   .toList(),
@@ -662,8 +591,7 @@ class _AgrotecbanMokoMidleScreenState extends State<AgrotecbanMokoMidleScreen> {
                     _loteController.clear();
                     return;
                   }
-                  final lote = _lotes.firstWhere((l) => l['id'] == value);
-                  _loteController.text = _formatLoteValue(lote);
+                  _loteController.text = value.toString();
                 });
               },
             ),
@@ -673,7 +601,7 @@ class _AgrotecbanMokoMidleScreenState extends State<AgrotecbanMokoMidleScreen> {
               readOnly: true,
               decoration: const InputDecoration(
                 labelText: 'Lote',
-                hintText: 'Seleccione una finca para cargar lotes',
+                hintText: 'Seleccione una finca para habilitar lotes 1 al 20',
                 border: OutlineInputBorder(),
                 prefixIcon: Icon(Icons.text_fields),
               ),
@@ -793,6 +721,24 @@ class _AgrotecbanMokoMidleScreenState extends State<AgrotecbanMokoMidleScreen> {
               icon: Icons.shield,
               color: const Color(0xFFC62828),
               onTap: _openContencion,
+            ),
+            const SizedBox(height: 12),
+            _buildActionButton(
+              title: 'Toma de muestras',
+              subtitle:
+                  'Abrir opciones para toma muestra areas libres o toma de muestra en foco.',
+              icon: Icons.biotech_outlined,
+              color: const Color(0xFF00695C),
+              onTap: _openMuestras,
+            ),
+            const SizedBox(height: 12),
+            _buildActionButton(
+              title: 'Capacitación',
+              subtitle:
+                  'Registrar tema, descripción, participantes y fotos de la capacitación.',
+              icon: Icons.groups_2_outlined,
+              color: const Color(0xFF6A1B9A),
+              onTap: _openCapacitacion,
             ),
           ],
         ),

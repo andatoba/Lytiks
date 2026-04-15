@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../helpers/client_location_helper.dart';
 import '../services/client_service.dart';
 import '../services/hacienda_service.dart';
 import '../services/lote_service.dart';
@@ -325,78 +326,43 @@ class _PlagasScreenState extends State<PlagasScreen>
   }
 
   String _formatClientName(Map<String, dynamic> client) {
-    final nombre = client['nombre']?.toString() ?? '';
-    final apellidos = client['apellidos']?.toString() ?? '';
-    return '$nombre $apellidos'.trim();
+    return ClientLocationHelper.formatClientName(client);
   }
 
   String _formatFincaName(Map<String, dynamic> client) {
-    return (client['fincaNombre'] ?? client['nombreFinca'] ?? '').toString();
+    return ClientLocationHelper.formatFincaName(client);
   }
 
   int? _toInt(dynamic value) {
-    if (value is int) return value;
-    if (value is String) return int.tryParse(value);
-    return null;
+    return ClientLocationHelper.toInt(value);
   }
 
   int? _resolveClienteId(Map<String, dynamic> client) {
-    return _toInt(client['clienteId']) ?? _toInt(client['id']);
+    return ClientLocationHelper.resolveClienteId(client);
   }
 
   String _formatHaciendaName(Map<String, dynamic> hacienda) {
-    return hacienda['nombre']?.toString().trim() ?? '';
+    return ClientLocationHelper.formatHaciendaName(hacienda);
   }
 
   String _formatLoteValue(Map<String, dynamic> lote) {
-    final codigo = lote['codigo']?.toString().trim() ?? '';
-    final nombre = lote['nombre']?.toString().trim() ?? '';
-    return nombre.isNotEmpty ? nombre : codigo;
+    return ClientLocationHelper.formatLoteName(lote);
   }
 
   int? _resolveInitialHaciendaId({int? preferredHaciendaId}) {
-    if (preferredHaciendaId != null &&
-        _haciendas.any((hacienda) => _toInt(hacienda['id']) == preferredHaciendaId)) {
-      return preferredHaciendaId;
-    }
-
-    final currentHacienda = _haciendaController.text.trim().toLowerCase();
-    if (currentHacienda.isNotEmpty) {
-      for (final hacienda in _haciendas) {
-        if (_formatHaciendaName(hacienda).toLowerCase() == currentHacienda) {
-          return _toInt(hacienda['id']);
-        }
-      }
-    }
-
-    if (_haciendas.isNotEmpty) {
-      return _toInt(_haciendas.first['id']);
-    }
-
-    return null;
+    return ClientLocationHelper.resolveInitialHaciendaId(
+      haciendas: _haciendas,
+      currentHaciendaText: _haciendaController.text,
+      preferredHaciendaId: preferredHaciendaId,
+    );
   }
 
   int? _resolveInitialLoteId({int? preferredLoteId}) {
-    if (preferredLoteId != null &&
-        _lotes.any((lote) => _toInt(lote['id']) == preferredLoteId)) {
-      return preferredLoteId;
-    }
-
-    final currentLote = _loteController.text.trim().toLowerCase();
-    if (currentLote.isNotEmpty) {
-      for (final lote in _lotes) {
-        if (_formatLoteValue(lote).toLowerCase() == currentLote ||
-            (lote['codigo']?.toString().trim().toLowerCase() ?? '') == currentLote) {
-          return _toInt(lote['id']);
-        }
-      }
-    }
-
-    if (_lotes.isNotEmpty) {
-      return _toInt(_lotes.first['id']);
-    }
-
-    return null;
+    return ClientLocationHelper.resolveInitialLoteId(
+      lotes: _lotes,
+      currentLoteText: _loteController.text,
+      preferredLoteId: preferredLoteId,
+    );
   }
 
   Future<void> _loadHaciendasByCliente(

@@ -33,11 +33,13 @@ class _AgrotecbanMokoPreventivoScreenState
 
   late final List<_PreventivoProducto> _microorganismos;
   late final List<_PreventivoProducto> _sar;
+  late final _BioseguridadPreventiva _bioseguridad;
 
   static const List<int> _ciclosMicro = [1, 2, 3, 5, 6, 7, 8, 9, 10, 11, 12];
   static const List<int> _ciclosSar = [1, 2, 3, 5, 6];
   int _cicloSeleccionadoMicro = 1;
   int _cicloSeleccionadoSar = 1;
+  String? _moduloSeleccionado = 'bioseguridad';
 
   @override
   void initState() {
@@ -60,6 +62,7 @@ class _AgrotecbanMokoPreventivoScreenState
       _PreventivoProducto(
           'TERRASORB T24', ['0.5 lt', '0.75 lt', '1 lt'], _ciclosSar),
     ];
+    _bioseguridad = _BioseguridadPreventiva();
 
     _cargarConfiguracionesExistentes();
   }
@@ -69,6 +72,7 @@ class _AgrotecbanMokoPreventivoScreenState
     for (final producto in [..._microorganismos, ..._sar]) {
       producto.dispose();
     }
+    _bioseguridad.dispose();
     super.dispose();
   }
 
@@ -120,93 +124,9 @@ class _AgrotecbanMokoPreventivoScreenState
             child: ListView(
               padding: const EdgeInsets.all(16),
               children: [
-                Card(
-                  elevation: 1,
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12)),
-                  child: Padding(
-                    padding: const EdgeInsets.all(12),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text('MICROORGANISMOS',
-                            style: TextStyle(
-                                fontSize: 15, fontWeight: FontWeight.bold)),
-                        const SizedBox(height: 4),
-                        const Text(
-                            'Seleccione el ciclo y registre los productos aplicados.',
-                            style: TextStyle(color: Colors.grey, fontSize: 12)),
-                        const SizedBox(height: 10),
-                        DropdownButtonFormField<int>(
-                          value: _cicloSeleccionadoMicro,
-                          decoration: const InputDecoration(
-                              labelText: 'Ciclo', border: OutlineInputBorder()),
-                          items: _ciclosMicro
-                              .map((ciclo) => DropdownMenuItem(
-                                  value: ciclo, child: Text('Ciclo $ciclo')))
-                              .toList(),
-                          onChanged: (v) =>
-                              setState(() => _cicloSeleccionadoMicro = v ?? 1),
-                        ),
-                        const SizedBox(height: 16),
-                        ..._microorganismos
-                            .map((producto) => _buildProductoCicloDropdown(
-                                producto, _cicloSeleccionadoMicro))
-                            .toList(),
-                      ],
-                    ),
-                  ),
-                ),
+                _buildSelectorModulos(),
                 const SizedBox(height: 16),
-                Card(
-                  elevation: 1,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Padding(
-                    padding: const EdgeInsets.all(12),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text(
-                          'SAR',
-                          style: TextStyle(
-                            fontSize: 15,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        const Text(
-                          'Seleccione el ciclo y registre las dosis para todos los productos SAR.',
-                          style: TextStyle(color: Colors.grey, fontSize: 12),
-                        ),
-                        const SizedBox(height: 10),
-                        DropdownButtonFormField<int>(
-                          value: _cicloSeleccionadoSar,
-                          decoration: const InputDecoration(
-                            labelText: 'Ciclo',
-                            border: OutlineInputBorder(),
-                          ),
-                          items: _ciclosSar
-                              .map(
-                                (ciclo) => DropdownMenuItem(
-                                  value: ciclo,
-                                  child: Text('Ciclo $ciclo'),
-                                ),
-                              )
-                              .toList(),
-                          onChanged: (v) =>
-                              setState(() => _cicloSeleccionadoSar = v ?? 1),
-                        ),
-                        const SizedBox(height: 16),
-                        ..._sar
-                            .map((producto) => _buildProductoCicloDropdown(
-                                producto, _cicloSeleccionadoSar))
-                            .toList(),
-                      ],
-                    ),
-                  ),
-                ),
+                _buildModuloActivo(),
               ],
             ),
           ),
@@ -243,6 +163,18 @@ class _AgrotecbanMokoPreventivoScreenState
     });
 
     try {
+      try {
+        final auditoriaResponse = await _service.getUltimaAuditoriaPreventivo(
+          focoId,
+        );
+        final auditoria = auditoriaResponse['auditoria'];
+        if (auditoria is Map<String, dynamic>) {
+          _aplicarPreventivoCompleto(auditoria);
+        } else if (auditoria is Map) {
+          _aplicarPreventivoCompleto(Map<String, dynamic>.from(auditoria));
+        }
+      } catch (_) {}
+
       final configuraciones = await _service.getConfiguracionesByFoco(focoId);
       _aplicarConfiguraciones(configuraciones);
     } catch (_) {
@@ -256,6 +188,57 @@ class _AgrotecbanMokoPreventivoScreenState
           _isLoading = false;
         });
       }
+    }
+  }
+
+  void _aplicarPreventivoCompleto(Map<String, dynamic> auditoria) {
+    final payloadRaw =
+        auditoria['payloadJson'] ?? auditoria['payload_json'] ?? auditoria['payload'];
+    if (payloadRaw == null) {
+      return;
+    }
+
+    Map<String, dynamic>? payload;
+    if (payloadRaw is String && payloadRaw.isNotEmpty) {
+      try {
+        final decoded = jsonDecode(payloadRaw);
+        if (decoded is Map<String, dynamic>) {
+          payload = decoded;
+        } else if (decoded is Map) {
+          payload = Map<String, dynamic>.from(decoded);
+        }
+      } catch (_) {}
+    } else if (payloadRaw is Map<String, dynamic>) {
+      payload = payloadRaw;
+    } else if (payloadRaw is Map) {
+      payload = Map<String, dynamic>.from(payloadRaw);
+    }
+
+    if (payload == null) {
+      return;
+    }
+
+    final fechaInicioRaw = payload['fechaInicioPlan']?.toString();
+    if (fechaInicioRaw != null && fechaInicioRaw.isNotEmpty) {
+      final fechaInicio = DateTime.tryParse(fechaInicioRaw);
+      if (fechaInicio != null) {
+        _fechaInicioPlan = DateTime(fechaInicio.year, fechaInicio.month, 1);
+      }
+    }
+
+    _cicloSeleccionadoMicro =
+        (payload['cicloSeleccionadoMicro'] as num?)?.toInt() ??
+            _cicloSeleccionadoMicro;
+    _cicloSeleccionadoSar =
+        (payload['cicloSeleccionadoSar'] as num?)?.toInt() ??
+            _cicloSeleccionadoSar;
+
+    _restoreProductos(payload['microorganismos'], _microorganismos);
+    _restoreProductos(payload['sar'], _sar);
+    _bioseguridad.restore(payload['bioseguridad']);
+
+    if (mounted) {
+      setState(() {});
     }
   }
 
@@ -590,6 +573,428 @@ class _AgrotecbanMokoPreventivoScreenState
                   ? const Icon(Icons.photo, color: Color(0xFF0F7B3C))
                   : null,
             ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildBioseguridadSection() {
+    return Card(
+      elevation: 1,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: ExpansionTile(
+        tilePadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+        childrenPadding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+        title: const Text(
+          'BIOSEGURIDAD',
+          style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
+        ),
+        subtitle: const Text(
+          'Registre concentración de amonio, infraestructura, desinfección de herramientas y monitoreos.',
+          style: TextStyle(fontSize: 12),
+        ),
+        children: [
+          TextField(
+            controller: _bioseguridad.concentracionAmonio,
+            keyboardType: TextInputType.number,
+            decoration: const InputDecoration(
+              labelText: 'Concentracion de amonio',
+              hintText: 'Ejemplo: 750',
+              helperText: 'Concentracion recomendada: 750',
+              border: OutlineInputBorder(),
+            ),
+          ),
+          const SizedBox(height: 12),
+          _buildBioseguridadCampo(
+            titulo: 'Infraestructura',
+            estadoController: _bioseguridad.infraestructuraEstado,
+            observacionController: _bioseguridad.infraestructuraObservacion,
+          ),
+          const SizedBox(height: 12),
+          _buildBioseguridadCampo(
+            titulo: 'Desinfeccion de herramientas',
+            estadoController: _bioseguridad.desinfeccionEstado,
+            observacionController: _bioseguridad.desinfeccionObservacion,
+          ),
+          const SizedBox(height: 12),
+          _buildBioseguridadCampo(
+            titulo: 'Monitoreos',
+            estadoController: _bioseguridad.monitoreosEstado,
+            observacionController: _bioseguridad.monitoreosObservacion,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSelectorModulos() {
+    return Card(
+      elevation: 1,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Que desea registrar',
+              style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 4),
+            const Text(
+              'Abra solo el modulo que vaya a diligenciar. Bioseguridad es opcional.',
+              style: TextStyle(color: Colors.grey, fontSize: 12),
+            ),
+            const SizedBox(height: 12),
+            _buildModuloTile(
+              id: 'bioseguridad',
+              titulo: 'Bioseguridad',
+              subtitulo:
+                  'Infraestructura, amonio, desinfeccion de herramientas y monitoreos.',
+              color: const Color(0xFF1565C0),
+            ),
+            const SizedBox(height: 10),
+            _buildModuloTile(
+              id: 'microorganismos',
+              titulo: 'Aplicacion Microorganismos',
+              subtitulo: _textoEstadoModulo(
+                productos: _microorganismos,
+                ciclos: _ciclosMicro,
+                etiqueta: 'ciclo',
+              ),
+              color: const Color(0xFF2E7D32),
+            ),
+            const SizedBox(height: 10),
+            _buildModuloTile(
+              id: 'sar',
+              titulo: 'Aplicacion SAR',
+              subtitulo: _textoEstadoModulo(
+                productos: _sar,
+                ciclos: _ciclosSar,
+                etiqueta: 'ciclo',
+              ),
+              color: const Color(0xFFEF6C00),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildModuloTile({
+    required String id,
+    required String titulo,
+    required String subtitulo,
+    required Color color,
+  }) {
+    final seleccionado = _moduloSeleccionado == id;
+    return InkWell(
+      onTap: () {
+        setState(() {
+          _moduloSeleccionado = id;
+        });
+      },
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: seleccionado ? color.withOpacity(0.10) : Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: seleccionado ? color : const Color(0xFFDADADA),
+            width: seleccionado ? 1.5 : 1,
+          ),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 42,
+              height: 42,
+              decoration: BoxDecoration(
+                color: color.withOpacity(0.14),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Icon(
+                id == 'bioseguridad'
+                    ? Icons.verified_user_outlined
+                    : id == 'microorganismos'
+                        ? Icons.spa_outlined
+                        : Icons.science_outlined,
+                color: color,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    titulo,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w700,
+                      fontSize: 14,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    subtitulo,
+                    style: const TextStyle(fontSize: 12, color: Colors.black54),
+                  ),
+                ],
+              ),
+            ),
+            Icon(
+              seleccionado
+                  ? Icons.keyboard_arrow_up_rounded
+                  : Icons.keyboard_arrow_down_rounded,
+              color: color,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildModuloActivo() {
+    switch (_moduloSeleccionado) {
+      case 'microorganismos':
+        return _buildProductosSection(
+          titulo: 'MICROORGANISMOS',
+          subtitulo:
+              'Seleccione el ciclo y registre los productos aplicados.',
+          resumenTitulo: 'Microorganismos',
+          productos: _microorganismos,
+          ciclos: _ciclosMicro,
+          cicloSeleccionado: _cicloSeleccionadoMicro,
+          onCicloChanged: (v) =>
+              setState(() => _cicloSeleccionadoMicro = v ?? 1),
+        );
+      case 'sar':
+        return _buildProductosSection(
+          titulo: 'SAR',
+          subtitulo:
+              'Seleccione el ciclo y registre las dosis para todos los productos SAR.',
+          resumenTitulo: 'SAR',
+          productos: _sar,
+          ciclos: _ciclosSar,
+          cicloSeleccionado: _cicloSeleccionadoSar,
+          onCicloChanged: (v) =>
+              setState(() => _cicloSeleccionadoSar = v ?? 1),
+        );
+      case 'bioseguridad':
+      default:
+        return _buildBioseguridadSection();
+    }
+  }
+
+  Widget _buildProductosSection({
+    required String titulo,
+    required String subtitulo,
+    required String resumenTitulo,
+    required List<_PreventivoProducto> productos,
+    required List<int> ciclos,
+    required int cicloSeleccionado,
+    required ValueChanged<int?> onCicloChanged,
+  }) {
+    return Card(
+      elevation: 1,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              titulo,
+              style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              subtitulo,
+              style: const TextStyle(color: Colors.grey, fontSize: 12),
+            ),
+            const SizedBox(height: 10),
+            _buildResumenGrupo(
+              titulo: resumenTitulo,
+              productos: productos,
+              ciclos: ciclos,
+              cicloActual: cicloSeleccionado,
+            ),
+            const SizedBox(height: 12),
+            DropdownButtonFormField<int>(
+              value: cicloSeleccionado,
+              decoration: const InputDecoration(
+                labelText: 'Ciclo',
+                border: OutlineInputBorder(),
+              ),
+              items: ciclos
+                  .map(
+                    (ciclo) =>
+                        DropdownMenuItem(value: ciclo, child: Text('Ciclo $ciclo')),
+                  )
+                  .toList(),
+              onChanged: onCicloChanged,
+            ),
+            const SizedBox(height: 16),
+            ...productos
+                .map(
+                  (producto) =>
+                      _buildProductoCicloDropdown(producto, cicloSeleccionado),
+                )
+                .toList(),
+          ],
+        ),
+      ),
+    );
+  }
+
+  String _textoEstadoModulo({
+    required List<_PreventivoProducto> productos,
+    required List<int> ciclos,
+    required String etiqueta,
+  }) {
+    final siguientePendiente = _nextPendingCycleForGroup(productos, ciclos);
+    if (siguientePendiente == null) {
+      return 'Todos los ciclos registrados.';
+    }
+    return 'Siguiente $etiqueta a registrar: $siguientePendiente.';
+  }
+
+  Widget _buildBioseguridadCampo({
+    required String titulo,
+    required TextEditingController estadoController,
+    required TextEditingController observacionController,
+  }) {
+    return Container(
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        border: Border.all(color: const Color(0xFFE0E0E0)),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(titulo, style: const TextStyle(fontWeight: FontWeight.bold)),
+          const SizedBox(height: 8),
+          DropdownButtonFormField<String>(
+            value: estadoController.text.isNotEmpty ? estadoController.text : null,
+            decoration: const InputDecoration(
+              labelText: 'Evaluacion',
+              border: OutlineInputBorder(),
+            ),
+            items: const [
+              DropdownMenuItem(value: 'Excelente', child: Text('Excelente')),
+              DropdownMenuItem(value: 'Bueno', child: Text('Bueno')),
+              DropdownMenuItem(value: 'Regular', child: Text('Regular')),
+              DropdownMenuItem(value: 'NT', child: Text('NT')),
+            ],
+            onChanged: (value) {
+              setState(() {
+                estadoController.text = value ?? '';
+              });
+            },
+          ),
+          const SizedBox(height: 8),
+          TextField(
+            controller: observacionController,
+            minLines: 2,
+            maxLines: 3,
+            decoration: InputDecoration(
+              labelText: 'Observacion $titulo',
+              border: const OutlineInputBorder(),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildResumenGrupo({
+    required String titulo,
+    required List<_PreventivoProducto> productos,
+    required List<int> ciclos,
+    required int cicloActual,
+  }) {
+    final siguientePendiente = _nextPendingCycleForGroup(productos, ciclos);
+    final ciclosCompletados = ciclos
+        .where(
+          (ciclo) => productos.every(
+            (producto) => producto.cumplimiento[ciclo] == true,
+          ),
+        )
+        .length;
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF4FAF5),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: const Color(0xFFD6E8D7)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            siguientePendiente == null
+                ? '$titulo completo'
+                : 'Va por ciclo ${siguientePendiente == cicloActual ? cicloActual : siguientePendiente}',
+            style: const TextStyle(
+              fontWeight: FontWeight.w700,
+              color: Color(0xFF0F7B3C),
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'Ciclos completados: $ciclosCompletados de ${ciclos.length}',
+            style: TextStyle(color: Colors.grey[700], fontSize: 12),
+          ),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: ciclos.map((ciclo) {
+              final completo = productos.every(
+                (producto) => producto.cumplimiento[ciclo] == true,
+              );
+              final esActual = ciclo == cicloActual && !completo;
+              return Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                decoration: BoxDecoration(
+                  color: completo
+                      ? const Color(0xFFDCF6E5)
+                      : esActual
+                          ? const Color(0xFFFFF4E5)
+                          : Colors.white,
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(
+                    color: completo
+                        ? const Color(0xFF0F7B3C)
+                        : esActual
+                            ? const Color(0xFFFFC107)
+                            : const Color(0xFFD6D6D6),
+                  ),
+                ),
+                child: Text(
+                  completo
+                      ? 'Ciclo $ciclo listo'
+                      : esActual
+                          ? 'Ciclo $ciclo actual'
+                          : 'Ciclo $ciclo pendiente',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: completo
+                        ? const Color(0xFF0F7B3C)
+                        : esActual
+                            ? const Color(0xFF8A5A00)
+                            : Colors.grey[700],
+                  ),
+                ),
+              );
+            }).toList(),
           ),
         ],
       ),
@@ -937,9 +1342,82 @@ class _AgrotecbanMokoPreventivoScreenState
       'fechaInicioPlan': _fechaInicioPlan.toIso8601String(),
       'cicloSeleccionadoMicro': _cicloSeleccionadoMicro,
       'cicloSeleccionadoSar': _cicloSeleccionadoSar,
+      'bioseguridad': _bioseguridad.toJson(),
       'microorganismos': _microorganismos.map(_serializeProducto).toList(),
       'sar': _sar.map(_serializeProducto).toList(),
     };
+  }
+
+  void _restoreProductos(
+    dynamic source,
+    List<_PreventivoProducto> target,
+  ) {
+    if (source is! List) {
+      return;
+    }
+
+    for (final productoRaw in source) {
+      if (productoRaw is! Map) {
+        continue;
+      }
+      final productoData = Map<String, dynamic>.from(productoRaw);
+      final nombre = productoData['nombre']?.toString().trim().toUpperCase();
+      if (nombre == null || nombre.isEmpty) {
+        continue;
+      }
+
+      _PreventivoProducto? producto;
+      for (final item in target) {
+        if (item.nombre == nombre) {
+          producto = item;
+          break;
+        }
+      }
+      if (producto == null) {
+        continue;
+      }
+
+      final dosisPorCiclo = productoData['dosisPorCiclo'];
+      if (dosisPorCiclo is Map) {
+        for (final entry in dosisPorCiclo.entries) {
+          final ciclo = int.tryParse(entry.key.toString());
+          final dosis = entry.value?.toString();
+          if (ciclo != null && dosis != null && dosis.isNotEmpty) {
+            producto.dosisPorCiclo[ciclo] = dosis;
+          }
+        }
+      }
+
+      final cumplimiento = productoData['cumplimiento'];
+      if (cumplimiento is Map) {
+        for (final entry in cumplimiento.entries) {
+          final ciclo = int.tryParse(entry.key.toString());
+          if (ciclo == null) {
+            continue;
+          }
+          final value = entry.value;
+          producto.cumplimiento[ciclo] = value == true || value == 1;
+        }
+      }
+
+      final fechas = productoData['fechas'];
+      if (fechas is Map) {
+        for (final entry in fechas.entries) {
+          final ciclo = int.tryParse(entry.key.toString());
+          final fecha = DateTime.tryParse(entry.value?.toString() ?? '');
+          if (ciclo != null) {
+            producto.fechas[ciclo] = fecha;
+          }
+        }
+      }
+
+      producto.observacionController.text =
+          productoData['observacion']?.toString() ?? '';
+      final fotoPath = productoData['fotoPath']?.toString();
+      if (fotoPath != null && fotoPath.isNotEmpty) {
+        producto.fotoPath = fotoPath;
+      }
+    }
   }
 
   Map<String, dynamic> _serializeProducto(_PreventivoProducto producto) {
@@ -1014,5 +1492,78 @@ class _PreventivoProducto {
 
   void dispose() {
     observacionController.dispose();
+  }
+}
+
+class _BioseguridadPreventiva {
+  final TextEditingController concentracionAmonio = TextEditingController();
+  final TextEditingController infraestructuraEstado = TextEditingController();
+  final TextEditingController infraestructuraObservacion =
+      TextEditingController();
+  final TextEditingController desinfeccionEstado = TextEditingController();
+  final TextEditingController desinfeccionObservacion =
+      TextEditingController();
+  final TextEditingController monitoreosEstado = TextEditingController();
+  final TextEditingController monitoreosObservacion = TextEditingController();
+
+  Map<String, dynamic> toJson() {
+    return {
+      'concentracionAmonio': concentracionAmonio.text.trim(),
+      'infraestructura': {
+        'evaluacion': infraestructuraEstado.text.trim(),
+        'observacion': infraestructuraObservacion.text.trim(),
+      },
+      'desinfeccionHerramientas': {
+        'evaluacion': desinfeccionEstado.text.trim(),
+        'observacion': desinfeccionObservacion.text.trim(),
+      },
+      'monitoreos': {
+        'evaluacion': monitoreosEstado.text.trim(),
+        'observacion': monitoreosObservacion.text.trim(),
+      },
+    };
+  }
+
+  void restore(dynamic source) {
+    if (source is! Map) {
+      return;
+    }
+
+    final data = Map<String, dynamic>.from(source);
+    concentracionAmonio.text = data['concentracionAmonio']?.toString() ?? '';
+
+    final infraestructura = _asMap(data['infraestructura']);
+    infraestructuraEstado.text = infraestructura['evaluacion']?.toString() ?? '';
+    infraestructuraObservacion.text =
+        infraestructura['observacion']?.toString() ?? '';
+
+    final desinfeccion = _asMap(data['desinfeccionHerramientas']);
+    desinfeccionEstado.text = desinfeccion['evaluacion']?.toString() ?? '';
+    desinfeccionObservacion.text =
+        desinfeccion['observacion']?.toString() ?? '';
+
+    final monitoreos = _asMap(data['monitoreos']);
+    monitoreosEstado.text = monitoreos['evaluacion']?.toString() ?? '';
+    monitoreosObservacion.text = monitoreos['observacion']?.toString() ?? '';
+  }
+
+  Map<String, dynamic> _asMap(dynamic value) {
+    if (value is Map<String, dynamic>) {
+      return value;
+    }
+    if (value is Map) {
+      return Map<String, dynamic>.from(value);
+    }
+    return <String, dynamic>{};
+  }
+
+  void dispose() {
+    concentracionAmonio.dispose();
+    infraestructuraEstado.dispose();
+    infraestructuraObservacion.dispose();
+    desinfeccionEstado.dispose();
+    desinfeccionObservacion.dispose();
+    monitoreosEstado.dispose();
+    monitoreosObservacion.dispose();
   }
 }

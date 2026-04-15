@@ -419,6 +419,29 @@ class PlanSeguimientoMokoService {
     }
   }
 
+  Future<Map<String, dynamic>> getUltimaAuditoriaPreventivo(
+    int focoId,
+  ) async {
+    try {
+      final base = await baseUri;
+      final response = await http.get(
+        base.replace(path: '${base.path}/foco/$focoId/preventivo/ultima-auditoria'),
+        headers: {'Content-Type': 'application/json'},
+      );
+
+      if (response.statusCode == 200) {
+        return json.decode(utf8.decode(response.bodyBytes));
+      }
+
+      throw Exception(
+        'Error al obtener ultima auditoria preventiva: ${response.statusCode}',
+      );
+    } catch (e) {
+      print('❌ Error al obtener ultima auditoria preventiva: $e');
+      rethrow;
+    }
+  }
+
   /// Obtiene todas las configuraciones de un foco
   Future<List<Map<String, dynamic>>> getConfiguracionesByFoco(
       int focoId) async {
