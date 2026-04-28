@@ -3,8 +3,10 @@ import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/foundation.dart';
 import 'offline_storage_service.dart';
 import 'audit_service.dart';
+import 'auth_service.dart';
 import 'client_service.dart';
 import 'moko_audit_service.dart';
+import 'plan_seguimiento_moko_service.dart';
 
 class SyncService {
   static final SyncService _instance = SyncService._internal();
@@ -13,8 +15,11 @@ class SyncService {
 
   final OfflineStorageService _offlineStorage = OfflineStorageService();
   final AuditService _auditService = AuditService();
+  final AuthService _authService = AuthService();
   final ClientService _clientService = ClientService();
   final MokoAuditService _mokoAuditService = MokoAuditService();
+  final PlanSeguimientoMokoService _planSeguimientoMokoService =
+      PlanSeguimientoMokoService();
 
   // Verificar conectividad
   Future<bool> hasInternetConnection() async {
@@ -102,6 +107,15 @@ class SyncService {
       failedItems += sigatokaResult.failedItems;
       if (sigatokaResult.errors.isNotEmpty) {
         errors.addAll(sigatokaResult.errors);
+      }
+
+      debugPrint('[SYNC] Iniciando sincronización de plan seguimiento Moko...');
+      final planResult = await _syncPlanSeguimientoMoko();
+      debugPrint('[SYNC] Resultado plan seguimiento Moko: $planResult');
+      syncedItems += planResult.syncedItems;
+      failedItems += planResult.failedItems;
+      if (planResult.errors.isNotEmpty) {
+        errors.addAll(planResult.errors);
       }
 
       debugPrint('[SYNC] Iniciando sincronización de fotos...');
@@ -198,6 +212,10 @@ class SyncService {
             .map((e) => Map<String, dynamic>.from(e as Map))
             .toList();
         debugPrint('[SYNC][AUDIT] auditDataParsed: $auditDataParsed');
+        if (auditDataParsed.isEmpty) {
+          throw Exception('La auditoría no contiene datos');
+        }
+        final auditMap = auditDataParsed.first;
 
         // Map real values from auditData
         final String? cedulaCliente = auditData['cedula_cliente'];
@@ -206,15 +224,27 @@ class SyncService {
           throw Exception('La cédula del cliente es requerida');
         }
 
-        // TODO: Obtener estos datos del cliente usando la cédula
-        final String hacienda = 'Hacienda Demo';
-        final String cultivo = 'banano';
+        final String hacienda =
+            (auditMap['Hacienda'] ?? auditMap['hacienda'] ?? 'No especificada')
+                .toString();
+        final String cultivo =
+            (auditMap['Cultivo'] ?? auditMap['cultivo'] ?? 'banano').toString();
         final String fecha =
             auditData['audit_date'] ?? DateTime.now().toIso8601String();
-        final int tecnicoId = 1;  // TODO: Get from auth service
+        final int tecnicoId = await _authService.getUserId() ?? 1;
         final String estado = auditData['status'] ?? 'COMPLETADA';
         final String? observaciones = auditData['observations'];
-        final scores = AuditService.buildBackendScores(auditDataParsed);
+        final scores =
+            await AuditService.buildBackendScoresFromAuditMap(auditMap);
+        List<Map<String, dynamic>>? trayectoUbicaciones;
+        final trayectoJson = auditData['trayecto_ubicaciones'];
+        if (trayectoJson != null) {
+          final raw = jsonDecode(trayectoJson);
+          if (raw is List) {
+            trayectoUbicaciones =
+                raw.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+          }
+        }
 
         final result = await _auditService.createAuditBackend(
           hacienda: hacienda,
@@ -225,6 +255,8 @@ class SyncService {
           observaciones: observaciones,
           scores: scores,
           cedulaCliente: cedulaCliente,
+          trayectoUbicaciones: trayectoUbicaciones,
+          evaluaciones: auditMap,
         );
         debugPrint('[SYNC][AUDIT] Respuesta backend: $result');
 
@@ -268,9 +300,8 @@ class SyncService {
     for (final mokoData in pendingMokoAudits) {
       try {
         final List<dynamic> rawList = jsonDecode(mokoData['moko_data']);
-        final List<Map<String, dynamic>> details = rawList
-            .map((e) => Map<String, dynamic>.from(e))
-            .toList();
+        final List<Map<String, dynamic>> details =
+            rawList.map((e) => Map<String, dynamic>.from(e)).toList();
 
         final result = await _mokoAuditService.createMokoAudit(
           tecnicoId: mokoData['client_id'],
@@ -311,14 +342,15 @@ class SyncService {
 
   // Sincronizar auditorías Sigatoka
   Future<SyncResult> _syncSigatokaAudits() async {
-    final pendingSigatokaAudits = await _offlineStorage.getPendingSigatokaAudits();
+    final pendingSigatokaAudits =
+        await _offlineStorage.getPendingSigatokaAudits();
     int syncedItems = 0;
     int failedItems = 0;
     List<String> errors = [];
 
     for (final sigatokaData in pendingSigatokaAudits) {
       try {
-        final Map<String, dynamic> data = jsonDecode(sigatokaData['sigatoka_data']);
+        jsonDecode(sigatokaData['sigatoka_data']);
 
         // TODO: Implementar el servicio de Sigatoka para crear auditoría
         // Por ahora solo marcamos como sincronizada (placeholder)
@@ -327,7 +359,8 @@ class SyncService {
         debugPrint('Auditoría Sigatoka sincronizada: ${sigatokaData['id']}');
       } catch (e) {
         failedItems++;
-        errors.add('Error al sincronizar auditoría Sigatoka ${sigatokaData['id']}: $e');
+        errors.add(
+            'Error al sincronizar auditoría Sigatoka ${sigatokaData['id']}: $e');
         debugPrint('Error syncing Sigatoka audit: $e');
       }
     }
@@ -336,6 +369,100 @@ class SyncService {
       success: failedItems == 0,
       message:
           'Auditorías Sigatoka: $syncedItems sincronizadas, $failedItems fallidas',
+      syncedItems: syncedItems,
+      failedItems: failedItems,
+      errors: errors,
+    );
+  }
+
+  // Sincronizar plan seguimiento Moko
+  Future<SyncResult> _syncPlanSeguimientoMoko() async {
+    final pendingPlans = await _offlineStorage.getPendingPlanMokoUpdates();
+    int syncedItems = 0;
+    int failedItems = 0;
+    List<String> errors = [];
+
+    int? _parseInt(dynamic value) {
+      if (value == null) return null;
+      if (value is int) return value;
+      return int.tryParse(value.toString());
+    }
+
+    for (final planData in pendingPlans) {
+      try {
+        int? ejecucionPlanId = _parseInt(planData['ejecucion_plan_id']);
+        final focoId = _parseInt(planData['foco_id']);
+        final planSeguimientoId = _parseInt(planData['plan_seg_moko_id']);
+
+        if (ejecucionPlanId == null &&
+            focoId != null &&
+            planSeguimientoId != null) {
+          try {
+            await _planSeguimientoMokoService.inicializarPlan(focoId);
+          } catch (_) {}
+
+          final estado =
+              await _planSeguimientoMokoService.getEstadoPlan(focoId);
+          final ejecuciones = estado['ejecuciones'] as List<dynamic>? ?? [];
+          for (final ejecucion in ejecuciones) {
+            final planId = _parseInt(ejecucion['planSeguimiento']?['id']);
+            if (planId == planSeguimientoId) {
+              ejecucionPlanId = _parseInt(ejecucion['id']);
+              break;
+            }
+          }
+        }
+
+        if (ejecucionPlanId == null) {
+          throw Exception('No se encontro ejecucion para sincronizar');
+        }
+
+        List<int> tareasCompletadas = [];
+        final tareasJson = planData['tareas_completadas'];
+        if (tareasJson != null) {
+          final rawList = jsonDecode(tareasJson);
+          if (rawList is List) {
+            tareasCompletadas = rawList
+                .map((e) => _parseInt(e) ?? 0)
+                .where((e) => e > 0)
+                .toList();
+          }
+        }
+
+        await _planSeguimientoMokoService.actualizarTareas(
+          ejecucionPlanId,
+          tareasCompletadas,
+        );
+
+        final finalizar = _parseInt(planData['finalizar']) ?? 1;
+        final observaciones = planData['observaciones']?.toString();
+        if (finalizar == 1) {
+          await _planSeguimientoMokoService.finalizarRevision(
+            ejecucionPlanId,
+            observaciones: observaciones,
+          );
+        } else if (observaciones != null && observaciones.isNotEmpty) {
+          await _planSeguimientoMokoService.actualizarObservaciones(
+            ejecucionPlanId,
+            observaciones: observaciones,
+          );
+        }
+
+        final id = _parseInt(planData['id']);
+        if (id != null) {
+          await _offlineStorage.markPlanMokoUpdateAsSynced(id);
+        }
+        syncedItems++;
+      } catch (e) {
+        failedItems++;
+        errors.add('Error al sincronizar plan Moko: $e');
+        debugPrint('Error syncing plan Moko: $e');
+      }
+    }
+
+    return SyncResult(
+      success: failedItems == 0,
+      message: 'Plan Moko: $syncedItems sincronizados, $failedItems fallidos',
       syncedItems: syncedItems,
       failedItems: failedItems,
       errors: errors,

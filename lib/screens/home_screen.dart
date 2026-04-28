@@ -1,13 +1,20 @@
 import 'package:flutter/material.dart';
+import 'dart:async' as dart_async;
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import 'package:connectivity_plus/connectivity_plus.dart';
 import '../services/sync_service.dart';
+import '../services/client_service.dart';
+import '../widgets/dynamic_logo_widget.dart';
+import 'agrotecban_moko_midle.dart';
 import 'audit_screen.dart';
-import 'moko_audit_screen.dart';
 import 'sigatoka_audit_screen.dart';
+import 'plagas_screen.dart';
 import 'audit_consultation_screen.dart';
 import 'client_info_screen.dart';
+import 'productive_indicators_screen.dart';
 import 'profile_screen.dart';
+import 'location_tracking_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -21,7 +28,9 @@ class _HomeScreenState extends State<HomeScreen> {
   int _pendingCount = 0;
   final SyncService _syncService = SyncService();
   bool _isSyncing = false;
-  
+  dart_async.StreamSubscription<List<ConnectivityResult>>?
+      _connectivitySubscription;
+
   // Estadísticas del backend
   int _totalClients = 0;
   int _activeClients = 0;
@@ -36,6 +45,13 @@ class _HomeScreenState extends State<HomeScreen> {
     super.initState();
     _updatePendingCount();
     _loadStats();
+    _startConnectivityListener();
+  }
+
+  @override
+  void dispose() {
+    _connectivitySubscription?.cancel();
+    super.dispose();
   }
 
   Future<void> _updatePendingCount() async {
@@ -54,17 +70,18 @@ class _HomeScreenState extends State<HomeScreen> {
         Uri.parse('http://5.161.198.89:8081/api/clients/stats'),
         headers: {'Content-Type': 'application/json'},
       );
-      
+
       // Cargar estadísticas de auditorías
       final auditsResponse = await http.get(
         Uri.parse('http://5.161.198.89:8081/api/audits/stats'),
         headers: {'Content-Type': 'application/json'},
       );
-      
-      if (clientsResponse.statusCode == 200 && auditsResponse.statusCode == 200) {
+
+      if (clientsResponse.statusCode == 200 &&
+          auditsResponse.statusCode == 200) {
         final clientsData = jsonDecode(clientsResponse.body);
         final auditsData = jsonDecode(auditsResponse.body);
-        
+
         if (mounted) {
           setState(() {
             _totalClients = clientsData['totalClients'] ?? 0;
@@ -90,7 +107,7 @@ class _HomeScreenState extends State<HomeScreen> {
     return Scaffold(
       appBar: AppBar(
         title: Text(_titles[_selectedIndex]),
-        backgroundColor: const Color(0xFF004B63),
+        backgroundColor: const Color(0xFF00903E),
         foregroundColor: Colors.white,
         actions: [
           IconButton(
@@ -184,7 +201,7 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  void _syncData() async {
+  Future<void> _syncData({bool showDialogs = true}) async {
     if (_isSyncing) return;
 
     setState(() {
@@ -196,54 +213,63 @@ class _HomeScreenState extends State<HomeScreen> {
       final hasConnection = await _syncService.hasInternetConnection();
 
       if (!hasConnection) {
-        _showNoConnectionDialog();
+        if (showDialogs) {
+          _showNoConnectionDialog();
+        }
         return;
       }
 
       // Mostrar diálogo de carga
-      showDialog(
-        context: context,
-        barrierDismissible: false,
-        builder: (context) => AlertDialog(
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const CircularProgressIndicator(
-                valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF004B63)),
-              ),
-              const SizedBox(height: 16),
-              const Text('Sincronizando datos...'),
-              const SizedBox(height: 8),
-              Text(
-                'Subiendo $_pendingCount elementos pendientes',
-                style: TextStyle(fontSize: 12, color: Colors.grey[600]),
-              ),
-            ],
+      if (showDialogs) {
+        showDialog(
+          context: context,
+          barrierDismissible: false,
+          builder: (context) => AlertDialog(
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const CircularProgressIndicator(
+                  valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF004B63)),
+                ),
+                const SizedBox(height: 16),
+                const Text('Sincronizando datos...'),
+                const SizedBox(height: 8),
+                Text(
+                  'Subiendo $_pendingCount elementos pendientes',
+                  style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                ),
+              ],
+            ),
           ),
-        ),
-      );
+        );
+      }
 
       // Ejecutar sincronización
       final result = await _syncService.syncAllData();
 
       // Cerrar diálogo de carga
-      if (mounted) Navigator.of(context).pop();
+      if (showDialogs && mounted) Navigator.of(context).pop();
 
       // Actualizar contador
       await _updatePendingCount();
 
       // Mostrar resultado
       if (mounted) {
-        if (result.success) {
-          _showSyncSuccessDialog(result);
-        } else {
-          _showSyncErrorDialog(result);
+        if (showDialogs) {
+          if (result.success) {
+            _showSyncSuccessDialog(result);
+          } else {
+            _showSyncErrorDialog(result);
+          }
         }
       }
     } catch (e) {
       if (mounted) {
-        Navigator.of(context).pop(); // Cerrar diálogo de carga si está abierto
-        _showSyncErrorDialog(null, error: e.toString());
+        if (showDialogs) {
+          Navigator.of(context)
+              .pop(); // Cerrar diálogo de carga si está abierto
+          _showSyncErrorDialog(null, error: e.toString());
+        }
       }
     } finally {
       if (mounted) {
@@ -382,6 +408,31 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  void _startConnectivityListener() {
+    _connectivitySubscription?.cancel();
+    _connectivitySubscription =
+        Connectivity().onConnectivityChanged.listen((result) async {
+      if (result.contains(ConnectivityResult.none)) {
+        return;
+      }
+
+      if (_isSyncing) {
+        return;
+      }
+
+      final pending = await _syncService.getPendingCount();
+      if (pending <= 0) {
+        return;
+      }
+
+      if (!mounted) {
+        return;
+      }
+
+      await _syncData(showDialogs: false);
+    });
+  }
+
   Widget _buildSyncSummaryItem(String title, String count, IconData icon) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4),
@@ -412,7 +463,7 @@ class _HomeScreenState extends State<HomeScreen> {
 }
 
 // Inicio Tab
-class InicioTab extends StatelessWidget {
+class InicioTab extends StatefulWidget {
   final VoidCallback onSyncData;
   final VoidCallback onUpdateCount;
   final int activeClients;
@@ -429,6 +480,27 @@ class InicioTab extends StatelessWidget {
     required this.totalHectareas,
     required this.isLoadingStats,
   });
+
+  @override
+  State<InicioTab> createState() => _InicioTabState();
+}
+
+class _InicioTabState extends State<InicioTab> {
+  final ClientService _clientService = ClientService();
+  final TextEditingController _clienteController = TextEditingController();
+  final FocusNode _clienteFocusNode = FocusNode();
+  List<Map<String, dynamic>> _clientSuggestions = [];
+  dart_async.Timer? _searchDebounce;
+  String _lastQuery = '';
+  Map<String, dynamic>? _selectedClient;
+
+  @override
+  void dispose() {
+    _searchDebounce?.cancel();
+    _clienteController.dispose();
+    _clienteFocusNode.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -466,8 +538,7 @@ class InicioTab extends StatelessWidget {
                     color: Colors.white,
                     borderRadius: BorderRadius.circular(12),
                   ),
-                  child: Image.asset(
-                    'assets/images/logo1.png',
+                  child: const DynamicLogoWidget(
                     fit: BoxFit.contain,
                   ),
                 ),
@@ -477,7 +548,7 @@ class InicioTab extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        '¡Bienvenido a Lytiks! 👋',
+                        '¡Bienvenido a Agrotecban! 👋',
                         style: TextStyle(
                           fontSize: 20,
                           fontWeight: FontWeight.bold,
@@ -526,19 +597,21 @@ class InicioTab extends StatelessWidget {
             childAspectRatio: 1.3,
             children: [
               _buildStatCard(
-                isLoadingStats ? '...' : '$activeClients',
+                widget.isLoadingStats ? '...' : '${widget.activeClients}',
                 'Fincas Activas',
                 Icons.agriculture,
                 const Color(0xFF4CAF50),
               ),
               _buildStatCard(
-                isLoadingStats ? '...' : '$todayAudits',
+                widget.isLoadingStats ? '...' : '${widget.todayAudits}',
                 'Auditorías Hoy',
                 Icons.assignment_turned_in,
                 const Color(0xFF2196F3),
               ),
               _buildStatCard(
-                isLoadingStats ? '...' : '${totalHectareas.toStringAsFixed(0)} Ha',
+                widget.isLoadingStats
+                    ? '...'
+                    : '${widget.totalHectareas.toStringAsFixed(0)} Ha',
                 'Hectáreas',
                 Icons.landscape,
                 const Color(0xFF00BCD4),
@@ -551,6 +624,10 @@ class InicioTab extends StatelessWidget {
               ),
             ],
           ),
+
+          const SizedBox(height: 24),
+
+          _buildClientSearchSection(),
 
           const SizedBox(height: 24),
 
@@ -585,9 +662,10 @@ class InicioTab extends StatelessWidget {
                     Navigator.push(
                       context,
                       MaterialPageRoute(
-                        builder: (context) => AuditScreen(),
+                        builder: (context) =>
+                            AuditScreen(clientData: _selectedClient),
                       ),
-                    ).then((_) => onUpdateCount());
+                    ).then((_) => widget.onUpdateCount());
                   },
                 ),
               ),
@@ -602,8 +680,9 @@ class InicioTab extends StatelessWidget {
                     Navigator.push(
                       context,
                       MaterialPageRoute(
-                        builder: (context) =>
-                            const MokoAuditScreen(clientData: null),
+                        builder: (context) => AgrotecbanMokoMidleScreen(
+                          clientData: _selectedClient,
+                        ),
                       ),
                     );
                   },
@@ -644,14 +723,82 @@ class InicioTab extends StatelessWidget {
                     Navigator.push(
                       context,
                       MaterialPageRoute(
-                        builder: (context) =>
-                            const SigatokaAuditScreen(clientData: null),
+                        builder: (context) => SigatokaAuditScreen(
+                          clientData: _selectedClient,
+                        ),
                       ),
                     );
                   },
                 ),
               ),
             ],
+          ),
+
+          const SizedBox(height: 12),
+
+          // Tercera fila de botones
+          Row(
+            children: [
+              Expanded(
+                child: _buildActionButton(
+                  context,
+                  icon: Icons.bug_report,
+                  title: 'Control de Plagas',
+                  color: const Color(0xFF8D6E63),
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => PlagasScreen(
+                          clientData: _selectedClient,
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: _buildActionButton(
+                  context,
+                  icon: Icons.insights,
+                  title: 'Indicadores productivos',
+                  color: const Color(0xFF1565C0),
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => ProductiveIndicatorsScreen(
+                          clientData: _selectedClient,
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+
+          const SizedBox(height: 12),
+
+          // Tercera fila: Seguimiento de ubicación
+          SizedBox(
+            width: double.infinity,
+            child: _buildActionButton(
+              context,
+              icon: Icons.location_on,
+              title: '📍 Seguimiento de Ubicación',
+              color: const Color(0xFFE91E63),
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => const LocationTrackingScreen(),
+                  ),
+                );
+              },
+              isFullWidth: true,
+            ),
           ),
 
           const SizedBox(height: 12),
@@ -664,13 +811,333 @@ class InicioTab extends StatelessWidget {
               icon: Icons.cloud_sync,
               title: '☁️ Sincronizar Todo',
               color: const Color(0xFF00BCD4),
-              onTap: onSyncData,
+              onTap: widget.onSyncData,
               isFullWidth: true,
             ),
           ),
         ],
       ),
     );
+  }
+
+  Widget _buildClientSearchSection() {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: const Color(0xFF004B63)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.grey.withOpacity(0.1),
+            spreadRadius: 1,
+            blurRadius: 3,
+            offset: const Offset(0, 1),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(
+                Icons.person_search,
+                color: const Color(0xFF004B63),
+                size: 24,
+              ),
+              const SizedBox(width: 8),
+              const Text(
+                'Seleccionar Cliente',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: Color(0xFF004B63),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          const Text(
+            'Este cliente se usará para auditorías de Moko, Sigatoka, Cultivos y Plagas.',
+            style: TextStyle(fontSize: 12, color: Colors.black54),
+          ),
+          const SizedBox(height: 12),
+          RawAutocomplete<Map<String, dynamic>>(
+            textEditingController: _clienteController,
+            focusNode: _clienteFocusNode,
+            displayStringForOption: _formatClientName,
+            optionsBuilder: (TextEditingValue value) {
+              final query = value.text.trim();
+              if (query.length < 2 || query != _lastQuery) {
+                return const Iterable<Map<String, dynamic>>.empty();
+              }
+              return _clientSuggestions;
+            },
+            onSelected: (client) {
+              if (!mounted) {
+                return;
+              }
+              setState(() {
+                _selectedClient = client;
+                _clientSuggestions = [];
+              });
+              _clientService.saveSelectedClient(client);
+              _showClientFoundMessage(client);
+            },
+            fieldViewBuilder: (
+              BuildContext context,
+              TextEditingController controller,
+              FocusNode focusNode,
+              VoidCallback onFieldSubmitted,
+            ) {
+              return TextField(
+                controller: controller,
+                focusNode: focusNode,
+                keyboardType: TextInputType.text,
+                onChanged: _onNameChanged,
+                decoration: InputDecoration(
+                  labelText: 'Nombre, Apellido o Cédula',
+                  hintText: 'Ingrese nombre, apellido o cédula',
+                  prefixIcon: const Icon(Icons.person),
+                  border: const OutlineInputBorder(),
+                  suffixIcon: IconButton(
+                    icon: const Icon(Icons.search),
+                    onPressed: _triggerSearch,
+                  ),
+                ),
+              );
+            },
+            optionsViewBuilder: (
+              BuildContext context,
+              AutocompleteOnSelected<Map<String, dynamic>> onSelected,
+              Iterable<Map<String, dynamic>> options,
+            ) {
+              final optionList = options.toList();
+              return Align(
+                alignment: Alignment.topLeft,
+                child: Material(
+                  elevation: 4.0,
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxHeight: 240),
+                    child: ListView.separated(
+                      padding: EdgeInsets.zero,
+                      shrinkWrap: true,
+                      itemCount: optionList.length,
+                      separatorBuilder: (_, __) => const Divider(height: 1),
+                      itemBuilder: (context, index) {
+                        final client = optionList[index];
+                        final nombre = _formatClientName(client);
+                        final cedula = client['cedula']?.toString() ?? '';
+                        final finca = _formatFincaName(client);
+                        final subtitleParts = <String>[];
+                        if (cedula.isNotEmpty) {
+                          subtitleParts.add('Cédula: $cedula');
+                        }
+                        if (finca.isNotEmpty) {
+                          subtitleParts.add('Finca: $finca');
+                        }
+                        return ListTile(
+                          title: Text(
+                              nombre.isEmpty ? 'Cliente sin nombre' : nombre),
+                          subtitle: subtitleParts.isEmpty
+                              ? null
+                              : Text(subtitleParts.join(' | ')),
+                          onTap: () => onSelected(client),
+                        );
+                      },
+                    ),
+                  ),
+                ),
+              );
+            },
+          ),
+          if (_selectedClient != null) ...[
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.green.shade50,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.green.shade200),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.check_circle, color: Colors.green.shade600),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Cliente: ${_selectedClient!['nombre'] ?? ''} ${_selectedClient!['apellidos'] ?? ''}',
+                          style: const TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 14,
+                          ),
+                        ),
+                        if (_selectedClient!['cedula'] != null &&
+                            _selectedClient!['cedula'].toString().isNotEmpty)
+                          Text(
+                            'Cédula: ${_selectedClient!['cedula']}',
+                            style: const TextStyle(fontSize: 12),
+                          ),
+                        if (_formatFincaName(_selectedClient!).isNotEmpty)
+                          Text(
+                            'Finca: ${_formatFincaName(_selectedClient!)}',
+                            style: const TextStyle(fontSize: 12),
+                          ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const Text(
+              'Puede cambiarlo al ingresar a cada módulo.',
+              style: TextStyle(fontSize: 11, color: Colors.black54),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  String _formatClientName(Map<String, dynamic> client) {
+    final nombre = client['nombre']?.toString() ?? '';
+    final apellidos = client['apellidos']?.toString() ?? '';
+    return '$nombre $apellidos'.trim();
+  }
+
+  String _formatFincaName(Map<String, dynamic> client) {
+    return (client['fincaNombre'] ?? client['nombreFinca'] ?? '').toString();
+  }
+
+  void _showClientFoundMessage(Map<String, dynamic> client) {
+    if (!mounted) {
+      return;
+    }
+    final nombre = _formatClientName(client);
+    final cedula = client['cedula']?.toString() ?? '';
+    final detail =
+        nombre.isNotEmpty ? nombre : (cedula.isNotEmpty ? cedula : '');
+    final message = detail.isNotEmpty
+        ? 'Cliente encontrado: $detail'
+        : 'Cliente encontrado';
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: Colors.green.shade700,
+      ),
+    );
+  }
+
+  void _onNameChanged(String value) {
+    final query = value.trim();
+    _searchDebounce?.cancel();
+    final queryChanged = query != _lastQuery;
+    _lastQuery = query;
+
+    if (_selectedClient != null) {
+      final selectedName = _formatClientName(_selectedClient!).toLowerCase();
+      if (selectedName != query.toLowerCase()) {
+        setState(() {
+          _selectedClient = null;
+        });
+        _clientService.clearSelectedClient();
+      }
+    }
+
+    if (query.length < 2) {
+      if (_clientSuggestions.isNotEmpty) {
+        setState(() {
+          _clientSuggestions = [];
+        });
+      }
+      return;
+    }
+
+    if (queryChanged && _clientSuggestions.isNotEmpty) {
+      setState(() {
+        _clientSuggestions = [];
+      });
+    }
+
+    _searchDebounce = dart_async.Timer(
+      const Duration(milliseconds: 350),
+      () => _fetchClientSuggestions(query),
+    );
+  }
+
+  bool _isLikelyCedula(String value) {
+    if (value.isEmpty) {
+      return false;
+    }
+    return RegExp(r'^[0-9]+$').hasMatch(value);
+  }
+
+  Future<void> _fetchClientSuggestions(String query) async {
+    try {
+      if (_isLikelyCedula(query)) {
+        final client = await _clientService.searchClientByCedula(query);
+        if (!mounted || query != _lastQuery) {
+          return;
+        }
+        setState(() {
+          _clientSuggestions = client == null ? [] : [client];
+        });
+        return;
+      }
+
+      final clients = await _clientService.searchClientsByName(query);
+      if (!mounted || query != _lastQuery) {
+        return;
+      }
+      setState(() {
+        _clientSuggestions = clients;
+      });
+    } catch (e) {
+      if (!mounted || query != _lastQuery) {
+        return;
+      }
+      setState(() {
+        _clientSuggestions = [];
+      });
+    }
+  }
+
+  Future<void> _triggerSearch() async {
+    final query = _clienteController.text.trim();
+    _lastQuery = query;
+    if (query.length < 2) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Ingrese al menos 2 letras para buscar'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+
+    await _fetchClientSuggestions(query);
+    if (!mounted) {
+      return;
+    }
+
+    if (_clientSuggestions.length == 1) {
+      final client = _clientSuggestions.first;
+      setState(() {
+        _selectedClient = client;
+        _clientSuggestions = [];
+      });
+      _clientService.saveSelectedClient(client);
+      _clienteController.text = _formatClientName(client);
+      _clienteFocusNode.unfocus();
+      _showClientFoundMessage(client);
+      return;
+    }
+
+    _clienteFocusNode.requestFocus();
   }
 
   Widget _buildStatCard(

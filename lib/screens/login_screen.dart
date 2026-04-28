@@ -1,6 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../services/auth_service.dart';
+import '../services/location_tracking_service.dart';
+import '../widgets/dynamic_logo_widget.dart';
 import 'home_screen.dart';
+import 'cliente_home_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -16,6 +20,8 @@ class _LoginScreenState extends State<LoginScreen> {
   bool _obscurePassword = true;
   bool _isLoading = false;
   final _authService = AuthService();
+  final _locationTrackingService = LocationTrackingService();
+  final _storage = const FlutterSecureStorage();
 
   @override
   void dispose() {
@@ -39,20 +45,70 @@ class _LoginScreenState extends State<LoginScreen> {
         // Navegamos según el rol del usuario
         if (mounted) {
           final userRole = loginResponse['user']['rol']?.toString().toUpperCase() ?? '';
+          final userId = loginResponse['user']['id']?.toString() ?? '';
+          
+          // Construir nombre completo del usuario
+          final firstName = loginResponse['user']['firstName']?.toString() ?? '';
+          final lastName = loginResponse['user']['lastName']?.toString() ?? '';
+          final userName = '$firstName $lastName'.trim();
+          // Fallback a username si no hay firstName/lastName
+          final displayName = userName.isNotEmpty 
+              ? userName 
+              : loginResponse['user']['username']?.toString() ?? '';
+          
           print('🔍 Rol del usuario recibido: $userRole');
+          print('👤 Nombre del usuario: $displayName');
 
           if (userRole == 'OPERADOR') {
+            // Guardar información del usuario para tracking
+            await _storage.write(key: 'user_id', value: userId);
+            await _storage.write(key: 'user_name', value: displayName);
+            await _storage.write(key: 'user_role', value: userRole);
+            
+            // Guardar id_empresa del usuario
+            final idEmpresa = loginResponse['user']['idEmpresa']?.toString() ?? '0';
+            await _storage.write(key: 'id_empresa', value: idEmpresa);
+            print('🏢 ID Empresa guardado: $idEmpresa');
+            
+            // Iniciar seguimiento automático de ubicación
+            await _locationTrackingService.startTracking(
+              userId: userId,
+              userName: displayName,
+            );
+            
+            print('✅ Seguimiento de ubicación iniciado para $displayName');
+            
             Navigator.pushReplacement(
               context,
               MaterialPageRoute(builder: (context) => const HomeScreen()),
             );
+          } else if (userRole == 'CLIENTE') {
+            // Guardar información del usuario cliente
+            await _storage.write(key: 'user_id', value: userId);
+            await _storage.write(key: 'user_name', value: displayName);
+            await _storage.write(key: 'user_role', value: userRole);
+            
+            // Guardar id_empresa del usuario
+            final idEmpresa = loginResponse['user']['idEmpresa']?.toString() ?? '0';
+            await _storage.write(key: 'id_empresa', value: idEmpresa);
+            print('🏢 ID Empresa guardado: $idEmpresa');
+            
+            // No iniciar seguimiento de ubicación para clientes
+            print('👤 Cliente autenticado: $displayName');
+            
+            Navigator.pushReplacement(
+              context,
+              MaterialPageRoute(
+                builder: (context) => ClienteHomeScreen(userData: loginResponse),
+              ),
+            );
           } else {
-            // Solo usuarios operadores pueden acceder
+            // Solo usuarios operadores y clientes pueden acceder
             if (mounted) {
               ScaffoldMessenger.of(context).showSnackBar(
                 const SnackBar(
                   content: Text(
-                    'Solo usuarios operadores pueden acceder a esta aplicación',
+                    'Rol de usuario no autorizado para esta aplicación',
                   ),
                   backgroundColor: Colors.red,
                 ),
@@ -124,8 +180,7 @@ class _LoginScreenState extends State<LoginScreen> {
                           ),
                         ],
                       ),
-                      child: Image.asset(
-                        'assets/images/logo1.png',
+                      child: DynamicLogoWidget(
                         height: logoHeight,
                         fit: BoxFit.contain,
                       ),
@@ -135,7 +190,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
                     // Título
                     Text(
-                      'Lytiks',
+                      'Agrotecban',
                       style: TextStyle(
                         fontSize: titleSize,
                         fontWeight: FontWeight.bold,
@@ -228,7 +283,7 @@ class _LoginScreenState extends State<LoginScreen> {
                             child: ElevatedButton(
                               onPressed: _isLoading ? null : _login,
                               style: ElevatedButton.styleFrom(
-                                backgroundColor: const Color(0xFF004B63),
+                                backgroundColor: const Color(0xFF00903E),
                                 shape: RoundedRectangleBorder(
                                   borderRadius: BorderRadius.circular(12),
                                 ),

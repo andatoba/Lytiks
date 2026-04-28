@@ -30,6 +30,10 @@ public class RegistroMokoService {
         return registroMokoRepository.findById(id);
     }
     
+    public Optional<RegistroMoko> getRegistroByNumeroFoco(Integer numeroFoco) {
+        return registroMokoRepository.findByNumeroFoco(numeroFoco);
+    }
+    
     public List<RegistroMoko> getRegistrosByClienteId(Long clienteId) {
         return registroMokoRepository.findByClienteIdOrderByFechaCreacionDesc(clienteId);
     }

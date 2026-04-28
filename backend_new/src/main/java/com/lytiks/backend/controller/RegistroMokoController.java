@@ -1,5 +1,7 @@
 package com.lytiks.backend.controller;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.lytiks.backend.entity.RegistroMoko;
 import com.lytiks.backend.entity.Client;
 import com.lytiks.backend.repository.ClientRepository;
@@ -7,16 +9,21 @@ import com.lytiks.backend.entity.Sintoma;
 import com.lytiks.backend.entity.ProductoContencion;
 import com.lytiks.backend.entity.Producto;
 import com.lytiks.backend.entity.Aplicacion;
+import com.lytiks.backend.entity.MokoContencionAuditoria;
 import com.lytiks.backend.entity.SeguimientoAplicacion;
+import com.lytiks.backend.entity.SeguimientoMoko;
 import com.lytiks.backend.service.RegistroMokoService;
 import com.lytiks.backend.service.SintomaService;
 import com.lytiks.backend.service.SeguimientoAplicacionService;
+import com.lytiks.backend.service.SeguimientoMokoService;
 import com.lytiks.backend.repository.ProductoContencionRepository;
 import com.lytiks.backend.repository.ProductoRepository;
 import com.lytiks.backend.repository.AplicacionRepository;
+import com.lytiks.backend.repository.MokoContencionAuditoriaRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -36,7 +43,6 @@ import java.util.UUID;
 
 @RestController
 @RequestMapping("moko")
-@CrossOrigin(origins = "*")
 public class RegistroMokoController {
 
     @Autowired
@@ -59,6 +65,15 @@ public class RegistroMokoController {
     
     @Autowired
     private SeguimientoAplicacionService seguimientoService;
+
+    @Autowired
+    private SeguimientoMokoService seguimientoMokoService;
+
+    @Autowired
+    private MokoContencionAuditoriaRepository mokoContencionAuditoriaRepository;
+
+    @Autowired
+    private ObjectMapper objectMapper;
 
     private static final String UPLOAD_DIR = "photos/moko/";
 
@@ -99,6 +114,8 @@ public class RegistroMokoController {
             @RequestParam(value = "lote", required = false) String lote,
             @RequestParam(value = "areaHectareas", required = false) Double areaHectareas,
             @RequestParam("gpsCoordinates") String gpsCoordinates,
+            @RequestParam(value = "loteLatitud", required = false) Double loteLatitud,
+            @RequestParam(value = "loteLongitud", required = false) Double loteLongitud,
             @RequestParam("plantasAfectadas") int plantasAfectadas,
             @RequestParam("fechaDeteccion") String fechaDeteccion,
             @RequestParam(value = "sintomaId", required = false) Long sintomaId,
@@ -116,6 +133,8 @@ public class RegistroMokoController {
             System.out.println("lote: " + lote);
             System.out.println("areaHectareas: " + areaHectareas);
             System.out.println("gpsCoordinates: " + gpsCoordinates);
+            System.out.println("loteLatitud: " + loteLatitud);
+            System.out.println("loteLongitud: " + loteLongitud);
             System.out.println("plantasAfectadas: " + plantasAfectadas);
             System.out.println("fechaDeteccion: " + fechaDeteccion);
             System.out.println("sintomaId (legacy): " + sintomaId);
@@ -133,6 +152,8 @@ public class RegistroMokoController {
             registro.setLote(lote);
             registro.setAreaHectareas(areaHectareas);
             registro.setGpsCoordinates(gpsCoordinates);
+            registro.setLoteLatitud(loteLatitud);
+            registro.setLoteLongitud(loteLongitud);
             registro.setPlantasAfectadas(plantasAfectadas);
             
             // Parsear fecha con mejor manejo de errores
@@ -194,6 +215,8 @@ public class RegistroMokoController {
                 regMap.put("numeroFoco", registro.getNumeroFoco());
                 regMap.put("clienteId", registro.getClienteId());
                 regMap.put("gpsCoordinates", registro.getGpsCoordinates());
+                regMap.put("loteLatitud", registro.getLoteLatitud());
+                regMap.put("loteLongitud", registro.getLoteLongitud());
                 regMap.put("plantasAfectadas", registro.getPlantasAfectadas());
                 regMap.put("fechaDeteccion", registro.getFechaDeteccion());
                 regMap.put("sintomaId", registro.getSintomaId());
@@ -223,6 +246,41 @@ public class RegistroMokoController {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(null);
         }
     }
+    
+    /**
+     * Obtener registros Moko de un cliente específico
+     */
+    @GetMapping("/registros/cliente/{clienteId}")
+    public ResponseEntity<List<Map<String, Object>>> getRegistrosByCliente(@PathVariable Long clienteId) {
+        try {
+            List<RegistroMoko> registros = registroMokoService.getRegistrosByClienteId(clienteId);
+            List<Map<String, Object>> registrosEnriquecidos = new java.util.ArrayList<>();
+            for (RegistroMoko registro : registros) {
+                Map<String, Object> regMap = new java.util.HashMap<>();
+                regMap.put("id", registro.getId());
+                regMap.put("numeroFoco", registro.getNumeroFoco());
+                regMap.put("clienteId", registro.getClienteId());
+                regMap.put("gpsCoordinates", registro.getGpsCoordinates());
+                regMap.put("loteLatitud", registro.getLoteLatitud());
+                regMap.put("loteLongitud", registro.getLoteLongitud());
+                regMap.put("plantasAfectadas", registro.getPlantasAfectadas());
+                regMap.put("fechaDeteccion", registro.getFechaDeteccion());
+                regMap.put("sintomaId", registro.getSintomaId());
+                regMap.put("sintomasJson", registro.getSintomasJson());
+                regMap.put("lote", registro.getLote());
+                regMap.put("areaHectareas", registro.getAreaHectareas());
+                regMap.put("severidad", registro.getSeveridad());
+                regMap.put("metodoComprobacion", registro.getMetodoComprobacion());
+                regMap.put("observaciones", registro.getObservaciones());
+                regMap.put("fotoPath", registro.getFotoPath());
+                regMap.put("fechaCreacion", registro.getFechaCreacion());
+                registrosEnriquecidos.add(regMap);
+            }
+            return ResponseEntity.ok(registrosEnriquecidos);
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(null);
+        }
+    }
 
     @GetMapping("/registro/{id}")
     public ResponseEntity<RegistroMoko> getRegistroById(@PathVariable Long id) {
@@ -242,6 +300,8 @@ public class RegistroMokoController {
     public ResponseEntity<Map<String, Object>> actualizarRegistro(
             @PathVariable Long id,
             @RequestParam("gpsCoordinates") String gpsCoordinates,
+            @RequestParam(value = "loteLatitud", required = false) Double loteLatitud,
+            @RequestParam(value = "loteLongitud", required = false) Double loteLongitud,
             @RequestParam("plantasAfectadas") int plantasAfectadas,
             @RequestParam("sintomaId") Long sintomaId,
             @RequestParam("severidad") String severidad,
@@ -260,6 +320,12 @@ public class RegistroMokoController {
 
             RegistroMoko registro = registroOpt.get();
             registro.setGpsCoordinates(gpsCoordinates);
+            if (loteLatitud != null) {
+                registro.setLoteLatitud(loteLatitud);
+            }
+            if (loteLongitud != null) {
+                registro.setLoteLongitud(loteLongitud);
+            }
             registro.setPlantasAfectadas(plantasAfectadas);
             registro.setSintomaId(sintomaId);
             registro.setSeveridad(severidad);
@@ -335,7 +401,7 @@ public class RegistroMokoController {
     }
 
     @GetMapping("/registros/por-cliente/{clienteId}")
-    public ResponseEntity<List<RegistroMoko>> getRegistrosByCliente(@PathVariable Long clienteId) {
+    public ResponseEntity<List<RegistroMoko>> getRegistrosByClienteSimple(@PathVariable Long clienteId) {
         try {
             List<RegistroMoko> registros = registroMokoService.getRegistrosByClienteId(clienteId);
             return ResponseEntity.ok(registros);
@@ -473,67 +539,22 @@ public class RegistroMokoController {
             productoContencionRepository.deleteAll();
             productoRepository.deleteAll();
 
-            // Crear productos con las especificaciones correctas
-            Producto goldenProducto = new Producto();
-            goldenProducto.setNombre("Golden Crop");
-            goldenProducto.setDetalle("Producto para contención");
-            goldenProducto.setCantidad(1);
-            goldenProducto.setPesoKg(1.0);
-            productoRepository.save(goldenProducto);
+            // Crear productos usando los nombres exactos del frontend actual
+            crearProductoContencion("SAFERBACTER", "250g", "250-500 gr", 0.25, "https://example.com/saferbacter");
+            crearProductoContencion("SAFERSOIL", "250g", "250-500 gr", 0.25, "https://example.com/safersoil");
+            crearProductoContencion("SAFERMIX", "250g", "250-500 gr", 0.25, "https://example.com/safermix");
+            crearProductoContencion("GOLDEN", "1L", "2-4 lt", 1.0, "https://example.com/golden");
+            crearProductoContencion("PREBIOTIK", "5kg", "5 kilos", 5.0, "https://example.com/prebiotik");
 
-            ProductoContencion golden = new ProductoContencion();
-            golden.setProducto(goldenProducto);
-            golden.setPresentacion("1L");
-            golden.setDosisSugerida("1L/400L/agua/ha");
-            golden.setUrl("https://example.com/golden-crop");
-            productoContencionRepository.save(golden);
-
-            Producto previotikProducto = new Producto();
-            previotikProducto.setNombre("Previotik Crop");
-            previotikProducto.setDetalle("Producto para contención");
-            previotikProducto.setCantidad(1);
-            previotikProducto.setPesoKg(6.6);
-            productoRepository.save(previotikProducto);
-
-            ProductoContencion previotik = new ProductoContencion();
-            previotik.setProducto(previotikProducto);
-            previotik.setPresentacion("6.6kg");
-            previotik.setDosisSugerida("6.6kg/ha (con fertilizante)");
-            previotik.setUrl("https://example.com/previotik-crop");
-            productoContencionRepository.save(previotik);
-
-            Producto saferbacterProducto = new Producto();
-            saferbacterProducto.setNombre("Saferbacter");
-            saferbacterProducto.setDetalle("Producto para contención");
-            saferbacterProducto.setCantidad(1);
-            saferbacterProducto.setPesoKg(0.25);
-            productoRepository.save(saferbacterProducto);
-
-            ProductoContencion saferbacter = new ProductoContencion();
-            saferbacter.setProducto(saferbacterProducto);
-            saferbacter.setPresentacion("250g");
-            saferbacter.setDosisSugerida("250g/400L/agua/ha");
-            saferbacter.setUrl("https://example.com/saferbacter");
-            productoContencionRepository.save(saferbacter);
-
-            Producto safersoilProducto = new Producto();
-            safersoilProducto.setNombre("Safersoil Trichoderma");
-            safersoilProducto.setDetalle("Producto para contención");
-            safersoilProducto.setCantidad(1);
-            safersoilProducto.setPesoKg(0.25);
-            productoRepository.save(safersoilProducto);
-
-            ProductoContencion safersoil = new ProductoContencion();
-            safersoil.setProducto(safersoilProducto);
-            safersoil.setPresentacion("250g");
-            safersoil.setDosisSugerida("250g/400L/agua/ha");
-            safersoil.setUrl("https://example.com/safersoil-trichoderma");
-            productoContencionRepository.save(safersoil);
+            crearProductoContencion("ARMUROX", "1L", "1 lt", 1.0, "https://example.com/armurox");
+            crearProductoContencion("AMINOALEXIN", "1L", "0,5-0,75 lt", 1.0, "https://example.com/aminoalexin");
+            crearProductoContencion("EQUILIBRIUM", "1L", "0,5-1 lt", 1.0, "https://example.com/equilibrium");
+            crearProductoContencion("TERRASORB T24", "1L", "0,5-1 lt", 1.0, "https://example.com/terrasorb-t24");
 
             Map<String, Object> response = new HashMap<>();
             response.put("success", true);
             response.put("message", "Productos inicializados correctamente");
-            response.put("total", 4);
+            response.put("total", 9);
 
             return ResponseEntity.ok(response);
         } catch (Exception e) {
@@ -542,6 +563,27 @@ public class RegistroMokoController {
             error.put("error", "Error inicializando productos: " + e.getMessage());
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(error);
         }
+    }
+
+    private void crearProductoContencion(
+            String nombre,
+            String presentacion,
+            String dosisSugerida,
+            double pesoKg,
+            String url) {
+        Producto producto = new Producto();
+        producto.setNombre(nombre);
+        producto.setDetalle("Producto para contencion");
+        producto.setCantidad(1);
+        producto.setPesoKg(pesoKg);
+        productoRepository.save(producto);
+
+        ProductoContencion contencion = new ProductoContencion();
+        contencion.setProducto(producto);
+        contencion.setPresentacion(presentacion);
+        contencion.setDosisSugerida(dosisSugerida);
+        contencion.setUrl(url);
+        productoContencionRepository.save(contencion);
     }
 
     @PostMapping("/aplicaciones-contencion")
@@ -562,6 +604,264 @@ public class RegistroMokoController {
             error.put("success", false);
             error.put("error", "Error al guardar aplicación: " + e.getMessage());
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(error);
+        }
+    }
+
+    /**
+     * Guarda toda la información de contención en una sola transacción.
+     * Payload esperado:
+     * {
+     *   "focoId": 123,
+     *   "numeroFoco": 5,
+     *   "aplicaciones": [ { ...campos de Aplicacion... } ],
+     *   "seguimiento": { ...campos de SeguimientoMoko... }
+     * }
+     */
+    @PostMapping("/contencion/guardar-completo")
+    @Transactional
+    public ResponseEntity<Map<String, Object>> guardarContencionCompleta(
+            @RequestBody Map<String, Object> payload) {
+        try {
+            Long focoId = toLong(payload.get("focoId"));
+            Integer numeroFoco = toInteger(payload.get("numeroFoco"));
+
+            // Buscar registro existente por focoId o por numeroFoco
+            Optional<RegistroMoko> registroExistente = Optional.empty();
+            if (focoId != null && focoId > 0) {
+                registroExistente = registroMokoService.getRegistroById(focoId);
+            }
+            if (registroExistente.isEmpty() && numeroFoco != null && numeroFoco > 0) {
+                registroExistente = registroMokoService.getRegistroByNumeroFoco(numeroFoco);
+            }
+
+            // Si no existe, crear automáticamente con auto-increment
+            if (registroExistente.isEmpty()) {
+                RegistroMoko nuevoRegistro = new RegistroMoko();
+                if (numeroFoco != null && numeroFoco > 0) {
+                    nuevoRegistro.setNumeroFoco(numeroFoco);
+                } else {
+                    nuevoRegistro.setNumeroFoco(registroMokoService.getNextFocoNumber());
+                }
+                Long clienteId = toLong(payload.get("clienteId"));
+                nuevoRegistro.setClienteId(clienteId != null ? clienteId : 0L);
+                nuevoRegistro.setFechaDeteccion(LocalDateTime.now());
+                nuevoRegistro.setPlantasAfectadas(0);
+                RegistroMoko registroGuardado = registroMokoService.save(nuevoRegistro);
+                focoId = registroGuardado.getId();
+                numeroFoco = registroGuardado.getNumeroFoco();
+            } else {
+                focoId = registroExistente.get().getId();
+                if (numeroFoco == null) {
+                    numeroFoco = registroExistente.get().getNumeroFoco();
+                }
+            }
+
+            int aplicacionesGuardadas = 0;
+            List<Long> aplicacionesIds = new java.util.ArrayList<>();
+
+            Object aplicacionesRaw = payload.get("aplicaciones");
+            if (aplicacionesRaw instanceof List<?> apps) {
+                for (Object appRaw : apps) {
+                    if (!(appRaw instanceof Map<?, ?> appMapRaw)) {
+                        continue;
+                    }
+
+                    @SuppressWarnings("unchecked")
+                    Map<String, Object> appMap = (Map<String, Object>) appMapRaw;
+
+                    Aplicacion aplicacion = new Aplicacion();
+                    aplicacion.setClienteId(toLong(appMap.get("clienteId")));
+                    aplicacion.setProductoId(toLong(appMap.get("productoId")));
+                    aplicacion.setProductoNombre(toStringValue(appMap.get("productoNombre")));
+                    aplicacion.setPlan(toStringValue(appMap.get("plan")));
+                    aplicacion.setLote(toStringValue(appMap.get("lote")));
+                    aplicacion.setAreaHectareas(toDouble(appMap.get("areaHectareas")));
+                    aplicacion.setDosis(toStringValue(appMap.get("dosis")));
+                    aplicacion.setFechaInicio(toDateTime(appMap.get("fechaInicio")));
+                    aplicacion.setFrecuenciaDias(toInteger(appMap.get("frecuenciaDias")));
+                    aplicacion.setRepeticiones(toInteger(appMap.get("repeticiones")));
+                    aplicacion.setRecordatorioHora(toStringValue(appMap.get("recordatorioHora")));
+                    aplicacion.setCreatedAt(LocalDateTime.now());
+
+                    Aplicacion savedAplicacion = aplicacionRepository.save(aplicacion);
+                    seguimientoService.crearSeguimientoAutomatico(savedAplicacion);
+
+                    aplicacionesGuardadas++;
+                    aplicacionesIds.add(savedAplicacion.getId());
+                }
+            }
+
+            SeguimientoMoko seguimientoGuardado = null;
+            Object seguimientoRaw = payload.get("seguimiento");
+            if (seguimientoRaw instanceof Map<?, ?> seguimientoMapRaw) {
+                @SuppressWarnings("unchecked")
+                Map<String, Object> seguimientoMap = (Map<String, Object>) seguimientoMapRaw;
+
+                SeguimientoMoko seguimiento = new SeguimientoMoko();
+                Long seguimientoFocoId = toLongOrDefault(seguimientoMap.get("focoId"), focoId);
+                if (!focoId.equals(seguimientoFocoId)) {
+                    return buildErrorResponse(
+                            HttpStatus.BAD_REQUEST,
+                            "El focoId del seguimiento no coincide con el foco principal enviado");
+                }
+                seguimiento.setFocoId(focoId);
+                seguimiento.setNumeroFoco(
+                        toIntegerOrDefault(seguimientoMap.get("numeroFoco"), numeroFoco));
+                seguimiento.setSemanaInicio(toInteger(seguimientoMap.get("semanaInicio")));
+                seguimiento.setPlantasAfectadas(
+                        toIntegerOrDefault(seguimientoMap.get("plantasAfectadas"), 0));
+                seguimiento.setPlantasInyectadas(
+                        toIntegerOrDefault(seguimientoMap.get("plantasInyectadas"), 0));
+                seguimiento.setControlVectores(toBoolean(seguimientoMap.get("controlVectores")));
+                seguimiento.setCuarentenaActiva(toBoolean(seguimientoMap.get("cuarentenaActiva")));
+                seguimiento.setUnicaEntradaHabilitada(
+                        toBoolean(seguimientoMap.get("unicaEntradaHabilitada")));
+                seguimiento.setEliminacionMalezaHospedera(
+                        toBoolean(seguimientoMap.get("eliminacionMalezaHospedera")));
+                seguimiento.setControlPicudoAplicado(
+                        toBoolean(seguimientoMap.get("controlPicudoAplicado")));
+                seguimiento.setInspeccionPlantasVecinas(
+                        toBoolean(seguimientoMap.get("inspeccionPlantasVecinas")));
+                seguimiento.setCorteRiego(toBoolean(seguimientoMap.get("corteRiego")));
+                seguimiento.setPediluvioActivo(toBoolean(seguimientoMap.get("pediluvioActivo")));
+                seguimiento.setPpmSolucionDesinfectante(
+                        toInteger(seguimientoMap.get("ppmSolucionDesinfectante")));
+
+                seguimientoGuardado = seguimientoMokoService.save(seguimiento);
+            }
+
+            MokoContencionAuditoria auditoriaGuardada = guardarAuditoriaContencion(
+                    focoId,
+                    numeroFoco,
+                    payload
+            );
+
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", true);
+            response.put("message", "Contención guardada correctamente");
+            response.put("aplicacionesGuardadas", aplicacionesGuardadas);
+            response.put("aplicacionesIds", aplicacionesIds);
+            response.put("seguimientoId", seguimientoGuardado != null ? seguimientoGuardado.getId() : null);
+            response.put("auditoriaId", auditoriaGuardada.getId());
+            return ResponseEntity.status(HttpStatus.CREATED).body(response);
+        } catch (IllegalArgumentException e) {
+            return buildErrorResponse(HttpStatus.BAD_REQUEST, e.getMessage());
+        } catch (Exception e) {
+            Map<String, Object> error = new HashMap<>();
+            error.put("success", false);
+            error.put("error", "Error al guardar contención completa: " + e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(error);
+        }
+    }
+
+    private ResponseEntity<Map<String, Object>> buildErrorResponse(HttpStatus status, String message) {
+        Map<String, Object> error = new HashMap<>();
+        error.put("success", false);
+        error.put("error", message);
+        return ResponseEntity.status(status).body(error);
+    }
+
+    @GetMapping("/contencion/foco/{focoId}/ultima-auditoria")
+    public ResponseEntity<Map<String, Object>> getUltimaAuditoriaContencion(@PathVariable Long focoId) {
+        return mokoContencionAuditoriaRepository.findTopByFocoIdOrderByCreatedAtDesc(focoId)
+                .<ResponseEntity<Map<String, Object>>>map(auditoria -> {
+                    Map<String, Object> response = new HashMap<>();
+                    response.put("success", true);
+                    response.put("auditoria", auditoria);
+                    return ResponseEntity.ok(response);
+                })
+                .orElseGet(() -> {
+                    Map<String, Object> response = new HashMap<>();
+                    response.put("success", false);
+                    response.put("message", "No existe auditoría de contención para el foco");
+                    return ResponseEntity.status(HttpStatus.NOT_FOUND).body(response);
+                });
+    }
+
+    private MokoContencionAuditoria guardarAuditoriaContencion(
+            Long focoId,
+            Integer numeroFoco,
+            Map<String, Object> payload) throws JsonProcessingException {
+        MokoContencionAuditoria auditoria = mokoContencionAuditoriaRepository
+                .findTopByFocoIdOrderByCreatedAtDesc(focoId)
+                .orElseGet(MokoContencionAuditoria::new);
+
+        auditoria.setFocoId(focoId);
+        auditoria.setNumeroFoco(numeroFoco);
+        auditoria.setClienteId(toLong(payload.get("clienteId")));
+
+        Object auditoriaRaw = payload.get("auditoria");
+        if (auditoriaRaw instanceof Map<?, ?> auditoriaMapRaw) {
+            @SuppressWarnings("unchecked")
+            Map<String, Object> auditoriaMap = (Map<String, Object>) auditoriaMapRaw;
+            auditoria.setObservacionesGenerales(toStringValue(auditoriaMap.get("observacionesGenerales")));
+            auditoria.setRecomendaciones(toStringValue(auditoriaMap.get("recomendaciones")));
+        } else {
+            auditoria.setObservacionesGenerales(null);
+            auditoria.setRecomendaciones(null);
+        }
+
+        auditoria.setPayloadJson(objectMapper.writeValueAsString(payload));
+        return mokoContencionAuditoriaRepository.save(auditoria);
+    }
+
+    private String toStringValue(Object value) {
+        return value == null ? null : value.toString();
+    }
+
+    private Long toLong(Object value) {
+        if (value == null) return null;
+        if (value instanceof Number number) return number.longValue();
+        try {
+            return Long.parseLong(value.toString());
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    private Long toLongOrDefault(Object value, Long fallback) {
+        Long parsed = toLong(value);
+        return parsed != null ? parsed : fallback;
+    }
+
+    private Integer toInteger(Object value) {
+        if (value == null) return null;
+        if (value instanceof Number number) return number.intValue();
+        try {
+            return Integer.parseInt(value.toString());
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    private Integer toIntegerOrDefault(Object value, Integer fallback) {
+        Integer parsed = toInteger(value);
+        return parsed != null ? parsed : fallback;
+    }
+
+    private Double toDouble(Object value) {
+        if (value == null) return null;
+        if (value instanceof Number number) return number.doubleValue();
+        try {
+            return Double.parseDouble(value.toString());
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    private Boolean toBoolean(Object value) {
+        if (value == null) return false;
+        if (value instanceof Boolean bool) return bool;
+        return Boolean.parseBoolean(value.toString());
+    }
+
+    private LocalDateTime toDateTime(Object value) {
+        if (value == null) return LocalDateTime.now();
+        if (value instanceof LocalDateTime dateTime) return dateTime;
+        try {
+            return LocalDateTime.parse(value.toString());
+        } catch (Exception e) {
+            return LocalDateTime.now();
         }
     }
 
@@ -635,38 +935,6 @@ public class RegistroMokoController {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(error);
         }
     }
-
-    @PostMapping("/api/seguimiento-moko/registrar")
-    public ResponseEntity<Map<String, Object>> registrarSeguimiento(@RequestBody Map<String, Object> body) {
-        try {
-            SeguimientoAplicacion seguimiento = new SeguimientoAplicacion();
-            if (body.containsKey("aplicacionId")) seguimiento.setAplicacionId(Long.valueOf(body.get("aplicacionId").toString()));
-            if (body.containsKey("numeroAplicacion")) seguimiento.setNumeroAplicacion(Integer.valueOf(body.get("numeroAplicacion").toString()));
-            if (body.containsKey("fechaProgramada")) seguimiento.setFechaProgramada(java.time.LocalDateTime.parse(body.get("fechaProgramada").toString()));
-            if (body.containsKey("estado")) seguimiento.setEstado(body.get("estado").toString());
-            if (body.containsKey("dosisAplicada")) seguimiento.setDosisAplicada(body.get("dosisAplicada").toString());
-            if (body.containsKey("lote")) seguimiento.setLote(body.get("lote").toString());
-            if (body.containsKey("observaciones")) seguimiento.setObservaciones(body.get("observaciones").toString());
-            seguimiento.setFechaCreacion(java.time.LocalDateTime.now());
-
-            SeguimientoAplicacion saved = seguimientoService.saveSeguimiento(seguimiento);
-
-            Map<String, Object> response = new HashMap<>();
-            response.put("success", true);
-            response.put("message", "Seguimiento guardado correctamente");
-            response.put("id", saved.getId());
-            return ResponseEntity.status(HttpStatus.CREATED).body(response);
-        } catch (Exception e) {
-            Map<String, Object> error = new HashMap<>();
-            error.put("success", false);
-            error.put("error", "Error al guardar seguimiento: " + e.getMessage());
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(error);
-        }
-    }
-
-
-
-
 
     private String guardarFotoEvidencia(MultipartFile foto, Long seguimientoId) throws IOException {
         // Crear directorio si no existe

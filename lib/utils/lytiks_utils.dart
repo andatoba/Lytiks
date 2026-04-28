@@ -3,7 +3,8 @@ import 'package:flutter/material.dart';
 /// Utilidades comunes para la aplicación Lytiks
 class LytiksUtils {
   /// Colores del tema de la aplicación
-  static const Color primaryColor = Color(0xFF004B63);
+  static const Color primaryColor = Color(0xFF00903E);
+  static const Color accentColor = Color(0xFFFFDF00);
   static const Color backgroundColor = Color(0xFFF5F5F5);
   static const Color successColor = Colors.green;
   static const Color warningColor = Colors.orange;
@@ -80,7 +81,7 @@ class LytiksUtils {
     gradient: LinearGradient(
       begin: Alignment.topLeft,
       end: Alignment.bottomRight,
-      colors: [primaryColor.withOpacity(0.1), Colors.blue.withOpacity(0.05)],
+      colors: [primaryColor.withOpacity(0.1), accentColor.withOpacity(0.12)],
     ),
     borderRadius: BorderRadius.circular(12),
     border: Border.all(color: primaryColor.withOpacity(0.2)),

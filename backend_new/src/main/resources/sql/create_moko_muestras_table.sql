@@ -1,0 +1,21 @@
+CREATE TABLE IF NOT EXISTS moko_muestra (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    cliente_id BIGINT NOT NULL,
+    hacienda_id BIGINT NULL,
+    lote_id BIGINT NULL,
+    lote VARCHAR(255) NOT NULL,
+    tipo_muestra VARCHAR(30) NOT NULL,
+    muestra_numero INT NOT NULL,
+    codigo VARCHAR(120) NOT NULL,
+    descripcion TEXT NULL,
+    foto_path VARCHAR(500) NULL,
+    resultado_laboratorio TEXT NULL,
+    documento_laboratorio_path VARCHAR(500) NULL,
+    documento_laboratorio_nombre VARCHAR(255) NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    KEY idx_moko_muestra_cliente (cliente_id),
+    KEY idx_moko_muestra_lote (lote),
+    KEY idx_moko_muestra_tipo (tipo_muestra),
+    KEY idx_moko_muestra_codigo (codigo)
+);

@@ -1,8 +1,16 @@
-import 'package:flutter/material.dart';
+import 'dart:async';
 import 'dart:convert';
+import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
+import 'package:geolocator/geolocator.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import '../helpers/client_location_helper.dart';
 import '../services/client_service.dart';
+import '../services/auth_service.dart';
+import '../services/hacienda_service.dart';
+import '../services/lote_service.dart';
 import '../services/sigatoka_evaluacion_service.dart';
+import '../utils/sigatoka_date_util.dart';
 import 'resumen_sigatoka_screen.dart';
 
 // Estructura de datos para una muestra
@@ -49,11 +57,25 @@ class SigatokaAuditScreen extends StatefulWidget {
   State<SigatokaAuditScreen> createState() => _SigatokaAuditScreenState();
 }
 
-class _SigatokaAuditScreenState extends State<SigatokaAuditScreen> {
+class _SigatokaAuditScreenState extends State<SigatokaAuditScreen>
+    with WidgetsBindingObserver {
+  static const String _draftKey = 'sigatoka_audit_draft';
   // Cliente seleccionado
   Map<String, dynamic>? _selectedClient;
-  final TextEditingController _cedulaController = TextEditingController();
+  final TextEditingController _nombreController = TextEditingController();
+  final FocusNode _nombreFocusNode = FocusNode();
+  List<Map<String, dynamic>> _clientSuggestions = [];
+  Timer? _searchDebounce;
+  String _lastQuery = '';
   final ClientService _clientService = ClientService();
+  final AuthService _authService = AuthService();
+  final HaciendaService _haciendaService = HaciendaService();
+  final LoteService _loteService = LoteService();
+  List<Map<String, dynamic>> _haciendas = [];
+  List<Map<String, dynamic>> _lotes = [];
+  int? _selectedHaciendaId;
+  int? _selectedLoteId;
+  bool _isLoadingClientLocations = false;
 
   // 1. Encabezado
   final TextEditingController haciendaController = TextEditingController();
@@ -65,11 +87,11 @@ class _SigatokaAuditScreenState extends State<SigatokaAuditScreen> {
   // 2. Controladores para agregar muestras
   final TextEditingController muestraNumController = TextEditingController();
   final TextEditingController loteCodigoController = TextEditingController();
-  final TextEditingController plantasMuestreadasController = TextEditingController();
   final TextEditingController grado3eraController = TextEditingController();
   final TextEditingController grado4taController = TextEditingController();
   final TextEditingController grado5taController = TextEditingController();
-  final TextEditingController totalHojas3eraController = TextEditingController();
+  final TextEditingController totalHojas3eraController =
+      TextEditingController();
   final TextEditingController totalHojas4taController = TextEditingController();
   final TextEditingController totalHojas5taController = TextEditingController();
   final TextEditingController hvle0wController = TextEditingController();
@@ -89,16 +111,208 @@ class _SigatokaAuditScreenState extends State<SigatokaAuditScreen> {
   Map<String, dynamic>? stoverReal;
   bool isLoading = false;
   int? evaluacionId;
-  
+
   // Lista de muestras de la sesión actual (en memoria)
   List<Map<String, dynamic>> muestrasSesion = [];
+  final List<int> _muestraOptions =
+      List<int>.generate(100, (index) => index + 1);
+  static const String _defaultInfectionGrade = '-';
+  static const List<String> _infectionGradeOptions = [
+    _defaultInfectionGrade,
+    '1a',
+    '1b',
+    '1c',
+    '2a',
+    '2b',
+    '2c',
+    '3a',
+    '3b',
+    '3c',
+  ];
+
+  // Coordenadas GPS del lote
+  double? _loteLatitud;
+  double? _loteLongitud;
+  bool _obteniendoUbicacion = false;
+
+  // Modo cliente: bloquea búsqueda de cliente y seguimiento de ubicación
+  bool _isClienteMode = false;
+
+  // Key para forzar reconstrucción de dropdowns después de limpiar
+  int _dropdownResetKey = 0;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     if (widget.clientData != null) {
       _selectedClient = widget.clientData;
+      _nombreController.text = _formatClientName(widget.clientData!);
+      haciendaController.text = _formatFincaName(widget.clientData!);
+      _clientService.saveSelectedClient(widget.clientData!);
+      _selectClient(widget.clientData!, persistSelection: true);
+
+      // Verificar si es modo cliente (usuario con rol CLIENTE)
+      _isClienteMode = widget.clientData!['isCliente'] == true;
+    } else {
+      _loadStoredClient();
     }
+    if (muestraNumController.text.trim().isEmpty) {
+      muestraNumController.text = '1';
+    }
+    _resetInfectionGrades();
+    _initializeDefaultDate();
+    _prefillEvaluador();
+    _restoreDraft();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.inactive ||
+        state == AppLifecycleState.paused ||
+        state == AppLifecycleState.detached) {
+      _saveDraft();
+    }
+  }
+
+  /// Inicializa la fecha actual y calcula automáticamente semana epidemiológica y período
+  void _initializeDefaultDate() {
+    final now = DateTime.now();
+    fechaController.text =
+        '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
+    _applyDateDerivedFields(now);
+  }
+
+  /// Calcula y aplica la semana epidemiológica y período basado en una fecha
+  void _applyDateDerivedFields(DateTime date) {
+    final semanaISO = SigatokaDateUtil.getSemanaEpidemiologicaISO(date);
+    semanaController.text = semanaISO.toString();
+
+    final periodo = SigatokaDateUtil.getPeriodoSemanaDelMes(date);
+    periodoController.text = periodo;
+  }
+
+  Future<void> _loadStoredClient() async {
+    final stored = await _clientService.getSelectedClient();
+    if (!mounted || stored == null) {
+      return;
+    }
+    await _selectClient(stored, persistSelection: false);
+  }
+
+  Future<void> _saveDraft() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final draft = {
+        'selectedClient': _selectedClient,
+        'nombre': _nombreController.text.trim(),
+        'hacienda': haciendaController.text.trim(),
+        'selectedHaciendaId': _selectedHaciendaId,
+        'fecha': fechaController.text.trim(),
+        'semana': semanaController.text.trim(),
+        'periodo': periodoController.text.trim(),
+        'evaluador': evaluadorController.text.trim(),
+        'muestraNumero': muestraNumController.text.trim(),
+        'loteCodigo': loteCodigoController.text.trim(),
+        'selectedLoteId': _selectedLoteId,
+        'grado3era': grado3eraController.text.trim(),
+        'grado4ta': grado4taController.text.trim(),
+        'grado5ta': grado5taController.text.trim(),
+        'totalHojas3era': totalHojas3eraController.text.trim(),
+        'totalHojas4ta': totalHojas4taController.text.trim(),
+        'totalHojas5ta': totalHojas5taController.text.trim(),
+        'hvle0w': hvle0wController.text.trim(),
+        'hvlq0w': hvlq0wController.text.trim(),
+        'hvlq5_0w': hvlq5_0wController.text.trim(),
+        'th0w': th0wController.text.trim(),
+        'hvle10w': hvle10wController.text.trim(),
+        'hvlq10w': hvlq10wController.text.trim(),
+        'hvlq5_10w': hvlq5_10wController.text.trim(),
+        'th10w': th10wController.text.trim(),
+        'evaluacionId': evaluacionId,
+        'muestrasSesion': muestrasSesion,
+        'loteLatitud': _loteLatitud,
+        'loteLongitud': _loteLongitud,
+        'isClienteMode': _isClienteMode,
+        'dropdownResetKey': _dropdownResetKey,
+      };
+      await prefs.setString(_draftKey, jsonEncode(draft));
+    } catch (_) {}
+  }
+
+  Future<void> _restoreDraft() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final raw = prefs.getString(_draftKey);
+      if (raw == null || raw.isEmpty || !mounted) {
+        return;
+      }
+
+      final draft = jsonDecode(raw) as Map<String, dynamic>;
+      setState(() {
+        final selectedClientRaw = draft['selectedClient'];
+        if (selectedClientRaw is Map) {
+          _selectedClient = Map<String, dynamic>.from(selectedClientRaw);
+        }
+        _nombreController.text =
+            draft['nombre']?.toString() ?? _nombreController.text;
+        haciendaController.text =
+            draft['hacienda']?.toString() ?? haciendaController.text;
+        _selectedHaciendaId = draft['selectedHaciendaId'] as int?;
+        fechaController.text =
+            draft['fecha']?.toString() ?? fechaController.text;
+        semanaController.text =
+            draft['semana']?.toString() ?? semanaController.text;
+        periodoController.text =
+            draft['periodo']?.toString() ?? periodoController.text;
+        evaluadorController.text =
+            draft['evaluador']?.toString() ?? evaluadorController.text;
+        muestraNumController.text =
+            draft['muestraNumero']?.toString().isNotEmpty == true
+                ? draft['muestraNumero'].toString()
+                : muestraNumController.text;
+        loteCodigoController.text = draft['loteCodigo']?.toString() ?? '';
+        _selectedLoteId = draft['selectedLoteId'] as int?;
+        grado3eraController.text =
+            draft['grado3era']?.toString() ?? grado3eraController.text;
+        grado4taController.text =
+            draft['grado4ta']?.toString() ?? grado4taController.text;
+        grado5taController.text =
+            draft['grado5ta']?.toString() ?? grado5taController.text;
+        totalHojas3eraController.text =
+            draft['totalHojas3era']?.toString() ?? '';
+        totalHojas4taController.text = draft['totalHojas4ta']?.toString() ?? '';
+        totalHojas5taController.text = draft['totalHojas5ta']?.toString() ?? '';
+        hvle0wController.text = draft['hvle0w']?.toString() ?? '';
+        hvlq0wController.text = draft['hvlq0w']?.toString() ?? '';
+        hvlq5_0wController.text = draft['hvlq5_0w']?.toString() ?? '';
+        th0wController.text = draft['th0w']?.toString() ?? '';
+        hvle10wController.text = draft['hvle10w']?.toString() ?? '';
+        hvlq10wController.text = draft['hvlq10w']?.toString() ?? '';
+        hvlq5_10wController.text = draft['hvlq5_10w']?.toString() ?? '';
+        th10wController.text = draft['th10w']?.toString() ?? '';
+        evaluacionId = draft['evaluacionId'] as int?;
+        final muestrasRaw = draft['muestrasSesion'];
+        if (muestrasRaw is List) {
+          muestrasSesion = muestrasRaw
+              .whereType<Map>()
+              .map((item) => Map<String, dynamic>.from(item))
+              .toList();
+        }
+        _loteLatitud = (draft['loteLatitud'] as num?)?.toDouble();
+        _loteLongitud = (draft['loteLongitud'] as num?)?.toDouble();
+        _isClienteMode = draft['isClienteMode'] as bool? ?? _isClienteMode;
+        _dropdownResetKey =
+            draft['dropdownResetKey'] as int? ?? _dropdownResetKey;
+      });
+      if (_selectedClient != null) {
+        await _loadHaciendasByCliente(
+          _resolveClientId(_selectedClient!),
+          preferredHaciendaId: _selectedHaciendaId,
+          preferredLoteId: _selectedLoteId,
+        );
+      }
+    } catch (_) {}
   }
 
   Future<void> _fetchReporte(int evaluacionId) async {
@@ -108,34 +322,35 @@ class _SigatokaAuditScreenState extends State<SigatokaAuditScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Evaluación creada. Ahora puede agregar muestras.'),
-          backgroundColor: Colors.blue,
+          backgroundColor: const Color(0xFF00903E),
           duration: Duration(seconds: 3),
         ),
       );
       setState(() => isLoading = false);
       return;
     }
-    
+
     setState(() => isLoading = true);
-    
+
     try {
       final service = SigatokaEvaluacionService();
-      
+
       // Enviar todas las muestras de la sesión al backend
       print('📤 Enviando ${muestrasSesion.length} muestras al backend...');
-      
+
       for (var muestra in muestrasSesion) {
         final result = await service.agregarMuestraCompleta(
           evaluacionId: evaluacionId,
           lote: muestra['lote'],
           numeroMuestra: muestra['numeroMuestra'],
+          loteLatitud: muestra['loteLatitud'],
+          loteLongitud: muestra['loteLongitud'],
           hoja3era: muestra['hoja3era'],
           hoja4ta: muestra['hoja4ta'],
           hoja5ta: muestra['hoja5ta'],
           totalHojas3era: muestra['totalHojas3era'],
           totalHojas4ta: muestra['totalHojas4ta'],
           totalHojas5ta: muestra['totalHojas5ta'],
-          plantasMuestreadas: muestra['plantasMuestreadas'] ?? 0,
           plantasConLesiones: 0,
           totalLesiones: 0,
           plantas3erEstadio: 0,
@@ -149,24 +364,25 @@ class _SigatokaAuditScreenState extends State<SigatokaAuditScreen> {
           hvlq5_10w: muestra['hvlq5_10w'],
           th10w: muestra['th10w'],
         );
-        
+
         if (!result['success']) {
-          throw Exception('Error al guardar muestra #${muestra['numeroMuestra']}: ${result['message']}');
+          throw Exception(
+              'Error al guardar muestra #${muestra['numeroMuestra']}: ${result['message']}');
         }
       }
-      
+
       print('✅ Todas las muestras guardadas en el backend');
-      
+
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('✅ ${muestrasSesion.length} muestras guardadas exitosamente'),
+          content: Text(
+              '✅ ${muestrasSesion.length} muestras guardadas exitosamente'),
           backgroundColor: Colors.green,
           duration: const Duration(seconds: 3),
         ),
       );
-      
+
       setState(() => isLoading = false);
-      
     } catch (e) {
       print('❌ Error al guardar muestras: $e');
       setState(() => isLoading = false);
@@ -185,7 +401,8 @@ class _SigatokaAuditScreenState extends State<SigatokaAuditScreen> {
     if (muestrasSesion.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Debe agregar al menos una muestra antes de calcular el resumen'),
+          content: Text(
+              'Debe agregar al menos una muestra antes de calcular el resumen'),
           backgroundColor: Colors.orange,
           duration: Duration(seconds: 3),
         ),
@@ -216,12 +433,13 @@ class _SigatokaAuditScreenState extends State<SigatokaAuditScreen> {
       return;
     }
 
-    if (haciendaController.text.isEmpty || 
-        fechaController.text.isEmpty || 
+    if (haciendaController.text.isEmpty ||
+        fechaController.text.isEmpty ||
         evaluadorController.text.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Complete los campos obligatorios (Hacienda, Fecha, Evaluador)'),
+          content: Text(
+              'Complete los campos obligatorios (Hacienda, Fecha, Evaluador)'),
           backgroundColor: Colors.orange,
         ),
       );
@@ -239,20 +457,21 @@ class _SigatokaAuditScreenState extends State<SigatokaAuditScreen> {
           'clienteId': _selectedClient!['id'],
           'hacienda': haciendaController.text,
           'fecha': fechaController.text,
-          'semanaEpidemiologica': semanaController.text.isNotEmpty 
-            ? int.tryParse(semanaController.text) 
-            : null,
-          'periodo': periodoController.text.isNotEmpty ? periodoController.text : null,
+          'semanaEpidemiologica': semanaController.text.isNotEmpty
+              ? int.tryParse(semanaController.text)
+              : null,
+          'periodo':
+              periodoController.text.isNotEmpty ? periodoController.text : null,
           'evaluador': evaluadorController.text,
         }),
       );
-      
+
       print('Response status: ${response.statusCode}');
       print('Response body: ${response.body}');
-      
+
       if (response.statusCode == 200 || response.statusCode == 201) {
         final data = jsonDecode(response.body);
-        
+
         // El backend nuevo devuelve la estructura completa
         if (data['evaluacion'] != null && data['evaluacion']['id'] != null) {
           evaluacionId = data['evaluacion']['id'];
@@ -261,7 +480,7 @@ class _SigatokaAuditScreenState extends State<SigatokaAuditScreen> {
         } else if (data['evaluacionId'] != null) {
           evaluacionId = data['evaluacionId'];
         }
-        
+
         if (evaluacionId != null) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
@@ -269,7 +488,8 @@ class _SigatokaAuditScreenState extends State<SigatokaAuditScreen> {
               backgroundColor: Colors.green,
             ),
           );
-          
+          _saveDraft();
+
           // Cargar reporte si hay muestras
           await _fetchReporte(evaluacionId!);
         } else {
@@ -280,7 +500,8 @@ class _SigatokaAuditScreenState extends State<SigatokaAuditScreen> {
         String errorMessage = 'Error ${response.statusCode}';
         try {
           final errorData = jsonDecode(response.body);
-          errorMessage += ': ${errorData['message'] ?? errorData['error'] ?? response.body}';
+          errorMessage +=
+              ': ${errorData['message'] ?? errorData['error'] ?? response.body}';
         } catch (e) {
           errorMessage += ': ${response.body}';
         }
@@ -300,6 +521,72 @@ class _SigatokaAuditScreenState extends State<SigatokaAuditScreen> {
     }
   }
 
+  Future<void> _obtenerUbicacionLote() async {
+    setState(() {
+      _obteniendoUbicacion = true;
+    });
+
+    try {
+      // Verificar permisos de ubicación
+      LocationPermission permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+        if (permission == LocationPermission.denied) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Permiso de ubicación denegado'),
+              backgroundColor: Colors.red,
+            ),
+          );
+          return;
+        }
+      }
+
+      if (permission == LocationPermission.deniedForever) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+                'Los permisos de ubicación están permanentemente denegados'),
+            backgroundColor: Colors.red,
+          ),
+        );
+        return;
+      }
+
+      // Obtener posición actual
+      Position position = await Geolocator.getCurrentPosition(
+        desiredAccuracy: LocationAccuracy.high,
+      );
+
+      setState(() {
+        _loteLatitud = position.latitude;
+        _loteLongitud = position.longitude;
+      });
+      _saveDraft();
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Ubicación capturada exitosamente'),
+            backgroundColor: Colors.green,
+            duration: Duration(seconds: 2),
+          ),
+        );
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error al obtener ubicación: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    } finally {
+      setState(() {
+        _obteniendoUbicacion = false;
+      });
+    }
+  }
+
   void _onAgregarMuestra() async {
     if (evaluacionId == null) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -313,11 +600,10 @@ class _SigatokaAuditScreenState extends State<SigatokaAuditScreen> {
 
     // Validar campos requeridos
     if (muestraNumController.text.isEmpty ||
-        loteCodigoController.text.isEmpty ||
-        plantasMuestreadasController.text.isEmpty) {
+        loteCodigoController.text.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Debe completar Muestra #, Lote # y Plantas Muestreadas'),
+          content: Text('Debe completar Muestra # y Lote #'),
           backgroundColor: Colors.orange,
         ),
       );
@@ -325,13 +611,17 @@ class _SigatokaAuditScreenState extends State<SigatokaAuditScreen> {
     }
 
     // Guardar muestra en memoria (sesión actual)
+    final hoja3era = _normalizeInfectionGrade(grado3eraController.text);
+    final hoja4ta = _normalizeInfectionGrade(grado4taController.text);
+    final hoja5ta = _normalizeInfectionGrade(grado5taController.text);
     final muestraData = {
       'numeroMuestra': int.tryParse(muestraNumController.text) ?? 1,
       'lote': loteCodigoController.text,
-      'plantasMuestreadas': int.tryParse(plantasMuestreadasController.text) ?? 0,
-      'hoja3era': grado3eraController.text.isEmpty ? null : grado3eraController.text,
-      'hoja4ta': grado4taController.text.isEmpty ? null : grado4taController.text,
-      'hoja5ta': grado5taController.text.isEmpty ? null : grado5taController.text,
+      'loteLatitud': _loteLatitud,
+      'loteLongitud': _loteLongitud,
+      'hoja3era': hoja3era,
+      'hoja4ta': hoja4ta,
+      'hoja5ta': hoja5ta,
       'totalHojas3era': int.tryParse(totalHojas3eraController.text) ?? 0,
       'totalHojas4ta': int.tryParse(totalHojas4taController.text) ?? 0,
       'totalHojas5ta': int.tryParse(totalHojas5taController.text) ?? 0,
@@ -345,42 +635,56 @@ class _SigatokaAuditScreenState extends State<SigatokaAuditScreen> {
       'th10w': double.tryParse(th10wController.text) ?? 0.0,
     };
 
+    int nextMuestra = (int.tryParse(muestraNumController.text) ?? 0) + 1;
+    if (nextMuestra > _muestraOptions.last) {
+      nextMuestra = _muestraOptions.last;
+    }
+
     setState(() {
       muestrasSesion.add(muestraData);
+      muestraNumController.text = nextMuestra.toString();
+
+      // Limpiar completamente todos los campos de la muestra
+      _resetInfectionGrades();
+      totalHojas3eraController.text = '';
+      totalHojas4taController.text = '';
+      totalHojas5taController.text = '';
+      hvle0wController.text = '';
+      hvlq0wController.text = '';
+      hvlq5_0wController.text = '';
+      th0wController.text = '';
+      hvle10wController.text = '';
+      hvlq10wController.text = '';
+      hvlq5_10wController.text = '';
+      th10wController.text = '';
+
+      // Resetear coordenadas GPS para la siguiente muestra
+      _loteLatitud = null;
+      _loteLongitud = null;
+
+      // Incrementar key para forzar reconstrucción de dropdowns
+      _dropdownResetKey++;
     });
+    _saveDraft();
 
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text('✅ Muestra #${muestraData['numeroMuestra']} agregada (${muestrasSesion.length} en sesión)'),
+        content: Text(
+            '✅ Muestra #${muestraData['numeroMuestra']} agregada (${muestrasSesion.length} en sesión)'),
         backgroundColor: Colors.green,
         duration: const Duration(seconds: 2),
       ),
     );
 
-    // Limpiar solo los campos de la muestra, mantener lote para siguiente
-    int nextMuestra = (int.tryParse(muestraNumController.text) ?? 0) + 1;
-    muestraNumController.text = nextMuestra.toString();
     // NO limpiar lote para facilitar ingreso múltiple
-    plantasMuestreadasController.clear();
-    grado3eraController.clear();
-    grado4taController.clear();
-    grado5taController.clear();
-    totalHojas3eraController.clear();
-    totalHojas4taController.clear();
-    totalHojas5taController.clear();
-    hvle0wController.clear();
-    hvlq0wController.clear();
-    hvlq5_0wController.clear();
-    th0wController.clear();
-    hvle10wController.clear();
-    hvlq10wController.clear();
-    hvlq5_10wController.clear();
-    th10wController.clear();
   }
 
   @override
   void dispose() {
-    _cedulaController.dispose();
+    WidgetsBinding.instance.removeObserver(this);
+    _searchDebounce?.cancel();
+    _nombreController.dispose();
+    _nombreFocusNode.dispose();
     haciendaController.dispose();
     fechaController.dispose();
     semanaController.dispose();
@@ -388,7 +692,6 @@ class _SigatokaAuditScreenState extends State<SigatokaAuditScreen> {
     evaluadorController.dispose();
     muestraNumController.dispose();
     loteCodigoController.dispose();
-    plantasMuestreadasController.dispose();
     grado3eraController.dispose();
     grado4taController.dispose();
     grado5taController.dispose();
@@ -411,7 +714,7 @@ class _SigatokaAuditScreenState extends State<SigatokaAuditScreen> {
     return Scaffold(
       backgroundColor: Colors.grey[50],
       appBar: AppBar(
-        backgroundColor: const Color(0xFF004B63),
+        backgroundColor: const Color(0xFF00903E),
         title: const Text(
           'Evaluación Sigatoka',
           style: TextStyle(color: Colors.white),
@@ -430,10 +733,37 @@ class _SigatokaAuditScreenState extends State<SigatokaAuditScreen> {
                 SizedBox(height: 16),
                 _buildClientSearchSection(),
                 SizedBox(height: 24),
-                _buildEncabezadoSection(),
-                SizedBox(height: 24),
+                if (_selectedClient == null) ...[
+                  _buildClientRequiredNotice(),
+                ] else ...[
+                  _buildEncabezadoSection(),
+                  SizedBox(height: 24),
+                ],
               ],
             ),
+    );
+  }
+
+  Widget _buildClientRequiredNotice() {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.amber.shade50,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.amber.shade200),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.warning_amber_rounded, color: Colors.amber.shade700),
+          const SizedBox(width: 12),
+          const Expanded(
+            child: Text(
+              'Seleccione un cliente para continuar con la evaluación.',
+              style: TextStyle(fontWeight: FontWeight.w600),
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -535,19 +865,105 @@ class _SigatokaAuditScreenState extends State<SigatokaAuditScreen> {
           Row(
             children: [
               Expanded(
-                child: TextField(
-                  controller: _cedulaController,
-                  keyboardType: TextInputType.number,
-                  decoration: InputDecoration(
-                    labelText: 'Cédula del Cliente',
-                    hintText: 'Ingrese la cédula',
-                    prefixIcon: const Icon(Icons.badge),
-                    border: const OutlineInputBorder(),
-                    suffixIcon: IconButton(
-                      icon: const Icon(Icons.search),
-                      onPressed: _searchClientByCedula,
-                    ),
-                  ),
+                child: RawAutocomplete<Map<String, dynamic>>(
+                  textEditingController: _nombreController,
+                  focusNode: _nombreFocusNode,
+                  displayStringForOption: _formatClientName,
+                  optionsBuilder: (TextEditingValue value) {
+                    final query = value.text.trim();
+                    if (query.length < 2 || query != _lastQuery) {
+                      return const Iterable<Map<String, dynamic>>.empty();
+                    }
+                    return _clientSuggestions;
+                  },
+                  onSelected: (client) {
+                    if (!mounted) {
+                      return;
+                    }
+                    _selectClient(client, persistSelection: true);
+                    _saveDraft();
+                  },
+                  fieldViewBuilder: (
+                    BuildContext context,
+                    TextEditingController controller,
+                    FocusNode focusNode,
+                    VoidCallback onFieldSubmitted,
+                  ) {
+                    return TextField(
+                      controller: controller,
+                      focusNode: focusNode,
+                      keyboardType: TextInputType.text,
+                      onChanged: _isClienteMode ? null : _onNameChanged,
+                      readOnly: _isClienteMode,
+                      enabled: !_isClienteMode,
+                      decoration: InputDecoration(
+                        labelText: 'Nombre y Apellido del Cliente',
+                        hintText: _isClienteMode
+                            ? 'Cliente autenticado'
+                            : 'Ingrese nombre y apellido',
+                        prefixIcon: Icon(
+                          Icons.person,
+                          color: _isClienteMode ? Colors.grey : null,
+                        ),
+                        border: const OutlineInputBorder(),
+                        filled: _isClienteMode,
+                        fillColor: _isClienteMode
+                            ? Colors.grey.withOpacity(0.1)
+                            : null,
+                        suffixIcon: _isClienteMode
+                            ? const Icon(Icons.lock, color: Colors.grey)
+                            : IconButton(
+                                icon: const Icon(Icons.search),
+                                onPressed: _triggerSearch,
+                              ),
+                      ),
+                    );
+                  },
+                  optionsViewBuilder: (
+                    BuildContext context,
+                    AutocompleteOnSelected<Map<String, dynamic>> onSelected,
+                    Iterable<Map<String, dynamic>> options,
+                  ) {
+                    final optionList = options.toList();
+                    return Align(
+                      alignment: Alignment.topLeft,
+                      child: Material(
+                        elevation: 4.0,
+                        child: ConstrainedBox(
+                          constraints: const BoxConstraints(maxHeight: 240),
+                          child: ListView.separated(
+                            padding: EdgeInsets.zero,
+                            shrinkWrap: true,
+                            itemCount: optionList.length,
+                            separatorBuilder: (_, __) =>
+                                const Divider(height: 1),
+                            itemBuilder: (context, index) {
+                              final client = optionList[index];
+                              final nombre = _formatClientName(client);
+                              final cedula = client['cedula']?.toString() ?? '';
+                              final finca = _formatFincaName(client);
+                              final subtitleParts = <String>[];
+                              if (cedula.isNotEmpty) {
+                                subtitleParts.add('Cédula: $cedula');
+                              }
+                              if (finca.isNotEmpty) {
+                                subtitleParts.add('Finca: $finca');
+                              }
+                              return ListTile(
+                                title: Text(nombre.isEmpty
+                                    ? 'Cliente sin nombre'
+                                    : nombre),
+                                subtitle: subtitleParts.isEmpty
+                                    ? null
+                                    : Text(subtitleParts.join(' | ')),
+                                onTap: () => onSelected(client),
+                              );
+                            },
+                          ),
+                        ),
+                      ),
+                    );
+                  },
                 ),
               ),
             ],
@@ -600,65 +1016,395 @@ class _SigatokaAuditScreenState extends State<SigatokaAuditScreen> {
     );
   }
 
-  Future<void> _searchClientByCedula() async {
-    final cedula = _cedulaController.text.trim();
-    if (cedula.isEmpty) {
+  String _formatClientName(Map<String, dynamic> client) {
+    return ClientLocationHelper.formatClientName(client);
+  }
+
+  String _formatFincaName(Map<String, dynamic> client) {
+    return ClientLocationHelper.formatFincaName(client);
+  }
+
+  int? _toInt(dynamic value) {
+    return ClientLocationHelper.toInt(value);
+  }
+
+  int? _resolveClientId(Map<String, dynamic> client) {
+    return ClientLocationHelper.resolveClienteId(client);
+  }
+
+  String _formatHaciendaName(Map<String, dynamic> hacienda) {
+    return ClientLocationHelper.formatHaciendaName(hacienda);
+  }
+
+  String _formatLoteName(Map<String, dynamic> lote) {
+    return ClientLocationHelper.formatLoteName(
+      lote,
+      includeCodeWhenAvailable: true,
+    );
+  }
+
+  int? _resolveInitialHaciendaId({int? preferredHaciendaId}) {
+    return ClientLocationHelper.resolveInitialHaciendaId(
+      haciendas: _haciendas,
+      currentHaciendaText: haciendaController.text,
+      preferredHaciendaId: preferredHaciendaId,
+    );
+  }
+
+  int? _resolveInitialLoteId({int? preferredLoteId}) {
+    return ClientLocationHelper.resolveInitialLoteId(
+      lotes: _lotes,
+      currentLoteText: loteCodigoController.text,
+      preferredLoteId: preferredLoteId,
+      includeCodeWhenAvailable: true,
+    );
+  }
+
+  Future<void> _selectClient(
+    Map<String, dynamic> client, {
+    required bool persistSelection,
+    int? preferredHaciendaId,
+    int? preferredLoteId,
+  }) async {
+    if (!mounted) {
+      return;
+    }
+
+    setState(() {
+      _selectedClient = client;
+      _clientSuggestions = [];
+      _haciendas = [];
+      _lotes = [];
+      _selectedHaciendaId = null;
+      _selectedLoteId = null;
+      haciendaController.text = _formatFincaName(client);
+      loteCodigoController.clear();
+    });
+
+    _nombreController.text = _formatClientName(client);
+
+    if (persistSelection) {
+      await _clientService.saveSelectedClient(client);
+    }
+
+    final clientId = _resolveClientId(client);
+    if (clientId != null) {
+      await _loadHaciendasByCliente(
+        clientId,
+        preferredHaciendaId: preferredHaciendaId,
+        preferredLoteId: preferredLoteId,
+      );
+    }
+  }
+
+  Future<void> _loadHaciendasByCliente(
+    int? clienteId, {
+    int? preferredHaciendaId,
+    int? preferredLoteId,
+  }) async {
+    if (clienteId == null || !mounted) {
+      return;
+    }
+
+    setState(() {
+      _isLoadingClientLocations = true;
+    });
+
+    try {
+      final haciendas = await _haciendaService.getHaciendasByCliente(clienteId);
+      if (!mounted) {
+        return;
+      }
+
+      _haciendas = haciendas;
+      final selectedHaciendaId =
+          _resolveInitialHaciendaId(preferredHaciendaId: preferredHaciendaId);
+
+      setState(() {
+        _haciendas = haciendas;
+        _selectedHaciendaId = selectedHaciendaId;
+        _lotes = [];
+        _selectedLoteId = null;
+        haciendaController.text = selectedHaciendaId == null
+            ? ''
+            : (_haciendas
+                    .firstWhere((h) => _toInt(h['id']) == selectedHaciendaId)['nombre']
+                    ?.toString() ??
+                '');
+        loteCodigoController.clear();
+      });
+
+      if (selectedHaciendaId != null) {
+        await _loadLotesByHacienda(
+          selectedHaciendaId,
+          preferredLoteId: preferredLoteId,
+        );
+      }
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _haciendas = [];
+        _lotes = [];
+        _selectedHaciendaId = null;
+        _selectedLoteId = null;
+        haciendaController.clear();
+        loteCodigoController.clear();
+      });
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoadingClientLocations = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _loadLotesByHacienda(
+    int haciendaId, {
+    int? preferredLoteId,
+  }) async {
+    if (!mounted) {
+      return;
+    }
+
+    setState(() {
+      _isLoadingClientLocations = true;
+    });
+
+    try {
+      final lotes = await _loteService.getLotesByHacienda(haciendaId);
+      if (!mounted) {
+        return;
+      }
+
+      _lotes = lotes;
+      final selectedLoteId =
+          _resolveInitialLoteId(preferredLoteId: preferredLoteId);
+
+      String loteNombre = '';
+      for (final lote in lotes) {
+        if (_toInt(lote['id']) == selectedLoteId) {
+          loteNombre = lote['nombre']?.toString().trim() ??
+              lote['codigo']?.toString().trim() ??
+              '';
+          break;
+        }
+      }
+
+      setState(() {
+        _lotes = lotes;
+        _selectedLoteId = selectedLoteId;
+        loteCodigoController.text = loteNombre;
+      });
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _lotes = [];
+        _selectedLoteId = null;
+        loteCodigoController.clear();
+      });
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoadingClientLocations = false;
+        });
+      }
+    }
+  }
+
+  Widget _buildInfectionGradeDropdown({
+    required TextEditingController controller,
+    required String label,
+    required String hint,
+  }) {
+    final currentValue = controller.text.trim();
+    final selectedValue = _infectionGradeOptions.contains(currentValue)
+        ? currentValue
+        : _defaultInfectionGrade;
+    return DropdownButtonFormField<String>(
+      key: ValueKey(
+          '${label}_$_dropdownResetKey'), // Key para forzar reconstrucción
+      value: selectedValue,
+      isExpanded: true,
+      decoration: InputDecoration(
+        labelText: label,
+        hintText: hint,
+        border: const OutlineInputBorder(),
+      ),
+      items: _infectionGradeOptions
+          .map(
+            (option) => DropdownMenuItem<String>(
+              value: option,
+              child: Text(option),
+            ),
+          )
+          .toList(),
+      onChanged: (value) {
+        controller.text = value ?? '';
+      },
+    );
+  }
+
+  String? _normalizeInfectionGrade(String value) {
+    final trimmed = value.trim();
+    if (trimmed.isEmpty || trimmed == _defaultInfectionGrade) {
+      return null;
+    }
+    return trimmed;
+  }
+
+  void _resetInfectionGrades() {
+    grado3eraController.text = _defaultInfectionGrade;
+    grado4taController.text = _defaultInfectionGrade;
+    grado5taController.text = _defaultInfectionGrade;
+  }
+
+  Future<void> _prefillEvaluador() async {
+    if (evaluadorController.text.trim().isNotEmpty) {
+      return;
+    }
+
+    try {
+      final userData = await _authService.getUserData();
+      if (!mounted) {
+        return;
+      }
+      final dynamic rawUser = userData?['user'];
+      final Map<String, dynamic>? userMap = rawUser is Map
+          ? Map<String, dynamic>.from(rawUser)
+          : (userData is Map<String, dynamic> ? userData : null);
+      final username =
+          userMap?['username']?.toString() ?? userData?['username']?.toString();
+
+      Map<String, dynamic>? profile;
+      if (username != null && username.isNotEmpty) {
+        profile = await _authService.getProfile(username);
+      }
+      if (!mounted) {
+        return;
+      }
+
+      final firstName = profile?['firstName']?.toString() ??
+          userMap?['firstName']?.toString() ??
+          userMap?['nombre']?.toString() ??
+          userData?['firstName']?.toString();
+      final lastName = profile?['lastName']?.toString() ??
+          userMap?['lastName']?.toString() ??
+          userMap?['apellidos']?.toString() ??
+          userData?['lastName']?.toString();
+
+      final fullName = [
+        if (firstName != null && firstName.isNotEmpty) firstName,
+        if (lastName != null && lastName.isNotEmpty) lastName,
+      ].join(' ').trim();
+
+      if (evaluadorController.text.trim().isNotEmpty) {
+        return;
+      }
+
+      if (fullName.isNotEmpty) {
+        evaluadorController.text = fullName;
+      } else if (username != null && username.isNotEmpty) {
+        evaluadorController.text = username;
+      }
+    } catch (_) {
+      // Si falla, no bloquear la edición manual
+    }
+  }
+
+  void _onNameChanged(String value) {
+    final query = value.trim();
+    _searchDebounce?.cancel();
+    final queryChanged = query != _lastQuery;
+    _lastQuery = query;
+
+    if (_selectedClient != null) {
+      final selectedName = _formatClientName(_selectedClient!).toLowerCase();
+      if (selectedName != query.toLowerCase()) {
+        setState(() {
+          _selectedClient = null;
+          _haciendas = [];
+          _lotes = [];
+          _selectedHaciendaId = null;
+          _selectedLoteId = null;
+          haciendaController.clear();
+          loteCodigoController.clear();
+        });
+        _clientService.clearSelectedClient();
+      }
+    }
+
+    if (query.length < 2) {
+      if (_clientSuggestions.isNotEmpty) {
+        setState(() {
+          _clientSuggestions = [];
+        });
+      }
+      return;
+    }
+
+    if (queryChanged && _clientSuggestions.isNotEmpty) {
+      setState(() {
+        _clientSuggestions = [];
+      });
+    }
+
+    _searchDebounce = Timer(
+      const Duration(milliseconds: 350),
+      () => _fetchClientSuggestions(query),
+    );
+  }
+
+  Future<void> _fetchClientSuggestions(String query) async {
+    try {
+      final clients = await _clientService.searchClientsByName(query);
+      if (!mounted || query != _lastQuery) {
+        return;
+      }
+      setState(() {
+        _clientSuggestions = clients;
+      });
+    } catch (e) {
+      if (!mounted || query != _lastQuery) {
+        return;
+      }
+      setState(() {
+        _clientSuggestions = [];
+      });
+    }
+  }
+
+  Future<void> _triggerSearch() async {
+    final query = _nombreController.text.trim();
+    _lastQuery = query;
+    if (query.length < 2) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Ingrese una cédula para buscar.'),
+          content: Text('Ingrese al menos 2 letras para buscar'),
           backgroundColor: Colors.orange,
         ),
       );
       return;
     }
 
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => const AlertDialog(
-        content: Row(
-          children: [
-            CircularProgressIndicator(),
-            SizedBox(width: 16),
-            Text('Buscando cliente...'),
-          ],
-        ),
-      ),
-    );
-
-    try {
-      final client = await _clientService.searchClientByCedula(cedula);
-      Navigator.of(context).pop();
-
-      if (client != null) {
-        setState(() {
-          _selectedClient = client;
-        });
-
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Cliente encontrado y seleccionado.'),
-            backgroundColor: Colors.green,
-            duration: Duration(seconds: 2),
-          ),
-        );
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('No se encontró cliente con esa cédula.'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    } catch (e) {
-      Navigator.of(context).pop();
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Error al buscar cliente: $e'),
-          backgroundColor: Colors.red,
-        ),
-      );
+    await _fetchClientSuggestions(query);
+    if (!mounted) {
+      return;
     }
+
+    if (_clientSuggestions.length == 1) {
+      final client = _clientSuggestions.first;
+      await _selectClient(client, persistSelection: true);
+      _nombreFocusNode.unfocus();
+      _saveDraft();
+      return;
+    }
+
+    _nombreFocusNode.requestFocus();
   }
 
   // 1. Encabezado
@@ -678,7 +1424,8 @@ class _SigatokaAuditScreenState extends State<SigatokaAuditScreen> {
                     color: Colors.blue[50],
                     borderRadius: BorderRadius.circular(8),
                   ),
-                  child: Icon(Icons.description, color: Colors.blue[700], size: 28),
+                  child: Icon(Icons.description,
+                      color: Colors.blue[700], size: 28),
                 ),
                 const SizedBox(width: 12),
                 const Text(
@@ -692,19 +1439,64 @@ class _SigatokaAuditScreenState extends State<SigatokaAuditScreen> {
               ],
             ),
             const SizedBox(height: 20),
-            
+
             // HACIENDA
-            TextField(
-              controller: haciendaController,
-              decoration: const InputDecoration(
-                labelText: '🏡 Hacienda *',
-                hintText: 'Nombre de la finca o predio',
-                border: OutlineInputBorder(),
-                prefixIcon: Icon(Icons.home),
+            if (_haciendas.isNotEmpty)
+              DropdownButtonFormField<int>(
+                value: _haciendas.any(
+                  (hacienda) => _toInt(hacienda['id']) == _selectedHaciendaId,
+                )
+                    ? _selectedHaciendaId
+                    : null,
+                decoration: InputDecoration(
+                  labelText: '🏡 Hacienda *',
+                  hintText: _isLoadingClientLocations
+                      ? 'Cargando fincas...'
+                      : 'Seleccione finca',
+                  border: const OutlineInputBorder(),
+                  prefixIcon: const Icon(Icons.home),
+                ),
+                items: _haciendas
+                    .map(
+                      (hacienda) => DropdownMenuItem<int>(
+                        value: _toInt(hacienda['id']),
+                        child: Text(_formatHaciendaName(hacienda)),
+                      ),
+                    )
+                    .toList(),
+                onChanged: _isLoadingClientLocations
+                    ? null
+                    : (value) {
+                        setState(() {
+                          _selectedHaciendaId = value;
+                          _selectedLoteId = null;
+                          _lotes = [];
+                          loteCodigoController.clear();
+                          haciendaController.text = value == null
+                              ? ''
+                              : (_haciendas
+                                      .firstWhere((h) => _toInt(h['id']) == value)['nombre']
+                                      ?.toString() ??
+                                  '');
+                        });
+                        if (value != null) {
+                          _loadLotesByHacienda(value);
+                        }
+                      },
+              )
+            else
+              TextField(
+                controller: haciendaController,
+                readOnly: true,
+                decoration: const InputDecoration(
+                  labelText: '🏡 Hacienda *',
+                  hintText: 'Seleccione un cliente para cargar fincas',
+                  border: OutlineInputBorder(),
+                  prefixIcon: Icon(Icons.home),
+                ),
               ),
-            ),
             const SizedBox(height: 16),
-            
+
             // FECHA CON CALENDARIO VISUAL
             InkWell(
               onTap: () async {
@@ -733,7 +1525,9 @@ class _SigatokaAuditScreenState extends State<SigatokaAuditScreen> {
                 );
                 if (picked != null) {
                   setState(() {
-                    fechaController.text = '${picked.year}-${picked.month.toString().padLeft(2, '0')}-${picked.day.toString().padLeft(2, '0')}';
+                    fechaController.text =
+                        '${picked.year}-${picked.month.toString().padLeft(2, '0')}-${picked.day.toString().padLeft(2, '0')}';
+                    _applyDateDerivedFields(picked);
                   });
                 }
               },
@@ -768,13 +1562,17 @@ class _SigatokaAuditScreenState extends State<SigatokaAuditScreen> {
                             ),
                             const SizedBox(height: 4),
                             Text(
-                              fechaController.text.isEmpty 
-                                ? 'Toque para seleccionar fecha' 
-                                : fechaController.text,
+                              fechaController.text.isEmpty
+                                  ? 'Toque para seleccionar fecha'
+                                  : fechaController.text,
                               style: TextStyle(
                                 fontSize: 16,
-                                color: fechaController.text.isEmpty ? Colors.grey : Colors.black,
-                                fontWeight: fechaController.text.isEmpty ? FontWeight.normal : FontWeight.bold,
+                                color: fechaController.text.isEmpty
+                                    ? Colors.grey
+                                    : Colors.black,
+                                fontWeight: fechaController.text.isEmpty
+                                    ? FontWeight.normal
+                                    : FontWeight.bold,
                               ),
                             ),
                           ],
@@ -790,7 +1588,7 @@ class _SigatokaAuditScreenState extends State<SigatokaAuditScreen> {
               ),
             ),
             const SizedBox(height: 16),
-            
+
             // SEMANA Y PERÍODO
             Row(
               children: [
@@ -821,7 +1619,7 @@ class _SigatokaAuditScreenState extends State<SigatokaAuditScreen> {
               ],
             ),
             const SizedBox(height: 16),
-            
+
             // EVALUADOR
             TextField(
               controller: evaluadorController,
@@ -833,7 +1631,7 @@ class _SigatokaAuditScreenState extends State<SigatokaAuditScreen> {
               ),
             ),
             const SizedBox(height: 20),
-            
+
             // BOTÓN GUARDAR
             SizedBox(
               width: double.infinity,
@@ -843,14 +1641,15 @@ class _SigatokaAuditScreenState extends State<SigatokaAuditScreen> {
                 label: const Text('Guardar y Cargar Reporte'),
                 style: ElevatedButton.styleFrom(
                   padding: const EdgeInsets.symmetric(vertical: 16),
-                  backgroundColor: const Color(0xFF004B63),
+                  backgroundColor: const Color(0xFF00903E),
                   foregroundColor: Colors.white,
-                  textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                  textStyle: const TextStyle(
+                      fontSize: 16, fontWeight: FontWeight.bold),
                 ),
               ),
             ),
             const SizedBox(height: 12),
-            
+
             // NOTA INFORMATIVA
             Container(
               padding: const EdgeInsets.all(12),
@@ -872,7 +1671,7 @@ class _SigatokaAuditScreenState extends State<SigatokaAuditScreen> {
                 ],
               ),
             ),
-            
+
             // SECCIÓN AGREGAR MUESTRAS (solo visible si hay evaluacionId)
             if (evaluacionId != null) ...[
               const SizedBox(height: 30),
@@ -885,7 +1684,7 @@ class _SigatokaAuditScreenState extends State<SigatokaAuditScreen> {
       ),
     );
   }
-  
+
   // Nueva sección para agregar muestras completas
   Widget _buildAgregarMuestraSection() {
     return Card(
@@ -910,117 +1709,312 @@ class _SigatokaAuditScreenState extends State<SigatokaAuditScreen> {
               ],
             ),
             const SizedBox(height: 20),
-            
+
             // Muestra # y Lote #
             Row(
               children: [
                 Expanded(
-                  child: TextField(
-                    controller: muestraNumController,
-                    keyboardType: TextInputType.number,
+                  child: DropdownButtonFormField<int>(
+                    value: _muestraOptions.contains(
+                      int.tryParse(muestraNumController.text) ?? 1,
+                    )
+                        ? int.tryParse(muestraNumController.text) ?? 1
+                        : _muestraOptions.first,
                     decoration: const InputDecoration(
                       labelText: '🌿 Muestra # *',
-                      hintText: '1',
                       border: OutlineInputBorder(),
                       prefixIcon: Icon(Icons.tag),
                     ),
+                    items: _muestraOptions
+                        .map(
+                          (value) => DropdownMenuItem<int>(
+                            value: value,
+                            child: Text(value.toString()),
+                          ),
+                        )
+                        .toList(),
+                    onChanged: (value) {
+                      if (value == null) {
+                        return;
+                      }
+                      muestraNumController.text = value.toString();
+                    },
                   ),
                 ),
                 const SizedBox(width: 16),
                 Expanded(
-                  child: TextField(
-                    controller: loteCodigoController,
-                    decoration: const InputDecoration(
-                      labelText: '🧭 Lote # *',
-                      hintText: 'A1',
-                      border: OutlineInputBorder(),
-                      prefixIcon: Icon(Icons.location_on),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: _lotes.isNotEmpty
+                            ? DropdownButtonFormField<int>(
+                                value: _lotes.any(
+                                  (lote) => _toInt(lote['id']) == _selectedLoteId,
+                                )
+                                    ? _selectedLoteId
+                                    : null,
+                                decoration: InputDecoration(
+                                  labelText: '🧭 Lote # *',
+                                  hintText: _isLoadingClientLocations
+                                      ? 'Cargando lotes...'
+                                      : 'Seleccione lote',
+                                  border: const OutlineInputBorder(),
+                                  prefixIcon: const Icon(Icons.location_on),
+                                  suffixIcon:
+                                      _loteLatitud != null && _loteLongitud != null
+                                          ? const Icon(Icons.check_circle,
+                                              color: Colors.green)
+                                          : null,
+                                ),
+                                items: _lotes
+                                    .map(
+                                      (lote) => DropdownMenuItem<int>(
+                                        value: _toInt(lote['id']),
+                                        child: Text(_formatLoteName(lote)),
+                                      ),
+                                    )
+                                    .toList(),
+                                onChanged: _isLoadingClientLocations
+                                    ? null
+                                    : (value) {
+                                        setState(() {
+                                          _selectedLoteId = value;
+                                          if (value == null) {
+                                            loteCodigoController.clear();
+                                            return;
+                                          }
+                                          for (final lote in _lotes) {
+                                            if (_toInt(lote['id']) == value) {
+                                              loteCodigoController.text =
+                                                  lote['nombre']?.toString().trim() ??
+                                                      lote['codigo']?.toString().trim() ??
+                                                      '';
+                                              break;
+                                            }
+                                          }
+                                        });
+                                      },
+                              )
+                            : TextField(
+                                controller: loteCodigoController,
+                                readOnly: true,
+                                decoration: InputDecoration(
+                                  labelText: '🧭 Lote # *',
+                                  hintText: 'Seleccione una finca para cargar lotes',
+                                  border: const OutlineInputBorder(),
+                                  prefixIcon: const Icon(Icons.location_on),
+                                  suffixIcon:
+                                      _loteLatitud != null && _loteLongitud != null
+                                          ? const Icon(Icons.check_circle,
+                                              color: Colors.green)
+                                          : null,
+                                ),
+                              ),
+                      ),
+                      const SizedBox(width: 8),
+                      Container(
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF4CAF50),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: IconButton(
+                          onPressed: _obteniendoUbicacion
+                              ? null
+                              : _obtenerUbicacionLote,
+                          icon: _obteniendoUbicacion
+                              ? const SizedBox(
+                                  width: 24,
+                                  height: 24,
+                                  child: CircularProgressIndicator(
+                                    color: Colors.white,
+                                    strokeWidth: 2,
+                                  ),
+                                )
+                              : const Icon(Icons.my_location,
+                                  color: Colors.white),
+                          tooltip: 'Obtener ubicación GPS',
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            if (_loteLatitud != null && _loteLongitud != null) ...[
+              const SizedBox(height: 8),
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: Colors.green[50],
+                  borderRadius: BorderRadius.circular(4),
+                  border: Border.all(color: Colors.green[200]!),
+                ),
+                child: Row(
+                  children: [
+                    Icon(Icons.gps_fixed, size: 16, color: Colors.green[700]),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'Lat: ${_loteLatitud!.toStringAsFixed(6)}, Lng: ${_loteLongitud!.toStringAsFixed(6)}',
+                        style:
+                            TextStyle(fontSize: 12, color: Colors.green[700]),
+                      ),
                     ),
+                  ],
+                ),
+              ),
+            ],
+            const SizedBox(height: 16),
+
+            // Grados de infección
+            const Text('🍃 Grado de Infección',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Expanded(
+                  child: _buildInfectionGradeDropdown(
+                    controller: grado3eraController,
+                    label: '3era hoja',
+                    hint: '-',
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: _buildInfectionGradeDropdown(
+                    controller: grado4taController,
+                    label: '4ta hoja',
+                    hint: '-',
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: _buildInfectionGradeDropdown(
+                    controller: grado5taController,
+                    label: '5ta hoja',
+                    hint: '-',
                   ),
                 ),
               ],
             ),
             const SizedBox(height: 16),
 
-            // Plantas muestreadas
+            // Total hojas
+            const Text('🍀 Total de Hojas en Planta',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+            const SizedBox(height: 8),
             Row(
               children: [
                 Expanded(
-                  child: TextField(
-                    controller: plantasMuestreadasController,
-                    keyboardType: TextInputType.number,
-                    decoration: const InputDecoration(
-                      labelText: '🌱 Plantas muestreadas *',
-                      hintText: '10',
-                      border: OutlineInputBorder(),
-                      prefixIcon: Icon(Icons.eco),
-                    ),
-                  ),
-                ),
+                    child: TextField(
+                        controller: totalHojas3eraController,
+                        keyboardType: TextInputType.number,
+                        decoration: const InputDecoration(
+                            labelText: 'Total hojas en 3era',
+                            hintText: '8',
+                            border: OutlineInputBorder()))),
+                const SizedBox(width: 8),
+                Expanded(
+                    child: TextField(
+                        controller: totalHojas4taController,
+                        keyboardType: TextInputType.number,
+                        decoration: const InputDecoration(
+                            labelText: 'Total hojas en 4ta',
+                            hintText: '8',
+                            border: OutlineInputBorder()))),
+                const SizedBox(width: 8),
+                Expanded(
+                    child: TextField(
+                        controller: totalHojas5taController,
+                        keyboardType: TextInputType.number,
+                        decoration: const InputDecoration(
+                            labelText: 'Total hojas en 5ta',
+                            hintText: '8',
+                            border: OutlineInputBorder()))),
               ],
             ),
             const SizedBox(height: 16),
-            
-            // Grados de infección
-            const Text('🍃 Grado de Infección', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-            const SizedBox(height: 8),
-            Row(
-              children: [
-                Expanded(child: TextField(controller: grado3eraController, decoration: const InputDecoration(labelText: '3era hoja', hintText: '2a', border: OutlineInputBorder()))),
-                const SizedBox(width: 8),
-                Expanded(child: TextField(controller: grado4taController, decoration: const InputDecoration(labelText: '4ta hoja', hintText: '3c', border: OutlineInputBorder()))),
-                const SizedBox(width: 8),
-                Expanded(child: TextField(controller: grado5taController, decoration: const InputDecoration(labelText: '5ta hoja', hintText: '1b', border: OutlineInputBorder()))),
-              ],
-            ),
-            const SizedBox(height: 16),
-            
-            // Total hojas
-            const Text('🍀 Total de Hojas en Planta', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-            const SizedBox(height: 8),
-            Row(
-              children: [
-                Expanded(child: TextField(controller: totalHojas3eraController, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Total hojas en 3era', hintText: '8', border: OutlineInputBorder()))),
-                const SizedBox(width: 8),
-                Expanded(child: TextField(controller: totalHojas4taController, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Total hojas en 4ta', hintText: '8', border: OutlineInputBorder()))),
-                const SizedBox(width: 8),
-                Expanded(child: TextField(controller: totalHojas5taController, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Total hojas en 5ta', hintText: '8', border: OutlineInputBorder()))),
-              ],
-            ),
-            const SizedBox(height: 16),
-            
+
             // Variables Stover 0 semanas
-            const Text('📈 Variables Stover "0 semanas"', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+            const Text('📈 Variables Stover "0 semanas"',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
             const SizedBox(height: 8),
             Row(
               children: [
-                Expanded(child: TextField(controller: hvle0wController, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'H.V.L.E.', border: OutlineInputBorder()))),
+                Expanded(
+                    child: TextField(
+                        controller: hvle0wController,
+                        keyboardType: TextInputType.number,
+                        decoration: const InputDecoration(
+                            labelText: 'H.V.L.E.',
+                            border: OutlineInputBorder()))),
                 const SizedBox(width: 8),
-                Expanded(child: TextField(controller: hvlq0wController, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'H.V.L.Q.', border: OutlineInputBorder()))),
+                Expanded(
+                    child: TextField(
+                        controller: hvlq0wController,
+                        keyboardType: TextInputType.number,
+                        decoration: const InputDecoration(
+                            labelText: 'H.V.L.Q.',
+                            border: OutlineInputBorder()))),
                 const SizedBox(width: 8),
-                Expanded(child: TextField(controller: hvlq5_0wController, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'H.V.L.Q.5%', border: OutlineInputBorder()))),
+                Expanded(
+                    child: TextField(
+                        controller: hvlq5_0wController,
+                        keyboardType: TextInputType.number,
+                        decoration: const InputDecoration(
+                            labelText: 'H.V.L.Q.5%',
+                            border: OutlineInputBorder()))),
                 const SizedBox(width: 8),
-                Expanded(child: TextField(controller: th0wController, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'T.H.', border: OutlineInputBorder()))),
+                Expanded(
+                    child: TextField(
+                        controller: th0wController,
+                        keyboardType: TextInputType.number,
+                        decoration: const InputDecoration(
+                            labelText: 'T.H.', border: OutlineInputBorder()))),
               ],
             ),
             const SizedBox(height: 16),
-            
+
             // Variables Stover 10 semanas
-            const Text('📈 Variables Stover "10 semanas"', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+            const Text('📈 Variables Stover "10 semanas"',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
             const SizedBox(height: 8),
             Row(
               children: [
-                Expanded(child: TextField(controller: hvle10wController, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'H.V.L.E.', border: OutlineInputBorder()))),
+                Expanded(
+                    child: TextField(
+                        controller: hvle10wController,
+                        keyboardType: TextInputType.number,
+                        decoration: const InputDecoration(
+                            labelText: 'H.V.L.E.',
+                            border: OutlineInputBorder()))),
                 const SizedBox(width: 8),
-                Expanded(child: TextField(controller: hvlq10wController, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'H.V.L.Q.', border: OutlineInputBorder()))),
+                Expanded(
+                    child: TextField(
+                        controller: hvlq10wController,
+                        keyboardType: TextInputType.number,
+                        decoration: const InputDecoration(
+                            labelText: 'H.V.L.Q.',
+                            border: OutlineInputBorder()))),
                 const SizedBox(width: 8),
-                Expanded(child: TextField(controller: hvlq5_10wController, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'H.V.L.Q.5%', border: OutlineInputBorder()))),
+                Expanded(
+                    child: TextField(
+                        controller: hvlq5_10wController,
+                        keyboardType: TextInputType.number,
+                        decoration: const InputDecoration(
+                            labelText: 'H.V.L.Q.5%',
+                            border: OutlineInputBorder()))),
                 const SizedBox(width: 8),
-                Expanded(child: TextField(controller: th10wController, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'T.H.', border: OutlineInputBorder()))),
+                Expanded(
+                    child: TextField(
+                        controller: th10wController,
+                        keyboardType: TextInputType.number,
+                        decoration: const InputDecoration(
+                            labelText: 'T.H.', border: OutlineInputBorder()))),
               ],
             ),
             const SizedBox(height: 20),
-            
+
             // Botón Guardar Muestra
             SizedBox(
               width: double.infinity,
@@ -1032,7 +2026,8 @@ class _SigatokaAuditScreenState extends State<SigatokaAuditScreen> {
                   padding: const EdgeInsets.symmetric(vertical: 18),
                   backgroundColor: Colors.green[700],
                   foregroundColor: Colors.white,
-                  textStyle: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                  textStyle: const TextStyle(
+                      fontSize: 18, fontWeight: FontWeight.bold),
                 ),
               ),
             ),
@@ -1047,9 +2042,10 @@ class _SigatokaAuditScreenState extends State<SigatokaAuditScreen> {
                   label: const Text('🧮 Calcular Resumen e Indicadores'),
                   style: ElevatedButton.styleFrom(
                     padding: const EdgeInsets.symmetric(vertical: 16),
-                    backgroundColor: Colors.blue[700],
+                    backgroundColor: const Color(0xFF00903E),
                     foregroundColor: Colors.white,
-                    textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                    textStyle: const TextStyle(
+                        fontSize: 16, fontWeight: FontWeight.bold),
                   ),
                 ),
               ),

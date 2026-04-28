@@ -35,9 +35,9 @@ class SigatokaEvaluacionService {
       );
       
       if (response.statusCode == 201 || response.statusCode == 200) {
-        return jsonDecode(response.body);
+        return jsonDecode(utf8.decode(response.bodyBytes));
       } else {
-        throw Exception('Error al crear evaluación: ${response.body}');
+        throw Exception('Error al crear evaluación: ${utf8.decode(response.bodyBytes)}');
       }
     } catch (e) {
       throw Exception('Error de conexión: $e');
@@ -50,18 +50,24 @@ class SigatokaEvaluacionService {
   Future<Map<String, dynamic>> crearLote({
     required int evaluacionId,
     required String codigo,
+    double? latitud,
+    double? longitud,
   }) async {
     try {
       final response = await http.post(
         Uri.parse('$baseUrl/$evaluacionId/lotes'),
         headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({'loteCodigo': codigo}),
+        body: jsonEncode({
+          'loteCodigo': codigo,
+          if (latitud != null) 'latitud': latitud,
+          if (longitud != null) 'longitud': longitud,
+        }),
       );
       
       if (response.statusCode == 201 || response.statusCode == 200) {
-        return jsonDecode(response.body);
+        return jsonDecode(utf8.decode(response.bodyBytes));
       } else {
-        throw Exception('Error al crear lote: ${response.body}');
+        throw Exception('Error al crear lote: ${utf8.decode(response.bodyBytes)}');
       }
     } catch (e) {
       throw Exception('Error de conexión: $e');
@@ -76,6 +82,8 @@ class SigatokaEvaluacionService {
     required int evaluacionId,
     required int numeroMuestra,
     required String lote,
+    double? loteLatitud,
+    double? loteLongitud,
     // Grados de infección
     String? hoja3era,
     String? hoja4ta,
@@ -84,8 +92,7 @@ class SigatokaEvaluacionService {
     int? totalHojas3era,
     int? totalHojas4ta,
     int? totalHojas5ta,
-    // Variables a-e
-    required int plantasMuestreadas,
+    // Variables b-e
     required int plantasConLesiones,
     required int totalLesiones,
     required int plantas3erEstadio,
@@ -108,6 +115,8 @@ class SigatokaEvaluacionService {
         loteData = await crearLote(
           evaluacionId: evaluacionId,
           codigo: lote,
+          latitud: loteLatitud,
+          longitud: loteLongitud,
         );
       } catch (e) {
         // Si falla (probablemente lote duplicado), buscar el lote existente
@@ -162,7 +171,6 @@ class SigatokaEvaluacionService {
           'totalHojas3era': totalHojas3era,
           'totalHojas4ta': totalHojas4ta,
           'totalHojas5ta': totalHojas5ta,
-          'plantasMuestreadas': plantasMuestreadas,
           'plantasConLesiones': plantasConLesiones,
           'totalLesiones': totalLesiones,
           'plantas3erEstadio': plantas3erEstadio,
@@ -372,7 +380,7 @@ class SigatokaEvaluacionService {
   }
   
   /**
-   * Guarda el resumen completo (resumen, indicadores, stover)
+   * Guarda el resumen completo en UN SOLO POST (resumen, indicadores, stover)
    */
   Future<Map<String, dynamic>> guardarResumenCompleto(
     int evaluacionId,
@@ -381,48 +389,30 @@ class SigatokaEvaluacionService {
     Map<String, dynamic> stoverData,
   ) async {
     try {
-      // Guardar resumen
-      final resumenResponse = await http.post(
-        Uri.parse('$baseUrl/evaluaciones/$evaluacionId/resumen'),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode(resumenData),
+      print('📊 Guardando resumen calculado en FRONTEND');
+      
+      // Combinar todo en un solo objeto
+      final datosCompletos = {
+        'resumen': resumenData,
+        'indicadores': indicadoresData,
+        'stover': stoverData,
+      };
+      
+      // UN SOLO POST con todos los datos
+      final response = await http.post(
+        Uri.parse('$baseUrl/$evaluacionId/guardar-resumen'),
+        headers: {'Content-Type': 'application/json; charset=UTF-8'},
+        body: jsonEncode(datosCompletos),
       );
       
-      if (resumenResponse.statusCode != 200 && resumenResponse.statusCode != 201) {
+      if (response.statusCode != 200 && response.statusCode != 201) {
         return {
           'success': false,
-          'message': 'Error al guardar resumen: ${resumenResponse.body}',
+          'message': 'Error al guardar resumen: ${response.body}',
         };
       }
       
-      // Guardar indicadores (Estado Evolutivo)
-      final indicadoresResponse = await http.post(
-        Uri.parse('$baseUrl/evaluaciones/$evaluacionId/indicadores'),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode(indicadoresData),
-      );
-      
-      if (indicadoresResponse.statusCode != 200 && indicadoresResponse.statusCode != 201) {
-        return {
-          'success': false,
-          'message': 'Error al guardar indicadores: ${indicadoresResponse.body}',
-        };
-      }
-      
-      // Guardar Stover promedio
-      final stoverResponse = await http.post(
-        Uri.parse('$baseUrl/evaluaciones/$evaluacionId/stover-promedio'),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode(stoverData),
-      );
-      
-      if (stoverResponse.statusCode != 200 && stoverResponse.statusCode != 201) {
-        return {
-          'success': false,
-          'message': 'Error al guardar Stover: ${stoverResponse.body}',
-        };
-      }
-      
+      print('✅ Resumen completo guardado');
       return {
         'success': true,
         'message': 'Resumen guardado correctamente',
@@ -441,12 +431,15 @@ class SigatokaEvaluacionService {
   Future<Map<String, dynamic>> eliminarEvaluacion(int evaluacionId) async {
     try {
       final response = await http.delete(
-        Uri.parse('$baseUrl/evaluaciones/$evaluacionId'),
-        headers: {'Content-Type': 'application/json'},
+        Uri.parse('$baseUrl/$evaluacionId'),
+        headers: {'Content-Type': 'application/json; charset=UTF-8'},
       );
       
-      if (response.statusCode == 200) {
-        return jsonDecode(response.body);
+      if (response.statusCode == 200 || response.statusCode == 204) {
+        if (response.body.isNotEmpty) {
+          return jsonDecode(response.body);
+        }
+        return {'success': true, 'message': 'Evaluación eliminada'};
       } else {
         throw Exception('Error al eliminar evaluación: ${response.body}');
       }

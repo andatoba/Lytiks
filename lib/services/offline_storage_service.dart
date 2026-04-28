@@ -8,7 +8,7 @@ import 'package:flutter/foundation.dart';
 class OfflineStorageService {
   static Database? _database;
   static const String _databaseName = 'lytiks_offline.db';
-  static const int _databaseVersion = 3;
+  static const int _databaseVersion = 8;
 
   // Singleton
   static final OfflineStorageService _instance =
@@ -31,6 +31,18 @@ class OfflineStorageService {
 
   Future<Database> _initDatabase() async {
     try {
+      // Usar databaseFactoryFfi solo para plataformas desktop (NO Web)
+      if (!kIsWeb && (Platform.isWindows || Platform.isLinux || Platform.isMacOS)) {
+        sqfliteFfiInit();
+        databaseFactory = databaseFactoryFfi;
+      }
+      
+      // En Web, la funcionalidad de base de datos local no está disponible
+      if (kIsWeb) {
+        debugPrint('⚠️ Base de datos local no disponible en Web. Los datos se guardarán solo en el servidor.');
+        throw UnsupportedError('SQLite no está disponible en plataforma Web');
+      }
+      
       String path = join(await getDatabasesPath(), _databaseName);
       debugPrint('🗄️ Inicializando base de datos en: $path');
 
@@ -80,6 +92,86 @@ class OfflineStorageService {
       ''');
       debugPrint('✅ Tabla pending_sigatoka_audits añadida en upgrade');
     }
+    if (oldVersion < 4) {
+      // Crear tabla para seguimiento de ubicación de técnicos
+      await db.execute('''
+        CREATE TABLE IF NOT EXISTS location_tracking (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          user_id TEXT NOT NULL,
+          user_name TEXT,
+          latitude REAL NOT NULL,
+          longitude REAL NOT NULL,
+          accuracy REAL,
+          matrix_latitude REAL,
+          matrix_longitude REAL,
+          timestamp TEXT NOT NULL,
+          is_synced INTEGER DEFAULT 0
+        )
+      ''');
+      debugPrint('✅ Tabla location_tracking añadida en upgrade');
+    }
+    if (oldVersion < 5) {
+      // Agregar columnas para trayecto de ubicaciones en auditorías
+      await db.execute('ALTER TABLE pending_audits ADD COLUMN trayecto_ubicaciones TEXT');
+      await db.execute('ALTER TABLE pending_audits ADD COLUMN inicio_evaluacion TEXT');
+      await db.execute('ALTER TABLE pending_audits ADD COLUMN fin_evaluacion TEXT');
+      debugPrint('✅ Columnas de trayecto añadidas a pending_audits en upgrade');
+    }
+    if (oldVersion < 6) {
+      // Crear tabla para plan de seguimiento Moko pendiente
+      await db.execute('''
+        CREATE TABLE IF NOT EXISTS pending_plan_moko_updates (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          foco_id INTEGER,
+          plan_seg_moko_id INTEGER,
+          ejecucion_plan_id INTEGER,
+          tareas_completadas TEXT,
+          observaciones TEXT,
+          finalizar INTEGER DEFAULT 1,
+          created_at TEXT,
+          is_synced INTEGER DEFAULT 0
+        )
+      ''');
+      debugPrint('✅ Tabla pending_plan_moko_updates añadida en upgrade');
+    }
+    if (oldVersion < 7) {
+      // Crear tabla para configuraciones de aplicación
+      await db.execute('''
+        CREATE TABLE IF NOT EXISTS configuraciones_aplicacion (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          foco_id INTEGER NOT NULL,
+          fase_id INTEGER NOT NULL,
+          tarea_id INTEGER NOT NULL,
+          nombre_tarea TEXT NOT NULL,
+          fecha_programada TEXT NOT NULL,
+          frecuencia INTEGER NOT NULL,
+          repeticiones INTEGER NOT NULL,
+          recordatorio TEXT NOT NULL,
+          completado INTEGER DEFAULT 0,
+          fecha_creacion TEXT NOT NULL,
+          fecha_completado TEXT,
+          observaciones TEXT,
+          is_synced INTEGER DEFAULT 0
+        )
+      ''');
+      debugPrint('✅ Tabla configuraciones_aplicacion añadida en upgrade');
+    }
+    if (oldVersion < 8) {
+      // Crear tabla para contencion Moko pendiente
+      await db.execute('''
+        CREATE TABLE IF NOT EXISTS pending_moko_contencion (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          foco_id INTEGER,
+          numero_foco INTEGER,
+          cliente_id INTEGER,
+          contencion_data TEXT,
+          auditoria_data TEXT,
+          created_at TEXT,
+          is_synced INTEGER DEFAULT 0
+        )
+      ''');
+      debugPrint('✅ Tabla pending_moko_contencion añadida en upgrade');
+    }
   }
 
   Future<void> _onCreate(Database db, int version) async {
@@ -100,6 +192,9 @@ class OfflineStorageService {
           latitude REAL,
           longitude REAL,
           image_path TEXT,
+          trayecto_ubicaciones TEXT,
+          inicio_evaluacion TEXT,
+          fin_evaluacion TEXT,
           created_at TEXT,
           is_synced INTEGER DEFAULT 0
         )
@@ -123,6 +218,37 @@ class OfflineStorageService {
       ''');
       debugPrint('✅ Tabla pending_moko_audits creada');
 
+      // Tabla para contencion Moko pendiente
+      await db.execute('''
+        CREATE TABLE pending_moko_contencion (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          foco_id INTEGER,
+          numero_foco INTEGER,
+          cliente_id INTEGER,
+          contencion_data TEXT,
+          auditoria_data TEXT,
+          created_at TEXT,
+          is_synced INTEGER DEFAULT 0
+        )
+      ''');
+      debugPrint('✅ Tabla pending_moko_contencion creada');
+
+      // Tabla para plan de seguimiento Moko pendiente
+      await db.execute('''
+        CREATE TABLE pending_plan_moko_updates (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          foco_id INTEGER,
+          plan_seg_moko_id INTEGER,
+          ejecucion_plan_id INTEGER,
+          tareas_completadas TEXT,
+          observaciones TEXT,
+          finalizar INTEGER DEFAULT 1,
+          created_at TEXT,
+          is_synced INTEGER DEFAULT 0
+        )
+      ''');
+      debugPrint('✅ Tabla pending_plan_moko_updates creada');
+
       // Tabla para auditorías Sigatoka pendientes
       await db.execute('''
         CREATE TABLE pending_sigatoka_audits (
@@ -145,6 +271,23 @@ class OfflineStorageService {
         )
       ''');
       debugPrint('✅ Tabla pending_sigatoka_audits creada');
+
+      // Tabla para seguimiento de ubicación de técnicos
+      await db.execute('''
+        CREATE TABLE location_tracking (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          user_id TEXT NOT NULL,
+          user_name TEXT,
+          latitude REAL NOT NULL,
+          longitude REAL NOT NULL,
+          accuracy REAL,
+          matrix_latitude REAL,
+          matrix_longitude REAL,
+          timestamp TEXT NOT NULL,
+          is_synced INTEGER DEFAULT 0
+        )
+      ''');
+      debugPrint('✅ Tabla location_tracking creada');
 
       // Tabla para clientes pendientes
       await db.execute('''
@@ -182,6 +325,27 @@ class OfflineStorageService {
       ''');
       debugPrint('✅ Tabla pending_audit_photos creada');
 
+      // Tabla para configuraciones de aplicación
+      await db.execute('''
+        CREATE TABLE configuraciones_aplicacion (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          foco_id INTEGER NOT NULL,
+          fase_id INTEGER NOT NULL,
+          tarea_id INTEGER NOT NULL,
+          nombre_tarea TEXT NOT NULL,
+          fecha_programada TEXT NOT NULL,
+          frecuencia INTEGER NOT NULL,
+          repeticiones INTEGER NOT NULL,
+          recordatorio TEXT NOT NULL,
+          completado INTEGER DEFAULT 0,
+          fecha_creacion TEXT NOT NULL,
+          fecha_completado TEXT,
+          observaciones TEXT,
+          is_synced INTEGER DEFAULT 0
+        )
+      ''');
+      debugPrint('✅ Tabla configuraciones_aplicacion creada');
+
       debugPrint('🎉 Todas las tablas creadas exitosamente');
     } catch (e) {
       debugPrint('❌ Error creando tablas: $e');
@@ -201,6 +365,9 @@ class OfflineStorageService {
     double? latitude,
     double? longitude,
     String? imagePath,
+    List<Map<String, dynamic>>? trayectoUbicaciones,
+    String? inicioEvaluacion,
+    String? finEvaluacion,
   }) async {
     final db = await database;
     return await db.insert('pending_audits', {
@@ -214,6 +381,9 @@ class OfflineStorageService {
       'latitude': latitude,
       'longitude': longitude,
       'image_path': imagePath,
+      'trayecto_ubicaciones': trayectoUbicaciones != null ? jsonEncode(trayectoUbicaciones) : null,
+      'inicio_evaluacion': inicioEvaluacion,
+      'fin_evaluacion': finEvaluacion,
       'created_at': DateTime.now().toIso8601String(),
       'is_synced': 0,
     });
@@ -289,6 +459,48 @@ class OfflineStorageService {
     final db = await database;
     await db.update(
       'pending_moko_audits',
+      {'is_synced': 1},
+      where: 'id = ?',
+      whereArgs: [id],
+    );
+  }
+
+  // PLAN SEGUIMIENTO MOKO
+  Future<int> savePendingPlanMokoUpdate({
+    required int focoId,
+    required int planSeguimientoId,
+    int? ejecucionPlanId,
+    required List<int> tareasCompletadas,
+    String? observaciones,
+    bool finalizar = true,
+  }) async {
+    final db = await database;
+    return await db.insert('pending_plan_moko_updates', {
+      'foco_id': focoId,
+      'plan_seg_moko_id': planSeguimientoId,
+      'ejecucion_plan_id': ejecucionPlanId,
+      'tareas_completadas': jsonEncode(tareasCompletadas),
+      'observaciones': observaciones,
+      'finalizar': finalizar ? 1 : 0,
+      'created_at': DateTime.now().toIso8601String(),
+      'is_synced': 0,
+    });
+  }
+
+  Future<List<Map<String, dynamic>>> getPendingPlanMokoUpdates() async {
+    final db = await database;
+    return await db.query(
+      'pending_plan_moko_updates',
+      where: 'is_synced = ?',
+      whereArgs: [0],
+      orderBy: 'created_at DESC',
+    );
+  }
+
+  Future<void> markPlanMokoUpdateAsSynced(int id) async {
+    final db = await database;
+    await db.update(
+      'pending_plan_moko_updates',
       {'is_synced': 1},
       where: 'id = ?',
       whereArgs: [id],
@@ -473,6 +685,14 @@ class OfflineStorageService {
         ) ??
         0;
 
+    final planMokoCount =
+        Sqflite.firstIntValue(
+          await db.rawQuery(
+            'SELECT COUNT(*) FROM pending_plan_moko_updates WHERE is_synced = 0',
+          ),
+        ) ??
+        0;
+
     final sigatokaCount =
         Sqflite.firstIntValue(
           await db.rawQuery(
@@ -497,7 +717,7 @@ class OfflineStorageService {
         ) ??
         0;
 
-    return auditCount + mokoCount + sigatokaCount + clientCount + photoCount;
+    return auditCount + mokoCount + planMokoCount + sigatokaCount + clientCount + photoCount;
   }
 
   // LIMPIAR DATOS SINCRONIZADOS
@@ -505,6 +725,7 @@ class OfflineStorageService {
     final db = await database;
     await db.delete('pending_audits', where: 'is_synced = 1');
     await db.delete('pending_moko_audits', where: 'is_synced = 1');
+    await db.delete('pending_plan_moko_updates', where: 'is_synced = 1');
     await db.delete('pending_sigatoka_audits', where: 'is_synced = 1');
     await db.delete('pending_clients', where: 'is_synced = 1');
     await db.delete('pending_audit_photos', where: 'is_synced = 1');
@@ -515,8 +736,219 @@ class OfflineStorageService {
     final db = await database;
     await db.delete('pending_audits');
     await db.delete('pending_moko_audits');
+    await db.delete('pending_moko_contencion');
+    await db.delete('pending_plan_moko_updates');
     await db.delete('pending_sigatoka_audits');
     await db.delete('pending_clients');
     await db.delete('pending_audit_photos');
+  }
+
+  // CONFIGURACIONES DE APLICACIÓN
+  Future<int> guardarConfiguracionAplicacion(Map<String, dynamic> configuracion) async {
+    try {
+      final db = await database;
+      
+      debugPrint('💾 Guardando configuración: $configuracion');
+      
+      // Verificar si ya existe una configuración para esta tarea
+      final existente = await db.query(
+        'configuraciones_aplicacion',
+        where: 'foco_id = ? AND fase_id = ? AND tarea_id = ?',
+        whereArgs: [
+          configuracion['focoId'],
+          configuracion['faseId'],
+          configuracion['tareaId'],
+        ],
+      );
+
+      debugPrint('🔍 Configuración existente: ${existente.isNotEmpty ? existente.first : "ninguna"}');
+
+      if (existente.isNotEmpty) {
+        // Actualizar configuración existente
+        final registrosActualizados = await db.update(
+          'configuraciones_aplicacion',
+          {
+            'nombre_tarea': configuracion['nombreTarea'],
+            'fecha_programada': configuracion['fechaProgramada'],
+            'frecuencia': configuracion['frecuencia'],
+            'repeticiones': configuracion['repeticiones'],
+            'recordatorio': configuracion['recordatorio'],
+            'completado': (configuracion['completado'] == true || configuracion['completado'] == 1) ? 1 : 0,
+            'fecha_creacion': configuracion['fechaCreacion'],
+            'observaciones': configuracion['observaciones'],
+            'is_synced': 0,
+          },
+          where: 'id = ?',
+          whereArgs: [existente.first['id']],
+        );
+        debugPrint('✅ Configuración actualizada. Registros afectados: $registrosActualizados, ID: ${existente.first['id']}');
+        return existente.first['id'] as int;
+      } else {
+        // Insertar nueva configuración
+        final id = await db.insert(
+          'configuraciones_aplicacion',
+          {
+            'foco_id': configuracion['focoId'],
+            'fase_id': configuracion['faseId'],
+            'tarea_id': configuracion['tareaId'],
+            'nombre_tarea': configuracion['nombreTarea'],
+            'fecha_programada': configuracion['fechaProgramada'],
+            'frecuencia': configuracion['frecuencia'],
+            'repeticiones': configuracion['repeticiones'],
+            'recordatorio': configuracion['recordatorio'],
+            'completado': (configuracion['completado'] == true || configuracion['completado'] == 1) ? 1 : 0,
+            'fecha_creacion': configuracion['fechaCreacion'],
+            'observaciones': configuracion['observaciones'],
+            'is_synced': 0,
+          },
+        );
+        debugPrint('✅ Nueva configuración insertada con ID: $id');
+        return id;
+      }
+    } catch (e) {
+      debugPrint('❌ Error guardando configuración de aplicación: $e');
+      rethrow;
+    }
+  }
+
+  Future<List<Map<String, dynamic>>> obtenerConfiguracionesAplicacion({
+    int? focoId,
+    int? faseId,
+    bool soloSinCompletar = false,
+  }) async {
+    try {
+      final db = await database;
+      
+      String where = '1=1';
+      List<dynamic> whereArgs = [];
+      
+      if (focoId != null) {
+        where += ' AND foco_id = ?';
+        whereArgs.add(focoId);
+      }
+      
+      if (faseId != null) {
+        where += ' AND fase_id = ?';
+        whereArgs.add(faseId);
+      }
+      
+      if (soloSinCompletar) {
+        where += ' AND completado = 0';
+      }
+      
+      final List<Map<String, dynamic>> configuraciones = await db.query(
+        'configuraciones_aplicacion',
+        where: where,
+        whereArgs: whereArgs.isNotEmpty ? whereArgs : null,
+        orderBy: 'fecha_programada ASC',
+      );
+      
+      debugPrint('📋 Configuraciones encontradas: ${configuraciones.length}');
+      return configuraciones;
+    } catch (e) {
+      debugPrint('❌ Error obteniendo configuraciones de aplicación: $e');
+      return [];
+    }
+  }
+
+  Future<void> marcarConfiguracionCompletada(int id) async {
+    try {
+      final db = await database;
+      await db.update(
+        'configuraciones_aplicacion',
+        {
+          'completado': 1,
+          'fecha_completado': DateTime.now().toIso8601String(),
+          'is_synced': 0,
+        },
+        where: 'id = ?',
+        whereArgs: [id],
+      );
+      debugPrint('✅ Configuración marcada como completada: $id');
+    } catch (e) {
+      debugPrint('❌ Error marcando configuración completada: $e');
+      rethrow;
+    }
+  }
+
+  Future<void> eliminarConfiguracionAplicacion(int id) async {
+    try {
+      final db = await database;
+      await db.delete(
+        'configuraciones_aplicacion',
+        where: 'id = ?',
+        whereArgs: [id],
+      );
+      debugPrint('✅ Configuración eliminada: $id');
+    } catch (e) {
+      debugPrint('❌ Error eliminando configuración: $e');
+      rethrow;
+    }
+  }
+
+  // MOKO CONTENCION OFFLINE
+  Future<int> guardarMokoContencion(Map<String, dynamic> data) async {
+    try {
+      final db = await database;
+      
+      final focoId = data['focoId'];
+      final numeroFoco = data['numeroFoco'];
+      
+      debugPrint('💾 Guardando Moko Contencion localmente: focoId=$focoId, numeroFoco=$numeroFoco');
+      
+      final id = await db.insert(
+        'pending_moko_contencion',
+        {
+          'foco_id': focoId,
+          'numero_foco': numeroFoco,
+          'cliente_id': data['clienteId'],
+          'contencion_data': jsonEncode(data),
+          'auditoria_data': jsonEncode(data['auditoria'] ?? {}),
+          'created_at': DateTime.now().toIso8601String(),
+          'is_synced': 0,
+        },
+      );
+      
+      debugPrint('✅ Contencion guardada localmente con ID: $id | ${data['aplicaciones']?.length ?? 0} aplicaciones');
+      return id;
+    } catch (e) {
+      debugPrint('❌ Error guardando Moko Contencion: $e');
+      rethrow;
+    }
+  }
+
+  Future<List<Map<String, dynamic>>> obtenerMokoContencionPendiente() async {
+    try {
+      final db = await database;
+      
+      final registros = await db.query(
+        'pending_moko_contencion',
+        where: 'is_synced = ?',
+        whereArgs: [0],
+        orderBy: 'created_at DESC',
+      );
+      
+      debugPrint('📋 Moko Contencion pendientes: ${registros.length}');
+      return registros;
+    } catch (e) {
+      debugPrint('❌ Error obteniendo Moko Contencion pendiente: $e');
+      return [];
+    }
+  }
+
+  Future<void> marcarMokoContencionSincronizado(int id) async {
+    try {
+      final db = await database;
+      await db.update(
+        'pending_moko_contencion',
+        {'is_synced': 1},
+        where: 'id = ?',
+        whereArgs: [id],
+      );
+      debugPrint('✅ Moko Contencion marcada como sincronizada: $id');
+    } catch (e) {
+      debugPrint('❌ Error marcando Moko Contencion sincronizada: $e');
+      rethrow;
+    }
   }
 }

@@ -1,15 +1,9 @@
 package com.lytiks.backend.entity;
 
 import jakarta.persistence.*;
-import lombok.Data;
-import lombok.NoArgsConstructor;
-import lombok.AllArgsConstructor;
 
 @Entity
 @Table(name = "sintomas")
-@Data
-@NoArgsConstructor
-@AllArgsConstructor
 public class Sintoma {
     
     @Id
@@ -27,4 +21,25 @@ public class Sintoma {
     
     @Column(name = "severidad")
     private String severidad;
+    
+    public Sintoma() {}
+    
+    public Sintoma(Long id, String categoria, String sintomaObservable, String descripcionTecnica, String severidad) {
+        this.id = id;
+        this.categoria = categoria;
+        this.sintomaObservable = sintomaObservable;
+        this.descripcionTecnica = descripcionTecnica;
+        this.severidad = severidad;
+    }
+
+    public Long getId() { return id; }
+    public void setId(Long id) { this.id = id; }
+    public String getCategoria() { return categoria; }
+    public void setCategoria(String categoria) { this.categoria = categoria; }
+    public String getSintomaObservable() { return sintomaObservable; }
+    public void setSintomaObservable(String sintomaObservable) { this.sintomaObservable = sintomaObservable; }
+    public String getDescripcionTecnica() { return descripcionTecnica; }
+    public void setDescripcionTecnica(String descripcionTecnica) { this.descripcionTecnica = descripcionTecnica; }
+    public String getSeveridad() { return severidad; }
+    public void setSeveridad(String severidad) { this.severidad = severidad; }
 }

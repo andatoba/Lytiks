@@ -13,7 +13,7 @@ import java.util.Map;
 
 @RestController
 @RequestMapping("/sintomas")
-@CrossOrigin(origins = "*")
+
 public class SintomaController {
 
     @Autowired

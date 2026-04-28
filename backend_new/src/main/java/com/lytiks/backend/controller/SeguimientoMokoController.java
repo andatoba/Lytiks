@@ -15,7 +15,6 @@ import java.util.Optional;
 
 @RestController
 @RequestMapping("/seguimiento-moko")
-@CrossOrigin(origins = "*")
 public class SeguimientoMokoController {
 
     @Autowired
@@ -65,6 +64,11 @@ public class SeguimientoMokoController {
 
             return ResponseEntity.status(HttpStatus.CREATED).body(response);
 
+        } catch (IllegalArgumentException e) {
+            Map<String, Object> error = new HashMap<>();
+            error.put("success", false);
+            error.put("error", e.getMessage());
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(error);
         } catch (Exception e) {
             Map<String, Object> error = new HashMap<>();
             error.put("success", false);

@@ -70,7 +70,9 @@ class _ContencionScreenState extends State<ContencionScreen> {
                         itemCount: _productos.length,
                         itemBuilder: (context, index) {
                           final p = _productos[index];
-                          final int? productoId = p['id'] is int ? p['id'] : int.tryParse(p['id']?.toString() ?? '');
+                          // Backend devuelve 'idProducto', no 'id'
+                          final int? productoId = p['idProducto'] is int ? p['idProducto'] : 
+                                                  (p['id'] is int ? p['id'] : int.tryParse(p['idProducto']?.toString() ?? p['id']?.toString() ?? ''));
                           final bool yaConfigurado = productoId != null && productosConfigurados.contains(productoId);
                           return Card(
                             margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),

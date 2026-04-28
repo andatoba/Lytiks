@@ -134,7 +134,15 @@ class AuthService {
   Future<Map<String, dynamic>?> getUserData() async {
     final userData = await storage.read(key: 'user_data');
     if (userData != null) {
-      return json.decode(userData);
+      final trimmed = userData.trim();
+      if (trimmed.isEmpty) {
+        return null;
+      }
+      try {
+        return json.decode(trimmed);
+      } catch (_) {
+        return null;
+      }
     }
     return null;
   }
@@ -146,13 +154,42 @@ class AuthService {
   // Obtener username del usuario autenticado
   Future<String?> getUsername() async {
     final userData = await getUserData();
-    return userData?['username'];
+    final rawUser = userData?['user'];
+    if (rawUser is Map) {
+      return rawUser['usuario']?.toString() ?? rawUser['username']?.toString();
+    }
+    return userData?['usuario']?.toString() ?? userData?['username']?.toString();
   }
 
   // Obtener id del usuario autenticado
   Future<int?> getUserId() async {
     final userData = await getUserData();
-    return userData?['id'];
+    final rawUser = userData?['user'];
+    final idValue = rawUser is Map ? rawUser['id'] : userData?['id'];
+    if (idValue == null) {
+      return null;
+    }
+    return idValue is int ? idValue : int.tryParse(idValue.toString());
+  }
+  
+  // Obtener id_empresa del usuario autenticado
+  Future<int?> getIdEmpresa() async {
+    // Primero intentar desde user_data guardado
+    final userData = await getUserData();
+    if (userData != null && userData['user'] != null) {
+      final idEmpresa = userData['user']['idEmpresa'];
+      if (idEmpresa != null) {
+        return idEmpresa is int ? idEmpresa : int.tryParse(idEmpresa.toString());
+      }
+    }
+    
+    // Fallback: leer desde storage directo
+    final idEmpresaStr = await storage.read(key: 'id_empresa');
+    if (idEmpresaStr != null) {
+      return int.tryParse(idEmpresaStr);
+    }
+    
+    return null;
   }
 
   Future<void> logout() async {

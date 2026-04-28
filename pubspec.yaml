@@ -1,5 +1,5 @@
 name: lytiks
-description: "Lytiks - Control Inteligente de Plagas para el Agro"
+description: "Agrotecban - Control Inteligente de Plagas para el Agro"
 publish_to: 'none'
 version: 0.1.0
 
@@ -21,9 +21,12 @@ dependencies:
   path: ^1.9.0
   connectivity_plus: ^6.0.3
   http: ^1.2.1
+  file_picker: ^8.0.7
   flutter_secure_storage: ^9.0.0
   shared_preferences: ^2.2.2
   encrypt: ^5.0.3
+  workmanager: ^0.9.0+3
+  permission_handler: ^11.0.1
 
 dev_dependencies:
   flutter_test:
@@ -33,16 +36,17 @@ dev_dependencies:
 
 # Configuración de íconos personalizados
 flutter_launcher_icons:
+  image_path: "assets/images/logo_edit.png"
   android: true
   ios: true
   web:
     generate: true
-    image_path: "assets/images/logo2.png"
-    background_color: "#004B63"
-    theme_color: "#004B63"
+    image_path: "assets/images/logo_edit.png"
+    background_color: "#00903E"
+    theme_color: "#FFFFDF00"
   windows:
     generate: true
-    image_path: "assets/images/logo2.png"
+    image_path: "assets/images/logo_edit.png"
     icon_size: 48
   min_sdk_android: 21
 

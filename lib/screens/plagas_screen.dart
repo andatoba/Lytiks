@@ -1,0 +1,1468 @@
+import 'dart:async' as dart_async;
+import 'dart:convert';
+
+import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
+import '../helpers/client_location_helper.dart';
+import '../services/client_service.dart';
+import '../services/hacienda_service.dart';
+import '../services/lote_service.dart';
+import '../services/plagas_service.dart';
+
+class _PlagaSample {
+  _PlagaSample(this.numero)
+      : huevoController = TextEditingController(),
+        pequenaController = TextEditingController(),
+        medianaController = TextEditingController(),
+        grandeController = TextEditingController(),
+        porcentajeDanioController = TextEditingController();
+
+  final int numero;
+  final TextEditingController huevoController;
+  final TextEditingController pequenaController;
+  final TextEditingController medianaController;
+  final TextEditingController grandeController;
+  final TextEditingController porcentajeDanioController;
+
+  int _toInt(TextEditingController controller) {
+    return int.tryParse(controller.text.trim()) ?? 0;
+  }
+
+  int get huevo => _toInt(huevoController);
+  int get pequena => _toInt(pequenaController);
+  int get mediana => _toInt(medianaController);
+  int get grande => _toInt(grandeController);
+
+  int get totalIndividuos => huevo + pequena + mediana + grande;
+
+  double get porcentajeDanio =>
+      double.tryParse(porcentajeDanioController.text.trim().replaceAll(',', '.')) ??
+      0;
+
+  void dispose() {
+    huevoController.dispose();
+    pequenaController.dispose();
+    medianaController.dispose();
+    grandeController.dispose();
+    porcentajeDanioController.dispose();
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'numero': numero,
+      'huevo': huevoController.text.trim(),
+      'pequena': pequenaController.text.trim(),
+      'mediana': medianaController.text.trim(),
+      'grande': grandeController.text.trim(),
+      'porcentajeDanio': porcentajeDanioController.text.trim(),
+    };
+  }
+
+  factory _PlagaSample.fromJson(Map<String, dynamic> json) {
+    final sample = _PlagaSample(json['numero'] as int? ?? 1);
+    sample.huevoController.text = json['huevo']?.toString() ?? '';
+    sample.pequenaController.text = json['pequena']?.toString() ?? '';
+    sample.medianaController.text = json['mediana']?.toString() ?? '';
+    sample.grandeController.text = json['grande']?.toString() ?? '';
+    sample.porcentajeDanioController.text =
+        json['porcentajeDanio']?.toString() ?? '';
+    return sample;
+  }
+}
+
+class PlagasScreen extends StatefulWidget {
+  final Map<String, dynamic>? clientData;
+
+  const PlagasScreen({super.key, this.clientData});
+
+  @override
+  State<PlagasScreen> createState() => _PlagasScreenState();
+}
+
+class _PlagasScreenState extends State<PlagasScreen>
+    with WidgetsBindingObserver {
+  static const String _draftKey = 'plagas_screen_draft';
+  final ClientService _clientService = ClientService();
+  final HaciendaService _haciendaService = HaciendaService();
+  final LoteService _loteService = LoteService();
+  final PlagasService _plagasService = PlagasService();
+  static const List<String> _plagasDisponibles = [
+    'CERAMIDIA',
+    'MONTURITA',
+    'VAQUITA',
+  ];
+
+  final TextEditingController _nombreController = TextEditingController();
+  final FocusNode _nombreFocusNode = FocusNode();
+  final TextEditingController _fechaController = TextEditingController();
+  final TextEditingController _haciendaController = TextEditingController();
+  final TextEditingController _loteController = TextEditingController();
+  final TextEditingController _plagaController = TextEditingController(
+    text: 'CERAMIDIA',
+  );
+
+  List<Map<String, dynamic>> _clientSuggestions = [];
+  dart_async.Timer? _searchDebounce;
+  String _lastQuery = '';
+  Map<String, dynamic>? _selectedClient;
+  List<Map<String, dynamic>> _haciendas = [];
+  List<Map<String, dynamic>> _lotes = [];
+  bool _isClienteMode = false;
+  bool _isSaving = false;
+  int? _selectedHaciendaId;
+  int? _selectedLoteId;
+
+  final List<_PlagaSample> _samples = [_PlagaSample(1)];
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _initializeDefaultDate();
+
+    for (final sample in _samples) {
+      _registerSampleListeners(sample);
+    }
+
+    if (widget.clientData != null) {
+      _selectedClient = widget.clientData;
+      _nombreController.text = _formatClientName(widget.clientData!);
+      _clientService.saveSelectedClient(widget.clientData!);
+      _isClienteMode = widget.clientData!['isCliente'] == true;
+      _loadHaciendasByCliente(_resolveClienteId(widget.clientData!));
+    } else {
+      _loadStoredClient();
+    }
+    _restoreDraft();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _searchDebounce?.cancel();
+    _nombreController.dispose();
+    _nombreFocusNode.dispose();
+    _fechaController.dispose();
+    _haciendaController.dispose();
+    _loteController.dispose();
+    _plagaController.dispose();
+    for (final sample in _samples) {
+      sample.dispose();
+    }
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.inactive ||
+        state == AppLifecycleState.paused ||
+        state == AppLifecycleState.detached) {
+      _saveDraft();
+    }
+  }
+
+  void _initializeDefaultDate() {
+    final now = DateTime.now();
+    _fechaController.text =
+        '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
+  }
+
+  Future<void> _selectDate() async {
+    final now = DateTime.now();
+    DateTime initialDate = now;
+    try {
+      initialDate = DateTime.parse(_fechaController.text.trim());
+    } catch (_) {}
+
+    final selectedDate = await showDatePicker(
+      context: context,
+      initialDate: initialDate,
+      firstDate: DateTime(2020),
+      lastDate: DateTime(2100),
+      locale: const Locale('es', 'ES'),
+    );
+
+    if (selectedDate == null) {
+      return;
+    }
+
+    setState(() {
+      _fechaController.text =
+          '${selectedDate.year}-${selectedDate.month.toString().padLeft(2, '0')}-${selectedDate.day.toString().padLeft(2, '0')}';
+    });
+    _saveDraft();
+  }
+
+  Future<void> _loadStoredClient() async {
+    final stored = await _clientService.getSelectedClient();
+    if (!mounted || stored == null) {
+      return;
+    }
+    setState(() {
+      _selectedClient = stored;
+      _nombreController.text = _formatClientName(stored);
+    });
+    await _loadHaciendasByCliente(_resolveClienteId(stored));
+  }
+
+  Future<void> _saveDraft() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final draft = {
+        'selectedClient': _selectedClient,
+        'nombre': _nombreController.text.trim(),
+        'fecha': _fechaController.text.trim(),
+        'hacienda': _haciendaController.text.trim(),
+        'selectedHaciendaId': _selectedHaciendaId,
+        'lote': _loteController.text.trim(),
+        'selectedLoteId': _selectedLoteId,
+        'plaga': _plagaController.text.trim(),
+        'isClienteMode': _isClienteMode,
+        'samples': _samples.map((sample) => sample.toJson()).toList(),
+      };
+      await prefs.setString(_draftKey, jsonEncode(draft));
+    } catch (_) {}
+  }
+
+  Future<void> _restoreDraft() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final raw = prefs.getString(_draftKey);
+      if (raw == null || raw.isEmpty) {
+        return;
+      }
+
+      final draft = jsonDecode(raw) as Map<String, dynamic>;
+      final restoredSamples = <_PlagaSample>[];
+      final samplesRaw = draft['samples'];
+      if (samplesRaw is List) {
+        for (final sampleRaw in samplesRaw) {
+          if (sampleRaw is Map) {
+            final sample = _PlagaSample.fromJson(
+              Map<String, dynamic>.from(sampleRaw),
+            );
+            _registerSampleListeners(sample);
+            restoredSamples.add(sample);
+          }
+        }
+      }
+
+      if (!mounted) {
+        for (final sample in restoredSamples) {
+          sample.dispose();
+        }
+        return;
+      }
+
+      setState(() {
+        final selectedClientRaw = draft['selectedClient'];
+        if (selectedClientRaw is Map) {
+          _selectedClient = Map<String, dynamic>.from(selectedClientRaw);
+        }
+        _nombreController.text =
+            draft['nombre']?.toString() ?? _nombreController.text;
+        _fechaController.text =
+            draft['fecha']?.toString() ?? _fechaController.text;
+        _haciendaController.text = draft['hacienda']?.toString() ?? '';
+        _loteController.text = draft['lote']?.toString() ?? '';
+        _selectedHaciendaId = draft['selectedHaciendaId'] as int?;
+        _selectedLoteId = draft['selectedLoteId'] as int?;
+        final restoredPlaga = draft['plaga']?.toString() ?? '';
+        if (restoredPlaga.isNotEmpty) {
+          _plagaController.text = restoredPlaga;
+        }
+        _isClienteMode = draft['isClienteMode'] as bool? ?? _isClienteMode;
+
+        if (restoredSamples.isNotEmpty) {
+          for (final sample in _samples) {
+            sample.dispose();
+          }
+          _samples
+            ..clear()
+            ..addAll(restoredSamples);
+        }
+      });
+      if (_selectedClient != null) {
+        await _loadHaciendasByCliente(
+          _resolveClienteId(_selectedClient!),
+          preferredHaciendaId: _selectedHaciendaId,
+          preferredLoteId: _selectedLoteId,
+        );
+      }
+    } catch (_) {}
+  }
+
+  Future<void> _clearDraft() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove(_draftKey);
+    } catch (_) {}
+  }
+
+  void _onSamplesChanged() {
+    if (!mounted) {
+      return;
+    }
+    setState(() {});
+    _saveDraft();
+  }
+
+  void _registerSampleListeners(_PlagaSample sample) {
+    sample.huevoController.addListener(_onSamplesChanged);
+    sample.pequenaController.addListener(_onSamplesChanged);
+    sample.medianaController.addListener(_onSamplesChanged);
+    sample.grandeController.addListener(_onSamplesChanged);
+    sample.porcentajeDanioController.addListener(_onSamplesChanged);
+  }
+
+  void _addSample() {
+    final sample = _PlagaSample(_samples.length + 1);
+    _registerSampleListeners(sample);
+    setState(() {
+      _samples.add(sample);
+    });
+    _saveDraft();
+  }
+
+  String _formatClientName(Map<String, dynamic> client) {
+    return ClientLocationHelper.formatClientName(client);
+  }
+
+  String _formatFincaName(Map<String, dynamic> client) {
+    return ClientLocationHelper.formatFincaName(client);
+  }
+
+  int? _toInt(dynamic value) {
+    return ClientLocationHelper.toInt(value);
+  }
+
+  int? _resolveClienteId(Map<String, dynamic> client) {
+    return ClientLocationHelper.resolveClienteId(client);
+  }
+
+  String _formatHaciendaName(Map<String, dynamic> hacienda) {
+    return ClientLocationHelper.formatHaciendaName(hacienda);
+  }
+
+  String _formatLoteValue(Map<String, dynamic> lote) {
+    return ClientLocationHelper.formatLoteName(lote);
+  }
+
+  int? _resolveInitialHaciendaId({int? preferredHaciendaId}) {
+    return ClientLocationHelper.resolveInitialHaciendaId(
+      haciendas: _haciendas,
+      currentHaciendaText: _haciendaController.text,
+      preferredHaciendaId: preferredHaciendaId,
+    );
+  }
+
+  int? _resolveInitialLoteId({int? preferredLoteId}) {
+    return ClientLocationHelper.resolveInitialLoteId(
+      lotes: _lotes,
+      currentLoteText: _loteController.text,
+      preferredLoteId: preferredLoteId,
+    );
+  }
+
+  Future<void> _loadHaciendasByCliente(
+    int? clienteId, {
+    int? preferredHaciendaId,
+    int? preferredLoteId,
+  }) async {
+    if (clienteId == null) {
+      return;
+    }
+
+    try {
+      final haciendas = await _haciendaService.getHaciendasByCliente(clienteId);
+      if (!mounted) {
+        return;
+      }
+
+      _haciendas = haciendas;
+      final nextHaciendaId =
+          _resolveInitialHaciendaId(preferredHaciendaId: preferredHaciendaId);
+
+      setState(() {
+        _haciendas = haciendas;
+        _selectedHaciendaId = nextHaciendaId;
+        _haciendaController.text = nextHaciendaId == null
+            ? ''
+            : (haciendas
+                    .firstWhere((h) => h['id'] == nextHaciendaId)['nombre']
+                    ?.toString() ??
+                '');
+        _lotes = [];
+        _selectedLoteId = null;
+        _loteController.clear();
+      });
+
+      if (nextHaciendaId != null) {
+        await _loadLotesByHacienda(
+          nextHaciendaId,
+          preferredLoteId: preferredLoteId,
+        );
+      }
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _haciendas = [];
+        _lotes = [];
+        _selectedHaciendaId = null;
+        _selectedLoteId = null;
+        _haciendaController.clear();
+        _loteController.clear();
+      });
+    }
+  }
+
+  Future<void> _loadLotesByHacienda(
+    int haciendaId, {
+    int? preferredLoteId,
+  }) async {
+    try {
+      final lotes = await _loteService.getLotesByHacienda(haciendaId);
+      if (!mounted) {
+        return;
+      }
+
+      _lotes = lotes;
+      final nextLoteId =
+          _resolveInitialLoteId(preferredLoteId: preferredLoteId);
+
+      setState(() {
+        _lotes = lotes;
+        _selectedLoteId = nextLoteId;
+        if (nextLoteId != null) {
+          final lote = lotes.firstWhere((l) => l['id'] == nextLoteId);
+          _loteController.text = _formatLoteValue(lote);
+        } else {
+          _loteController.clear();
+        }
+      });
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _lotes = [];
+        _selectedLoteId = null;
+        _loteController.clear();
+      });
+    }
+  }
+
+  void _onNameChanged(String value) {
+    final query = value.trim();
+    _searchDebounce?.cancel();
+    final queryChanged = query != _lastQuery;
+    _lastQuery = query;
+
+    if (_selectedClient != null) {
+      final selectedName = _formatClientName(_selectedClient!).toLowerCase();
+      if (selectedName != query.toLowerCase()) {
+        setState(() {
+          _selectedClient = null;
+          _selectedHaciendaId = null;
+          _selectedLoteId = null;
+          _haciendas = [];
+          _lotes = [];
+          _haciendaController.clear();
+          _loteController.clear();
+        });
+        _clientService.clearSelectedClient();
+      }
+    }
+
+    if (query.length < 2) {
+      if (_clientSuggestions.isNotEmpty) {
+        setState(() {
+          _clientSuggestions = [];
+        });
+      }
+      return;
+    }
+
+    if (queryChanged && _clientSuggestions.isNotEmpty) {
+      setState(() {
+        _clientSuggestions = [];
+      });
+    }
+
+    _searchDebounce = dart_async.Timer(
+      const Duration(milliseconds: 350),
+      () => _fetchClientSuggestions(query),
+    );
+  }
+
+  bool _isLikelyCedula(String value) {
+    if (value.isEmpty) {
+      return false;
+    }
+    return RegExp(r'^[0-9]+$').hasMatch(value);
+  }
+
+  Future<void> _fetchClientSuggestions(String query) async {
+    try {
+      if (_isLikelyCedula(query)) {
+        final client = await _clientService.searchClientByCedula(query);
+        if (!mounted || query != _lastQuery) {
+          return;
+        }
+        setState(() {
+          _clientSuggestions = client == null ? [] : [client];
+        });
+        return;
+      }
+
+      final clients = await _clientService.searchClientsByName(query);
+      if (!mounted || query != _lastQuery) {
+        return;
+      }
+      setState(() {
+        _clientSuggestions = clients;
+      });
+    } catch (_) {
+      if (!mounted || query != _lastQuery) {
+        return;
+      }
+      setState(() {
+        _clientSuggestions = [];
+      });
+    }
+  }
+
+  Future<void> _triggerSearch() async {
+    final query = _nombreController.text.trim();
+    _lastQuery = query;
+    if (query.length < 2) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Ingrese al menos 2 letras para buscar'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+
+    await _fetchClientSuggestions(query);
+    if (!mounted) {
+      return;
+    }
+
+    if (_clientSuggestions.length == 1) {
+      final client = _clientSuggestions.first;
+      setState(() {
+        _selectedClient = client;
+        _clientSuggestions = [];
+        _selectedHaciendaId = null;
+        _selectedLoteId = null;
+        _haciendas = [];
+        _lotes = [];
+        _haciendaController.clear();
+        _loteController.clear();
+      });
+      _clientService.saveSelectedClient(client);
+      _nombreController.text = _formatClientName(client);
+      _nombreFocusNode.unfocus();
+      await _loadHaciendasByCliente(_resolveClienteId(client));
+      _saveDraft();
+      return;
+    }
+
+    _nombreFocusNode.requestFocus();
+  }
+
+  int get _totalHuevo =>
+      _samples.fold(0, (previousValue, sample) => previousValue + sample.huevo);
+
+  int get _totalPequena => _samples.fold(
+        0,
+        (previousValue, sample) => previousValue + sample.pequena,
+      );
+
+  int get _totalMediana => _samples.fold(
+        0,
+        (previousValue, sample) => previousValue + sample.mediana,
+      );
+
+  int get _totalGrande => _samples.fold(
+      0, (previousValue, sample) => previousValue + sample.grande);
+
+  int get _totalIndividuos => _samples.fold(
+      0, (previousValue, sample) => previousValue + sample.totalIndividuos);
+
+  double _avgInt(int total) {
+    if (_samples.isEmpty) {
+      return 0;
+    }
+    return total / _samples.length;
+  }
+
+  double get _promHuevo => _avgInt(_totalHuevo);
+  double get _promPequena => _avgInt(_totalPequena);
+  double get _promMediana => _avgInt(_totalMediana);
+  double get _promGrande => _avgInt(_totalGrande);
+  double get _promTotal => _avgInt(_totalIndividuos);
+
+  double _ratio(int value, int total) {
+    if (total <= 0) {
+      return 0;
+    }
+    return (value / total) * 100;
+  }
+
+  double get _pctHuevo => _ratio(_totalHuevo, _totalIndividuos);
+  double get _pctPequena => _ratio(_totalPequena, _totalIndividuos);
+  double get _pctMediana => _ratio(_totalMediana, _totalIndividuos);
+  double get _pctGrande => _ratio(_totalGrande, _totalIndividuos);
+
+  double get _pctDanioResumen => _promDanio;
+
+  double get _promDanio {
+    if (_samples.isEmpty) {
+      return 0;
+    }
+    final total = _samples.fold<double>(
+      0,
+      (previousValue, sample) => previousValue + sample.porcentajeDanio,
+    );
+    return total / _samples.length;
+  }
+
+  String _fmt(double value, {int decimals = 1}) {
+    return value.toStringAsFixed(decimals).replaceAll('.', ',');
+  }
+
+  String get _loteResumen {
+    final lote = _loteController.text.trim();
+    return lote.isEmpty ? '-' : lote;
+  }
+
+  Future<void> _guardarResumen() async {
+    if (_selectedClient == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Seleccione un cliente antes de guardar.'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+
+    final lote = _loteController.text.trim();
+    final plaga = _plagaController.text.trim();
+    if (lote.isEmpty || plaga.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Lote y plaga son obligatorios.'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+
+    setState(() {
+      _isSaving = true;
+    });
+
+    try {
+      final payload = {
+        'clientId': _selectedClient!['id'],
+        'cedulaCliente': _selectedClient!['cedula'],
+        'fecha': _fechaController.text.trim(),
+        'lote': lote,
+        'plaga': plaga,
+        'totalHuevo': _totalHuevo,
+        'totalPequena': _totalPequena,
+        'totalMediana': _totalMediana,
+        'totalGrande': _totalGrande,
+        'totalIndividuos': _totalIndividuos,
+        'porcentajeDanio': double.parse(_pctDanioResumen.toStringAsFixed(2)),
+        'promedioHuevo': double.parse(_promHuevo.toStringAsFixed(2)),
+        'promedioPequena': double.parse(_promPequena.toStringAsFixed(2)),
+        'promedioMediana': double.parse(_promMediana.toStringAsFixed(2)),
+        'promedioGrande': double.parse(_promGrande.toStringAsFixed(2)),
+        'promedioTotal': double.parse(_promTotal.toStringAsFixed(2)),
+        'promedioDanio': double.parse(_promDanio.toStringAsFixed(2)),
+        'porcentajeHuevo': double.parse(_pctHuevo.toStringAsFixed(2)),
+        'porcentajePequena': double.parse(_pctPequena.toStringAsFixed(2)),
+        'porcentajeMediana': double.parse(_pctMediana.toStringAsFixed(2)),
+        'porcentajeGrande': double.parse(_pctGrande.toStringAsFixed(2)),
+        'numeroMuestras': _samples.length,
+      };
+
+      final result = await _plagasService.guardarResumen(payload);
+      await _clearDraft();
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+              result['message']?.toString() ?? 'Resumen de plagas guardado'),
+          backgroundColor: Colors.green,
+        ),
+      );
+    } catch (e) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+              'Error al guardar resumen: ${e.toString().replaceAll('Exception: ', '')}'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isSaving = false;
+        });
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        backgroundColor: const Color(0xFF00903E),
+        foregroundColor: Colors.white,
+        title: const Text('Control de Plagas'),
+      ),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _buildInfoCard(),
+            const SizedBox(height: 20),
+            _buildClientSearchSection(),
+            const SizedBox(height: 20),
+            if (_selectedClient == null)
+              _buildSelectClientWarning()
+            else ...[
+              _buildHeaderSection(),
+              const SizedBox(height: 20),
+              _buildSamplingSection(),
+              const SizedBox(height: 20),
+              _buildSummarySection(),
+              const SizedBox(height: 16),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton.icon(
+                  onPressed: _isSaving ? null : _guardarResumen,
+                  icon: _isSaving
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.save),
+                  label: Text(
+                    _isSaving ? 'Guardando...' : 'Calcular y Enviar Resumen',
+                  ),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF5D4037),
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                  ),
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildInfoCard() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [Color(0xFF5D4037), Color(0xFF8D6E63)],
+        ),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: const Row(
+        children: [
+          Icon(Icons.bug_report, color: Colors.white, size: 34),
+          SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              'Evaluación de Plagas en Banano\nLevantamiento manual por muestras',
+              style: TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.bold,
+                fontSize: 16,
+                height: 1.3,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSelectClientWarning() {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.amber.shade50,
+        border: Border.all(color: Colors.amber.shade300),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.warning_amber_rounded, color: Colors.amber.shade700),
+          const SizedBox(width: 10),
+          const Expanded(
+            child: Text(
+              'Seleccione un cliente para continuar con el levantamiento de plagas.',
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildClientSearchSection() {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: const Color(0xFF004B63)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.grey.withOpacity(0.1),
+            spreadRadius: 1,
+            blurRadius: 3,
+            offset: const Offset(0, 1),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(
+                Icons.person_search,
+                color: const Color(0xFF004B63),
+                size: 24,
+              ),
+              const SizedBox(width: 8),
+              const Text(
+                'Buscar Cliente',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: Color(0xFF004B63),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          RawAutocomplete<Map<String, dynamic>>(
+            textEditingController: _nombreController,
+            focusNode: _nombreFocusNode,
+            displayStringForOption: _formatClientName,
+            optionsBuilder: (TextEditingValue value) {
+              final query = value.text.trim();
+              if (query.length < 2 || query != _lastQuery) {
+                return const Iterable<Map<String, dynamic>>.empty();
+              }
+              return _clientSuggestions;
+            },
+            onSelected: (client) {
+              if (!mounted) {
+                return;
+              }
+              setState(() {
+                _selectedClient = client;
+                _clientSuggestions = [];
+                _selectedHaciendaId = null;
+                _selectedLoteId = null;
+                _haciendas = [];
+                _lotes = [];
+                _haciendaController.clear();
+                _loteController.clear();
+              });
+              _clientService.saveSelectedClient(client);
+              _loadHaciendasByCliente(_resolveClienteId(client));
+              _saveDraft();
+            },
+            fieldViewBuilder: (
+              BuildContext context,
+              TextEditingController controller,
+              FocusNode focusNode,
+              VoidCallback onFieldSubmitted,
+            ) {
+              return TextField(
+                controller: controller,
+                focusNode: focusNode,
+                keyboardType: TextInputType.text,
+                onChanged: _isClienteMode ? null : _onNameChanged,
+                readOnly: _isClienteMode,
+                enabled: !_isClienteMode,
+                decoration: InputDecoration(
+                  labelText: 'Nombre, Apellido o Cédula',
+                  hintText: _isClienteMode
+                      ? 'Cliente autenticado'
+                      : 'Ingrese nombre, apellido o cédula',
+                  prefixIcon: Icon(
+                    Icons.person,
+                    color: _isClienteMode ? Colors.grey : null,
+                  ),
+                  border: const OutlineInputBorder(),
+                  filled: _isClienteMode,
+                  fillColor:
+                      _isClienteMode ? Colors.grey.withOpacity(0.1) : null,
+                  suffixIcon: _isClienteMode
+                      ? const Icon(Icons.lock, color: Colors.grey)
+                      : IconButton(
+                          icon: const Icon(Icons.search),
+                          onPressed: _triggerSearch,
+                        ),
+                ),
+              );
+            },
+            optionsViewBuilder: (
+              BuildContext context,
+              AutocompleteOnSelected<Map<String, dynamic>> onSelected,
+              Iterable<Map<String, dynamic>> options,
+            ) {
+              final optionList = options.toList();
+              return Align(
+                alignment: Alignment.topLeft,
+                child: Material(
+                  elevation: 4.0,
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxHeight: 240),
+                    child: ListView.separated(
+                      padding: EdgeInsets.zero,
+                      shrinkWrap: true,
+                      itemCount: optionList.length,
+                      separatorBuilder: (_, __) => const Divider(height: 1),
+                      itemBuilder: (context, index) {
+                        final client = optionList[index];
+                        final nombre = _formatClientName(client);
+                        final cedula = client['cedula']?.toString() ?? '';
+                        final finca = _formatFincaName(client);
+                        final subtitleParts = <String>[];
+                        if (cedula.isNotEmpty) {
+                          subtitleParts.add('Cédula: $cedula');
+                        }
+                        if (finca.isNotEmpty) {
+                          subtitleParts.add('Finca: $finca');
+                        }
+                        return ListTile(
+                          title: Text(
+                              nombre.isEmpty ? 'Cliente sin nombre' : nombre),
+                          subtitle: subtitleParts.isEmpty
+                              ? null
+                              : Text(subtitleParts.join(' | ')),
+                          onTap: () => onSelected(client),
+                        );
+                      },
+                    ),
+                  ),
+                ),
+              );
+            },
+          ),
+          if (_selectedClient != null) ...[
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.green.shade50,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.green.shade200),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.check_circle, color: Colors.green.shade600),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Cliente: ${_selectedClient!['nombre'] ?? ''} ${_selectedClient!['apellidos'] ?? ''}',
+                          style: const TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 14,
+                          ),
+                        ),
+                        if (_selectedClient!['cedula'] != null &&
+                            _selectedClient!['cedula'].toString().isNotEmpty)
+                          Text(
+                            'Cédula: ${_selectedClient!['cedula']}',
+                            style: const TextStyle(fontSize: 12),
+                          ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildHeaderSection() {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: const Color(0xFFE0E0E0)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Encabezado',
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.bold,
+              color: Color(0xFF004B63),
+            ),
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: TextField(
+                  controller: _fechaController,
+                  readOnly: true,
+                  decoration: const InputDecoration(
+                    labelText: 'Fecha',
+                    border: OutlineInputBorder(),
+                    prefixIcon: Icon(Icons.calendar_month),
+                  ),
+                  onTap: _selectDate,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: _haciendas.isNotEmpty
+                    ? DropdownButtonFormField<int>(
+                        value: _selectedHaciendaId,
+                        decoration: const InputDecoration(
+                          labelText: 'Finca',
+                          border: OutlineInputBorder(),
+                          prefixIcon: Icon(Icons.home_work_outlined),
+                        ),
+                        items: _haciendas
+                            .map(
+                              (hacienda) => DropdownMenuItem<int>(
+                                value: _toInt(hacienda['id']),
+                                child: Text(hacienda['nombre']?.toString() ?? ''),
+                              ),
+                            )
+                            .toList(),
+                        onChanged: (value) {
+                          setState(() {
+                            _selectedHaciendaId = value;
+                            _selectedLoteId = null;
+                            _lotes = [];
+                            _loteController.clear();
+                            _haciendaController.text = value == null
+                                ? ''
+                                : (_haciendas
+                                        .firstWhere((h) => h['id'] == value)['nombre']
+                                        ?.toString() ??
+                                    '');
+                          });
+                          if (value != null) {
+                            _loadLotesByHacienda(value);
+                          } else {
+                            _saveDraft();
+                          }
+                        },
+                      )
+                    : TextField(
+                        controller: _haciendaController,
+                        readOnly: true,
+                        decoration: const InputDecoration(
+                          labelText: 'Finca',
+                          border: OutlineInputBorder(),
+                          prefixIcon: Icon(Icons.home_work_outlined),
+                        ),
+                      ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          if (_lotes.isNotEmpty)
+            DropdownButtonFormField<int>(
+              value: _selectedLoteId,
+              decoration: const InputDecoration(
+                labelText: 'Lote',
+                border: OutlineInputBorder(),
+                prefixIcon: Icon(Icons.agriculture),
+              ),
+              items: _lotes
+                  .map(
+                    (lote) => DropdownMenuItem<int>(
+                      value: _toInt(lote['id']),
+                      child: Text(
+                        '${lote['codigo'] ?? ''} - ${lote['nombre'] ?? ''}',
+                      ),
+                    ),
+                  )
+                  .toList(),
+              onChanged: (value) {
+                setState(() {
+                  _selectedLoteId = value;
+                  if (value == null) {
+                    _loteController.clear();
+                  } else {
+                    final lote = _lotes.firstWhere((l) => l['id'] == value);
+                    _loteController.text = _formatLoteValue(lote);
+                  }
+                });
+                _saveDraft();
+              },
+            )
+          else
+            TextField(
+              controller: _loteController,
+              readOnly: true,
+              decoration: const InputDecoration(
+                labelText: 'Lote',
+                border: OutlineInputBorder(),
+                prefixIcon: Icon(Icons.agriculture),
+                hintText: 'Seleccione una finca para cargar lotes',
+              ),
+            ),
+          const SizedBox(height: 12),
+          DropdownButtonFormField<String>(
+            value: _plagasDisponibles.contains(_plagaController.text.trim())
+                ? _plagaController.text.trim()
+                : _plagasDisponibles.first,
+            decoration: const InputDecoration(
+              labelText: 'Plaga',
+              border: OutlineInputBorder(),
+              prefixIcon: Icon(Icons.bug_report_outlined),
+            ),
+            items: _plagasDisponibles
+                .map(
+                  (plaga) => DropdownMenuItem<String>(
+                    value: plaga,
+                    child: Text(plaga),
+                  ),
+                )
+                .toList(),
+            onChanged: (value) {
+              if (value == null) {
+                return;
+              }
+              setState(() {
+                _plagaController.text = value;
+              });
+              _saveDraft();
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSamplingSection() {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: const Color(0xFFE0E0E0)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Levantamiento por Muestra',
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.bold,
+              color: Color(0xFF004B63),
+            ),
+          ),
+          const SizedBox(height: 10),
+          const Text(
+            'Complete una muestra y agregue otra solo si la necesita. El % de daño se ingresa manualmente por muestra.',
+            style: TextStyle(fontSize: 12, color: Colors.black54),
+          ),
+          const SizedBox(height: 12),
+          ..._samples.map(_buildSampleCard),
+          const SizedBox(height: 12),
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              onPressed: _addSample,
+              icon: const Icon(Icons.add),
+              label: const Text('Agregar muestra'),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSampleCard(_PlagaSample sample) {
+    return Card(
+      margin: const EdgeInsets.only(bottom: 10),
+      elevation: 0,
+      color: Colors.grey.shade50,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(10),
+        side: BorderSide(color: Colors.grey.shade200),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'MUESTRA ${sample.numero}',
+              style: const TextStyle(
+                fontWeight: FontWeight.bold,
+                color: Color(0xFF004B63),
+              ),
+            ),
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                Expanded(
+                  child: _numberField(sample.huevoController, 'Huevo'),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: _numberField(sample.pequenaController, 'Pequeña'),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Expanded(
+                  child: _numberField(sample.medianaController, 'Mediana'),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: _numberField(sample.grandeController, 'Grande'),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                Expanded(
+                  child: _calcChip(
+                    'Total individuos',
+                    sample.totalIndividuos.toString(),
+                    const Color(0xFF004B63),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: TextField(
+                    controller: sample.porcentajeDanioController,
+                    keyboardType: const TextInputType.numberWithOptions(
+                      decimal: true,
+                    ),
+                    decoration: const InputDecoration(
+                      labelText: '% daño',
+                      suffixText: '%',
+                      border: OutlineInputBorder(),
+                      isDense: true,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _numberField(TextEditingController controller, String label) {
+    return TextField(
+      controller: controller,
+      keyboardType: TextInputType.number,
+      decoration: InputDecoration(
+        labelText: label,
+        border: const OutlineInputBorder(),
+        isDense: true,
+      ),
+    );
+  }
+
+  Widget _calcChip(String label, String value, Color color) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.08),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: color.withOpacity(0.25)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 11,
+              color: color,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            value,
+            style: TextStyle(
+              fontSize: 15,
+              color: color,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSummarySection() {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: const Color(0xFFE0E0E0)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Cuadro Resumen',
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.bold,
+              color: Color(0xFF004B63),
+            ),
+          ),
+          const SizedBox(height: 10),
+          _summaryMeta('Fecha', _fechaController.text),
+          _summaryMeta('Lote', _loteResumen),
+          _summaryMeta(
+            'Plaga',
+            _plagaController.text.trim().isEmpty
+                ? '-'
+                : _plagaController.text.trim(),
+          ),
+          const SizedBox(height: 10),
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: DataTable(
+              headingRowColor: MaterialStateProperty.all(
+                const Color(0xFF004B63).withOpacity(0.08),
+              ),
+              columns: const [
+                DataColumn(label: Text('PLAGA')),
+                DataColumn(label: Text('LOTE')),
+                DataColumn(label: Text('HUEVO')),
+                DataColumn(label: Text('PEQUEÑA')),
+                DataColumn(label: Text('MEDIANA')),
+                DataColumn(label: Text('GRANDE')),
+                DataColumn(label: Text('TOTAL')),
+                DataColumn(label: Text('% DAÑO')),
+              ],
+              rows: [
+                DataRow(
+                  cells: [
+                    DataCell(Text(_plagaController.text.trim().isEmpty
+                        ? '-'
+                        : _plagaController.text.trim())),
+                    DataCell(Text(_loteResumen)),
+                    DataCell(Text(_totalHuevo.toString())),
+                    DataCell(Text(_totalPequena.toString())),
+                    DataCell(Text(_totalMediana.toString())),
+                    DataCell(Text(_totalGrande.toString())),
+                    DataCell(Text(_totalIndividuos.toString())),
+                    DataCell(Text('${_fmt(_pctDanioResumen)} %')),
+                  ],
+                ),
+                DataRow(
+                  cells: [
+                    const DataCell(Text('PROMEDIO')),
+                    const DataCell(Text('-')),
+                    DataCell(Text(_fmt(_promHuevo))),
+                    DataCell(Text(_fmt(_promPequena))),
+                    DataCell(Text(_fmt(_promMediana))),
+                    DataCell(Text(_fmt(_promGrande))),
+                    DataCell(Text(_fmt(_promTotal))),
+                    DataCell(Text('${_fmt(_promDanio)} %')),
+                  ],
+                ),
+                DataRow(
+                  cells: [
+                    const DataCell(Text('DISTRIBUCIÓN %')),
+                    const DataCell(Text('-')),
+                    DataCell(Text('${_fmt(_pctHuevo)} %')),
+                    DataCell(Text('${_fmt(_pctPequena)} %')),
+                    DataCell(Text('${_fmt(_pctMediana)} %')),
+                    DataCell(Text('${_fmt(_pctGrande)} %')),
+                    const DataCell(Text('100,0 %')),
+                    DataCell(Text('${_fmt(_pctDanioResumen)} %')),
+                  ],
+                ),
+                DataRow(
+                  cells: [
+                    const DataCell(Text('PROMEDIO COLUMNAS')),
+                    const DataCell(Text('-')),
+                    DataCell(Text(_fmt(_promHuevo))),
+                    DataCell(Text(_fmt(_promPequena))),
+                    DataCell(Text(_fmt(_promMediana))),
+                    DataCell(Text(_fmt(_promGrande))),
+                    DataCell(Text(_fmt(_promTotal))),
+                    DataCell(Text('${_fmt(_promDanio)} %')),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _summaryMeta(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 4),
+      child: RichText(
+        text: TextSpan(
+          style: const TextStyle(color: Colors.black87, fontSize: 13),
+          children: [
+            TextSpan(
+              text: '$label: ',
+              style: const TextStyle(fontWeight: FontWeight.bold),
+            ),
+            TextSpan(text: value),
+          ],
+        ),
+      ),
+    );
+  }
+}

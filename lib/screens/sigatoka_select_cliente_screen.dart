@@ -14,7 +14,7 @@ class SigatokaSelectClienteScreen extends StatelessWidget {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Seleccionar Cliente'),
-        backgroundColor: const Color(0xFF2563EB),
+        backgroundColor: const Color(0xFF00903E),
         foregroundColor: Colors.white,
       ),
       body: ListView.separated(

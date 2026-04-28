@@ -293,7 +293,7 @@ class _GuardarAplicacionScreenState extends State<GuardarAplicacionScreen> {
     try {
       final aplicacionData = {
         'clienteId': widget.clientData?['id'],
-        'productoId': widget.producto['id'],
+        'productoId': widget.producto['idProducto'] ?? widget.producto['id'], // Backend devuelve 'idProducto'
         'productoNombre': widget.producto['nombre'],
         'plan': 'Moko',
         'dosis': _dosisController.text,
